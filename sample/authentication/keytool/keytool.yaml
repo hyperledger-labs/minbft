@@ -1,0 +1,28 @@
+# Example configuration file for `keytool`
+
+# Replica key options
+replicas:
+  # Number of replicas
+  number: 3
+
+  # Keyspec to use
+  keyspec: "ECDSA"
+
+  # Security parameter (key length)
+  secparam: 256
+
+# Client key options
+clients:
+  # Number of clients
+  number: 1
+
+  # Keyspec to use
+  keyspec: "ECDSA"
+
+  # Security parameter (key length)
+  secparam: 256
+
+# USIG options
+usig:
+  # Path to USIG enclave file (environment substitution supported)
+  enclaveFile: "$GOPATH/src/github.com/nec-blockchain/minbft/usig/sgx/enclave/libusig.signed.so"

@@ -1,0 +1,22 @@
+# Sample configuration file for peer command
+
+# Consensus configuration
+consensusConf: "consensus.yaml"
+
+# Keyset file
+keys: "keys.yaml"
+
+# Replica options
+replica:
+  # ID of the replica instance
+  id: 0
+
+# Client options
+client:
+  # ID of the client instance
+  id: 0
+
+# USIG options
+usig:
+  # USIG enclave file (environment expansion is supported)
+  enclaveFile: "$GOPATH/src/github.com/nec-blockchain/minbft/usig/sgx/enclave/libusig.signed.so"

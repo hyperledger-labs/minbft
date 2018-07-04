@@ -1,0 +1,12 @@
+*.a
+*.so
+*.o
+*.d
+*.key
+*.config.xml
+*_[tu].[ch]
+*_test
+TAGS
+tags
+.config_*
+usig-enclave.go
