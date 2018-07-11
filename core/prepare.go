@@ -30,10 +30,8 @@ type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 
 // makePrepareHandler constructs and instance of prepareHandler using
 // id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces. The returned handler will send
-// generated Commit messages to out channel for UI assignment and
-// delivery to peer replicas.
-func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handleRequest requestHandler, collectCommit commitCollector, out chan<- messages.MessageWithUI) prepareHandler {
+// the supplied abstract interfaces.
+func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
 		logger.Debugf("Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
 			id, prepare.Msg.ReplicaId, prepare.Msg.View,
@@ -74,7 +72,7 @@ func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, ha
 		logger.Debugf("Replica %d generated Commit: view=%d primary=%d client=%d seq=%d",
 			id, commit.Msg.View, commit.Msg.PrimaryId,
 			commit.Msg.Request.Msg.ClientId, commit.Msg.Request.Msg.Seq)
-		out <- commit
+		handleGeneratedUIMessage(commit)
 
 		return new, nil
 	}

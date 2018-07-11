@@ -39,8 +39,7 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 	n := randN()
 	view := randView()
 	id := primaryID(n, view)
-	out := make(chan messages.MessageWithUI, 1)
-	handle := setupMakePrepareHandlerMock(mock, id, n, view, out)
+	handle := setupMakePrepareHandlerMock(mock, id, n, view)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -97,7 +96,6 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 	new, err = handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new)
-	assert.Empty(t, out)
 }
 
 func testMakePrepareHandlerBackup(t *testing.T) {
@@ -108,8 +106,7 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 	view := randView()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
-	out := make(chan messages.MessageWithUI, 1)
-	handle := setupMakePrepareHandlerMock(mock, id, n, view, out)
+	handle := setupMakePrepareHandlerMock(mock, id, n, view)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -174,16 +171,15 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
 	assert.Panics(t, func() { _, _ = handle(prepare) }, "Failed collecting own Commit")
-	assert.Empty(t, out)
 
 	mock.On("commitCollector", commit).Return(nil)
+	mock.On("generatedUIMessageHandler", commit).Once()
 	new, err = handle(prepare)
 	assert.NoError(t, err)
 	assert.True(t, new)
-	assert.Equal(t, commit, <-out)
 }
 
-func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint64, out chan<- messages.MessageWithUI) prepareHandler {
+func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint64) prepareHandler {
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
@@ -200,6 +196,9 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("commitCollector", commit)
 		return args.Error(0)
 	}
+	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("generatedUIMessageHandler", msg)
+	}
 	mock.On("viewProvider").Return(view)
-	return makePrepareHandler(id, n, provideView, acceptUI, handleRequest, collectCommit, out)
+	return makePrepareHandler(id, n, provideView, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage)
 }
