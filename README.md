@@ -144,7 +144,7 @@ environment variable, e.g. by modifying `~/.profile` file:
 export SGX_MODE=SIM
 ```
 
-[sgx-install]: https://01.org/intel-software-guard-extensions/documentation/intel-sgx-sdk-installation-guide
+[sgx-install]: https://01.org/intel-softwareguard-extensions/documentation/intel-software-guard-extensions-installation-guide
 
 ## Getting Started ##
 
