@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/nec-blockchain/minbft?status.svg)](https://godoc.org/github.com/nec-blockchain/minbft)
+
 # MinBFT #
 
   * [Status](#status)
