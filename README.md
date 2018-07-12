@@ -315,7 +315,11 @@ The following features are considered to be implemented:
 
 ## Contributing ##
 
-_TBD_
+Any kind of feedback is highly appreciated. Questions, suggestions,
+bug reports, change requests etc are welcome. Please [file a GitHub
+issue](https://github.com/nec-blockchain/minbft/issues/new) or [submit
+a pull request](https://github.com/nec-blockchain/minbft/compare), as
+appropriate.
 
 ## License ##
 
