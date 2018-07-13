@@ -36,7 +36,7 @@ type uiAcceptor func(msg messages.MessageWithUI) (new bool, err error)
 // uiVerifier verifies USIG certificate attached to a message.
 //
 // USIG certificate is verified and the UI is returned if it is valid
-// for the message.
+// for the message. A UI with zero counter value is never valid.
 type uiVerifier func(msg messages.MessageWithUI) (ui *usig.UI, err error)
 
 // uiAssigner assigns a unique identifier to a message.
@@ -63,8 +63,6 @@ func makeUIAcceptor(verifier uiVerifier) uiAcceptor {
 		ui, err := verifier(msg)
 		if err != nil {
 			return false, err
-		} else if ui.Counter == uint64(0) {
-			return false, fmt.Errorf("Invalid (zero) counter value")
 		}
 
 		replicaID := msg.ReplicaID()
@@ -94,6 +92,8 @@ func makeUIVerifier(authen api.Authenticator) uiVerifier {
 
 		if err := ui.UnmarshalBinary(msg.UIBytes()); err != nil {
 			return nil, fmt.Errorf("Failed unmarshaling UI: %s", err)
+		} else if ui.Counter == uint64(0) {
+			return nil, fmt.Errorf("Invalid (zero) counter value")
 		}
 
 		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes()); err != nil {

@@ -34,45 +34,54 @@ import (
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
-func TestUIVerifier(t *testing.T) {
+func TestMakeUIVerifier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	setExpectation := func(ok bool) (api.Authenticator, messages.MessageWithUI, *usig.UI) {
+	authen := mock_api.NewMockAuthenticator(ctrl)
+
+	makeMsg := func(cv uint64) (messages.MessageWithUI, *usig.UI) {
 		msg := mock_messages.NewMockMessageWithUI(ctrl)
-		authen := mock_api.NewMockAuthenticator(ctrl)
+		msg.EXPECT().ReplicaID().Return(rand.Uint32()).AnyTimes()
 
-		replicaID := rand.Uint32()
-		cv := rand.Uint64()
-
-		payload := []byte(fmt.Sprintf("MessageWithUI{replicaID: %d}", replicaID))
-		ui := &usig.UI{Counter: cv, Cert: []byte{}}
-		uiBytes, _ := ui.MarshalBinary()
-		msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
+		payload := make([]byte, 1)
+		rand.Read(payload)
 		msg.EXPECT().Payload().Return(payload).AnyTimes()
+
+		cert := make([]byte, 1)
+		rand.Read(cert)
+		ui := &usig.UI{Counter: cv, Cert: cert}
+		uiBytes, _ := ui.MarshalBinary()
 		msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 
-		var err error
-		if !ok {
-			err = fmt.Errorf("USIG certificate invalid")
-		}
-		authen.EXPECT().VerifyMessageAuthenTag(
-			api.USIGAuthen, replicaID, payload, uiBytes,
-		).Return(err).AnyTimes()
-		return authen, msg, ui
+		return msg, ui
 	}
 
+	verifyUI := makeUIVerifier(authen)
+
+	cv := rand.Uint64()
+
 	// Correct UI
-	authen, msg, expectedUI := setExpectation(true)
-	verifier := makeUIVerifier(authen)
-	actualUI, err := verifier(msg)
+	msg, expectedUI := makeMsg(cv)
+	authen.EXPECT().VerifyMessageAuthenTag(
+		api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes(),
+	).Return(nil)
+	actualUI, err := verifyUI(msg)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedUI, actualUI)
 
 	// Failed USIG certificate verification
-	authen, msg, _ = setExpectation(false)
-	verifier = makeUIVerifier(authen)
-	actualUI, err = verifier(msg)
+	msg, _ = makeMsg(cv)
+	authen.EXPECT().VerifyMessageAuthenTag(
+		api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes(),
+	).Return(fmt.Errorf("USIG certificate invalid"))
+	actualUI, err = verifyUI(msg)
+	assert.Error(t, err)
+	assert.Nil(t, actualUI)
+
+	// Invalid (zero) counter value
+	msg, _ = makeMsg(uint64(0))
+	actualUI, err = verifyUI(msg)
 	assert.Error(t, err)
 	assert.Nil(t, actualUI)
 }
@@ -87,9 +96,6 @@ func TestUIAcceptor(t *testing.T) {
 		new       bool
 	}{
 		{
-			desc: "Invalid (zero) counter value",
-			cv:   0,
-		}, {
 			desc:    "Invalid USIG certificate",
 			cv:      1,
 			invalid: true,
