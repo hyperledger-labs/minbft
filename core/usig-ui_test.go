@@ -19,18 +19,20 @@ package minbft
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/nec-blockchain/minbft/api"
 	"github.com/nec-blockchain/minbft/messages"
 	"github.com/nec-blockchain/minbft/usig"
 
+	"github.com/nec-blockchain/minbft/core/internal/peerstate"
+
 	mock_api "github.com/nec-blockchain/minbft/api/mocks"
+	mock_peerstate "github.com/nec-blockchain/minbft/core/internal/peerstate/mocks"
 	mock_messages "github.com/nec-blockchain/minbft/messages/mocks"
 )
 
@@ -86,138 +88,76 @@ func TestMakeUIVerifier(t *testing.T) {
 	assert.Nil(t, actualUI)
 }
 
-func TestUIAcceptor(t *testing.T) {
-	cases := []struct {
-		desc      string
-		replicaID int
-		cv        int
-		invalid   bool
-		ok        bool
-		new       bool
-	}{
-		{
-			desc:    "Invalid USIG certificate",
-			cv:      1,
-			invalid: true,
-		}, {
-			desc: "First UI with too advanced counter value",
-			cv:   2,
-		}, {
-			desc: "First valid UI",
-			cv:   1,
-			ok:   true,
-			new:  true,
-		}, {
-			desc: "The same UI again",
-			cv:   1,
-			ok:   true,
-		}, {
-			desc: "Too advanced counter value",
-			cv:   3,
-		}, {
-			desc:      "First valid UI from another replica",
-			replicaID: 1,
-			cv:        1,
-			ok:        true,
-			new:       true,
-		}, {
-			desc:      "Second valid UI from another replica",
-			replicaID: 1,
-			cv:        2,
-			ok:        true,
-			new:       true,
-		}, {
-			desc: "Second valid UI",
-			cv:   2,
-			ok:   true,
-			new:  true,
-		}, {
-			desc: "Previous valid UI",
-			cv:   1,
-			ok:   true,
-		}, {
-			desc: "Third valid UI",
-			cv:   3,
-			ok:   true,
-			new:  true,
-		},
-	}
-
-	acceptor := makeUIAcceptor(fakeVerifier)
-	for _, c := range cases {
-		new, err := acceptor(&fakeMsgWithUI{c.replicaID, c.cv, !c.invalid})
-		if c.ok {
-			require.NoErrorf(t, err, c.desc)
-		} else {
-			require.Error(t, err, c.desc)
-		}
-		require.Equal(t, c.new, new, c.desc)
-	}
-}
-
-func TestUIAcceptorConcurrent(t *testing.T) {
-	const nrConcurrent = 5
-	const nrUIs = 10
-
-	wg := new(sync.WaitGroup)
-	wg.Add(nrConcurrent)
-
-	acceptor := makeUIAcceptor(fakeVerifier)
-	for id := 0; id < nrConcurrent; id++ {
-		go func(workerID int) {
-			for cv := 1; cv <= nrUIs; cv++ {
-				new, err := acceptor(&fakeMsgWithUI{workerID, cv, true})
-				assertMsg := fmt.Sprintf("Worker %d, UI %d", workerID, cv)
-				assert.NoErrorf(t, err, assertMsg)
-				assert.True(t, new, assertMsg)
-			}
-			defer wg.Done()
-		}(id)
-	}
-
-	wg.Wait()
-}
-
-func TestUIAssigner(t *testing.T) {
+func TestMakeUICapturer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	msg := mock_messages.NewMockMessageWithUI(ctrl)
-	authen := mock_api.NewMockAuthenticator(ctrl)
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
 
-	payload := make([]byte, 1)
-	uiBytes := make([]byte, 1)
-	rand.Read(payload)
-	rand.Read(uiBytes)
-	msg.EXPECT().Payload().Return(payload).AnyTimes()
+	providePeerState, msg, peerState := setupPeerStateProviderMock(ctrl, mock)
 
-	assignUI := makeUIAssigner(authen)
-
-	err := fmt.Errorf("Failed to generate UI")
-	authen.EXPECT().GenerateMessageAuthenTag(api.USIGAuthen, payload).Return(nil, err)
-	assert.Panics(t, func() { assignUI(msg) })
-
-	authen.EXPECT().GenerateMessageAuthenTag(api.USIGAuthen, payload).Return(uiBytes, nil)
-	msg.EXPECT().AttachUI(uiBytes)
-	assignUI(msg)
-}
-
-type fakeMsgWithUI struct {
-	replicaID int
-	cv        int
-	valid     bool
-}
-
-func (m *fakeMsgWithUI) ReplicaID() uint32  { return uint32(m.replicaID) }
-func (m *fakeMsgWithUI) Payload() []byte    { return nil }
-func (m *fakeMsgWithUI) UIBytes() []byte    { return nil }
-func (m *fakeMsgWithUI) AttachUI(ui []byte) {}
-
-func fakeVerifier(msg messages.MessageWithUI) (ui *usig.UI, err error) {
-	m := msg.(*fakeMsgWithUI)
-	ui = &usig.UI{Counter: uint64(m.cv)}
-	if !m.valid {
-		err = fmt.Errorf("USIG certificate invalid")
+	verifyUI := func(msg messages.MessageWithUI) (*usig.UI, error) {
+		args := mock.MethodCalled("uiVerifier", msg)
+		return args.Get(0).(*usig.UI), args.Error(1)
 	}
-	return
+
+	captureUI := makeUICapturer(providePeerState, verifyUI)
+
+	mock.On("uiVerifier", msg).Return((*usig.UI)(nil), fmt.Errorf("Invalid UI")).Once()
+	new, err := captureUI(msg)
+	assert.Error(t, err)
+	assert.False(t, new)
+
+	ui := &usig.UI{Counter: uint64(1), Cert: []byte{}}
+
+	mock.On("uiVerifier", msg).Return(ui, nil).Once()
+	peerState.EXPECT().CaptureUI(ui).Return(false)
+	new, err = captureUI(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("uiVerifier", msg).Return(ui, nil).Once()
+	peerState.EXPECT().CaptureUI(ui).Return(true)
+	new, err = captureUI(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeUIReleaser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	providePeerState, msg, peerState := setupPeerStateProviderMock(ctrl, mock)
+
+	releaseUI := makeUIReleaser(providePeerState)
+
+	ui := &usig.UI{Counter: uint64(1), Cert: []byte{}}
+	uiBytes, _ := ui.MarshalBinary()
+	msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
+
+	peerState.EXPECT().ReleaseUI(ui).Return(fmt.Errorf("UI already released"))
+	assert.Panics(t, func() { releaseUI(msg) })
+
+	peerState.EXPECT().ReleaseUI(ui).Return(nil)
+	assert.NotPanics(t, func() { releaseUI(msg) })
+}
+
+func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock) (peerstate.Provider, *mock_messages.MockMessageWithUI, *mock_peerstate.MockState) {
+	peerState := mock_peerstate.NewMockState(ctrl)
+	msg := mock_messages.NewMockMessageWithUI(ctrl)
+
+	providePeerState := func(replicaID uint32) peerstate.State {
+		args := mock.MethodCalled("peerStateProvider", replicaID)
+		return args.Get(0).(peerstate.State)
+	}
+
+	replicaID := rand.Uint32()
+	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
+	mock.On("peerStateProvider", replicaID).Return(peerState)
+
+	return providePeerState, msg, peerState
 }
