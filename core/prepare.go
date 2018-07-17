@@ -31,7 +31,7 @@ type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 // makePrepareHandler constructs and instance of prepareHandler using
 // id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
-func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareHandler {
+func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler, commitUI uiCommitter) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
 		logger.Debugf("Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
 			id, prepare.Msg.ReplicaId, prepare.Msg.View,
@@ -40,6 +40,8 @@ func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, ha
 
 		if new, err = acceptUI(prepare); err != nil {
 			return false, fmt.Errorf("Prepare UI cannot be accepted: %s", err)
+		} else if new {
+			defer commitUI(prepare)
 		}
 
 		if prepare.Msg.View != currentView {

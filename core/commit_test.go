@@ -56,7 +56,10 @@ func TestMakeCommitHandler(t *testing.T) {
 		args := mock.MethodCalled("collectCommit", commit)
 		return args.Error(0)
 	}
-	handle := makeCommitHandler(id, n, provideView, acceptUI, handlePrepare, collectCommit)
+	commitUI := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("uiCommitter", msg)
+	}
+	handle := makeCommitHandler(id, n, provideView, acceptUI, handlePrepare, collectCommit, commitUI)
 
 	prepareUIBytes := make([]byte, 1)
 	rand.Read(prepareUIBytes)
@@ -100,23 +103,29 @@ func TestMakeCommitHandler(t *testing.T) {
 
 	commit = makeCommitMsg(view + 1)
 	mock.On("uiAcceptor", commit).Return(true, nil).Once()
+	mock.On("uiCommitter", commit).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit is for different view")
 
 	commit = makeCommitMsg(view)
-	mock.On("uiAcceptor", commit).Return(true, nil)
 
+	mock.On("uiAcceptor", commit).Return(true, nil).Once()
+	mock.On("uiCommitter", commit).Once()
 	mock.On("prepareHandler", prepare).Return(false, fmt.Errorf("Invalid Prepare")).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit is for invalid Prepare")
 
-	mock.On("prepareHandler", prepare).Return(false, nil)
-
+	mock.On("uiAcceptor", commit).Return(true, nil).Once()
+	mock.On("uiCommitter", commit).Once()
+	mock.On("prepareHandler", prepare).Return(false, nil).Once()
 	mock.On("collectCommit", commit).Return(fmt.Errorf("Duplicated Commit")).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit cannot be taken into account")
 
-	mock.On("collectCommit", commit).Return(nil)
+	mock.On("uiAcceptor", commit).Return(true, nil).Once()
+	mock.On("uiCommitter", commit).Once()
+	mock.On("prepareHandler", prepare).Return(false, nil).Once()
+	mock.On("collectCommit", commit).Return(nil).Once()
 	new, err = handle(commit)
 	assert.NoError(t, err)
 	assert.True(t, new)

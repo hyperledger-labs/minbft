@@ -75,24 +75,28 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 
 	prepare = makePrepareMsg(view+1, primaryID(n, view))
 	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare is for different view")
 
 	prepare = makePrepareMsg(view, randOtherReplicaID(id, n))
 	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare creator is not primary in this view")
 
 	prepare = makePrepareMsg(view, id)
-	mock.On("uiAcceptor", prepare).Return(true, nil)
 
 	err = fmt.Errorf("Invalid request ID")
+	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, false, err).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Invalid request ID")
 
-	mock.On("requestHandler", request, true).Return(replyChan, true, nil)
-
+	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
+	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
 	new, err = handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new)
@@ -151,27 +155,34 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 
 	prepare = makePrepareMsg(view+1, primaryID(n, view))
 	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare is for different view")
 
 	prepare = makePrepareMsg(view, randOtherReplicaID(primary, n))
 	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare creator is not primary in this view")
 
 	prepare = makePrepareMsg(view, primary)
-	mock.On("uiAcceptor", prepare).Return(true, nil)
 
 	err = fmt.Errorf("Invalid request ID")
+	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, false, err).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Invalid request ID")
 
-	mock.On("requestHandler", request, true).Return(replyChan, true, nil)
-
+	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
+	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
 	assert.Panics(t, func() { _, _ = handle(prepare) }, "Failed collecting own Commit")
 
+	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
+	mock.On("uiCommitter", prepare).Once()
+	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
 	mock.On("commitCollector", commit).Return(nil)
 	mock.On("generatedUIMessageHandler", commit).Once()
 	new, err = handle(prepare)
@@ -199,6 +210,9 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
+	commitUI := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("uiCommitter", msg)
+	}
 	mock.On("viewProvider").Return(view)
-	return makePrepareHandler(id, n, provideView, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage)
+	return makePrepareHandler(id, n, provideView, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage, commitUI)
 }

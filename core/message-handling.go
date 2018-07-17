@@ -25,6 +25,7 @@ import (
 	"github.com/nec-blockchain/minbft/api"
 	"github.com/nec-blockchain/minbft/core/internal/clientstate"
 	"github.com/nec-blockchain/minbft/core/internal/messagelog"
+	"github.com/nec-blockchain/minbft/core/internal/peerstate"
 	"github.com/nec-blockchain/minbft/messages"
 )
 
@@ -54,14 +55,17 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	n := config.N()
 
 	view := func() uint64 { return 0 } // view change is not implemented
+	verifyUI := makeUIVerifier(stack)
 	clientStates := clientstate.NewProvider()
-	acceptUI := defaultUIAcceptor(stack)
+	peerStates := peerstate.NewProvider()
+	acceptUI := makeUIAcceptor(peerStates, verifyUI)
+	commitUI := makeUICommitter(peerStates)
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
 	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
 	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
-	handlePrepare := makePrepareHandler(id, n, view, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage)
-	handleCommit := makeCommitHandler(id, n, view, acceptUI, handlePrepare, collectCommit)
+	handlePrepare := makePrepareHandler(id, n, view, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage, commitUI)
+	handleCommit := makeCommitHandler(id, n, view, acceptUI, handlePrepare, collectCommit, commitUI)
 
 	return makeMessageHandler(handleRequest, handlePrepare, handleCommit)
 }
