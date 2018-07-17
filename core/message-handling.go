@@ -25,6 +25,7 @@ import (
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
+	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -54,14 +55,17 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	n := config.N()
 
 	view := func() uint64 { return 0 } // view change is not implemented
+	verifyUI := makeUIVerifier(stack)
 	clientStates := clientstate.NewProvider()
-	acceptUI := defaultUIAcceptor(stack)
+	peerStates := peerstate.NewProvider()
+	captureUI := makeUICapturer(peerStates, verifyUI)
+	releaseUI := makeUIReleaser(peerStates)
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
 	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
 	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
-	handlePrepare := makePrepareHandler(id, n, view, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage)
-	handleCommit := makeCommitHandler(id, n, view, acceptUI, handlePrepare, collectCommit)
+	handlePrepare := makePrepareHandler(id, n, view, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	handleCommit := makeCommitHandler(id, n, view, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, handlePrepare, handleCommit)
 }

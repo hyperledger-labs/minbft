@@ -57,13 +57,15 @@ func defaultCommitCollector(id uint32, clientStates clientstate.Provider, config
 
 // makeCommitHandler construct an instance of commitHandler using n as
 // the total number of nodes, and the supplied abstract interfaces.
-func makeCommitHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handlePrepare prepareHandler, collectCommit commitCollector) commitHandler {
+func makeCommitHandler(id, n uint32, view viewProvider, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector, releaseUI uiReleaser) commitHandler {
 	return func(commit *messages.Commit) (new bool, err error) {
-		if new, err = acceptUI(commit); err != nil {
+		if new, err = captureUI(commit); err != nil {
 			logger.Debugf("Replica %d handling Commit from replica %d: view=%d primary=%d seq=%d",
 				id, commit.Msg.ReplicaId, commit.Msg.View, commit.Msg.PrimaryId,
 				commit.Msg.Request.Msg.Seq)
-			return false, fmt.Errorf("Commit UI cannot be accepted: %s", err)
+			return false, fmt.Errorf("Commit UI cannot be captured: %s", err)
+		} else if new {
+			defer releaseUI(commit)
 		}
 
 		if currentView := view(); commit.Msg.View != currentView {
