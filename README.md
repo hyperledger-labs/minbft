@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/nec-blockchain/minbft.svg?branch=master)](https://travis-ci.com/nec-blockchain/minbft)
 [![GoDoc](https://godoc.org/github.com/nec-blockchain/minbft?status.svg)](https://godoc.org/github.com/nec-blockchain/minbft)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nec-blockchain/minbft)](https://goreportcard.com/report/github.com/nec-blockchain/minbft)
 

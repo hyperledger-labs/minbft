@@ -1,0 +1,24 @@
+sudo: required
+
+language: generic
+
+services:
+  - docker
+
+env:
+  global:
+    - BASE_IMAGE="$TRAVIS_REPO_SLUG:base-$TRAVIS_BRANCH"
+    - LINT_IMAGE="$TRAVIS_REPO_SLUG:lint-$TRAVIS_BRANCH"
+    - BUILD_DIR="/opt/go/src/github.com/nec-blockchain/minbft"
+    - DOCKER_RUN="docker run -v $(pwd):$BUILD_DIR -w $BUILD_DIR"
+
+before_script:
+  - docker build -t $BASE_IMAGE dockerfiles/base
+  - docker build -t $LINT_IMAGE --build-arg BASE_IMAGE=$BASE_IMAGE dockerfiles/lint
+
+script:
+  - $DOCKER_RUN $BASE_IMAGE make build check SGX_MODE=SIM
+  - "$DOCKER_RUN $LINT_IMAGE make lint || : allow failure"
+
+notifications:
+  email: false
