@@ -25,9 +25,6 @@ jobs:
             echo -e "no\n$(dirname $SGX_SDK)" | sudo ./sgx_installer.bin
             rm sgx_installer.bin
             echo '. $SGX_SDK/environment' >> $BASH_ENV
-            echo 'export PATH=$PATH:$SGX_SDK/bin:$SGX_SDK/bin/x64' >> $BASH_ENV
-            echo 'export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$SGX_SDK/pkgconfig' >> $BASH_ENV
-            echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SGX_SDK/sdk_libs' >> $BASH_ENV
       - run:
           name: Install gometalinter
           command: |
