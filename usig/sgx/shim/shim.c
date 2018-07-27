@@ -63,10 +63,10 @@ sgx_status_t usig_destroy(const sgx_enclave_id_t enclave_id)
 
 sgx_status_t usig_create_ui(sgx_enclave_id_t enclave_id,
                             sgx_sha256_hash_t digest,
-                            usig_ui *ui)
+                            uint64_t *counter,
+                            sgx_ec256_signature_t *signature)
 {
-        return ECALL_USIG(enclave_id, create_ui, digest,
-                          &ui->counter, &ui->signature);
+        return ECALL_USIG(enclave_id, create_ui, digest, counter, signature);
 }
 
 sgx_status_t usig_get_epoch(sgx_enclave_id_t enclave_id,

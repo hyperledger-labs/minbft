@@ -39,9 +39,10 @@ static void test_init_destroy()
         assert(usig_destroy(eid) == SGX_SUCCESS);
 }
 
-static inline bool signature_is_equal(usig_ui *ui1, usig_ui *ui2)
+static inline bool signature_is_equal(sgx_ec256_signature_t *s1,
+                                      sgx_ec256_signature_t *s2)
 {
-        return memcmp(&ui1->signature, &ui2->signature, sizeof(ui1->signature)) == 0;
+        return memcmp(s1, s2, sizeof(sgx_ec256_signature_t)) == 0;
 }
 
 static void test_seal_key()
@@ -66,7 +67,8 @@ static void test_create_ui()
         uint64_t e1, e2;
         void *sealed_data;
         size_t sealed_data_size;
-        usig_ui ui1, ui2, ui3;
+        sgx_ec256_signature_t s1, s2, s3;
+        uint64_t c1, c2, c3;
         sgx_sha256_hash_t digest = "TEST DIGEST";
 
         assert(usig_init(enclave_file, &usig, NULL, 0) == SGX_SUCCESS);
@@ -74,15 +76,15 @@ static void test_create_ui()
                              &sealed_data_size) == SGX_SUCCESS);
         assert(usig_get_epoch(usig, &e1) == SGX_SUCCESS);
 
-        assert(usig_create_ui(usig, digest, &ui1) == SGX_SUCCESS);
+        assert(usig_create_ui(usig, digest, &c1, &s1) == SGX_SUCCESS);
         // The first counter value must be one
-        assert(ui1.counter == 1);
+        assert(c1 == 1);
 
-        assert(usig_create_ui(usig, digest, &ui2) == SGX_SUCCESS);
+        assert(usig_create_ui(usig, digest, &c2, &s2) == SGX_SUCCESS);
         // The counter must be monotonic and sequential
-        assert(ui2.counter == ui1.counter + 1);
+        assert(c2 == c1 + 1);
         // Certificate must be unique for each counter value
-        assert(!signature_is_equal(&ui1, &ui2));
+        assert(!signature_is_equal(&s1, &s2));
 
         // Destroy USIG instance
         assert(usig_destroy(usig) == SGX_SUCCESS);
@@ -92,9 +94,9 @@ static void test_create_ui()
                          sealed_data_size) == SGX_SUCCESS);
         assert(usig_get_epoch(usig, &e2) == SGX_SUCCESS);
 
-        assert(usig_create_ui(usig, digest, &ui3) == SGX_SUCCESS);
+        assert(usig_create_ui(usig, digest, &c3, &s3) == SGX_SUCCESS);
         // Must fetch a fresh counter value
-        assert(ui3.counter == 1);
+        assert(c3 == 1);
 #ifndef SGX_SIM_MODE
         // Apparently, SGX SDK in the simulation mode uses current
         // time in *seconds* to seed random number generation. We
@@ -102,7 +104,7 @@ static void test_create_ui()
         // Check for uniqueness of the epoch and certificate produced
         // by the new instance of the enclave
         assert(e1 != e2);
-        assert(!signature_is_equal(&ui1, &ui3));
+        assert(!signature_is_equal(&s1, &s3));
 #endif
 
         assert(usig_destroy(usig) == SGX_SUCCESS);

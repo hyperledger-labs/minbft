@@ -99,10 +99,12 @@ func (enclave *USIGEnclave) Destroy() {
 // CreateUI creates a unique identifier assigned to the specified
 // message digest.
 func (enclave *USIGEnclave) CreateUI(digest Digest) (*usig.UI, error) {
-	ui := new(C.usig_ui)
+	var counter uint64
+	sgxSignature := new(C.sgx_ec256_signature_t)
 
 	enclave.ecallLock.Lock()
-	sgxErr := C.usig_create_ui(enclave.enclaveID, (*C.uint8_t)(&digest[0]), ui)
+	sgxErr := C.usig_create_ui(enclave.enclaveID, (*C.uint8_t)(&digest[0]),
+		(*C.uint64_t)(&counter), sgxSignature)
 	enclave.ecallLock.Unlock()
 	if err := sgxError(sgxErr); err != nil {
 		return nil, err
@@ -110,8 +112,8 @@ func (enclave *USIGEnclave) CreateUI(digest Digest) (*usig.UI, error) {
 
 	return &usig.UI{
 		Epoch:   enclave.epoch,
-		Counter: uint64(ui.counter),
-		Cert:    sgxEC256SigToASN1(&ui.signature),
+		Counter: counter,
+		Cert:    sgxEC256SigToASN1(sgxSignature),
 	}, nil
 }
 
