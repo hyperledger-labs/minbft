@@ -70,7 +70,7 @@ func testUSIGAuthenScheme(t *testing.T) {
 	usig, err := sgxusig.New(usigEnclaveFile, nil)
 	assert.NoError(t, err, "Failed to create SGX USIG")
 
-	usigAuthScheme := NewUSIGAuthenticationScheme(usig)
+	usigAuthScheme := NewSGXUSIGAuthenticationScheme(usig)
 
 	tag, err := usigAuthScheme.GenerateAuthenticationTag(testMessage, nil)
 	assert.NoError(t, err, "Failed to generate USIG authentication tag")

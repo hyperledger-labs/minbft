@@ -100,7 +100,14 @@ func new(roles []api.AuthenticationRole, id uint32, ks BftKeyStorer, usig usig.U
 		case keySpecEcdsa:
 			a.authschemes[r] = &PublicAuthenScheme{crypto.SHA256, &EcdsaSigCipher{}}
 		case keySpecSgxEcdsa:
-			a.authschemes[r] = NewUSIGAuthenticationScheme(usig)
+			if usig == nil {
+				continue
+			}
+			sgxUSIG, ok := usig.(*sgxusig.USIG)
+			if !ok {
+				return nil, fmt.Errorf("Cannot use supplied USIG: %s keyspec requires SGX USIG", ksName)
+			}
+			a.authschemes[r] = NewSGXUSIGAuthenticationScheme(sgxUSIG)
 		default:
 			return nil, fmt.Errorf("Cannot find an authentication scheme corresponding to the keyspec '%s'", ks.KeySpec(r))
 		}
