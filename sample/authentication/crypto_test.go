@@ -23,8 +23,10 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
 )
@@ -67,16 +69,39 @@ func testEcdsaAuthenScheme(t *testing.T) {
 }
 
 func testUSIGAuthenScheme(t *testing.T) {
-	usig, err := sgxusig.New(usigEnclaveFile, nil)
-	assert.NoError(t, err, "Failed to create SGX USIG")
+	usig1, err := sgxusig.New(usigEnclaveFile, nil)
+	require.NoError(t, err)
 
-	usigAuthScheme := NewSGXUSIGAuthenticationScheme(usig)
+	pubKey := usig1.PublicKey()
+	usigAuthScheme1 := NewSGXUSIGAuthenticationScheme(usig1)
 
-	tag, err := usigAuthScheme.GenerateAuthenticationTag(testMessage, nil)
-	assert.NoError(t, err, "Failed to generate USIG authentication tag")
+	tag1, err := usigAuthScheme1.GenerateAuthenticationTag(testMessage, nil)
+	require.NoError(t, err)
 
-	err = usigAuthScheme.VerifyAuthenticationTag(testMessage, tag, usig.PublicKey())
-	assert.NoError(t, err, "Failed to verify USIG authentication tag")
+	err = usigAuthScheme1.VerifyAuthenticationTag(testMessage, tag1, pubKey)
+	assert.NoError(t, err)
+
+	if testing.Short() {
+		t.Skip("skipping USIG enclave recreation in short mode.")
+	}
+	// The USIG enclave might have been built in simulation mode.
+	// Apparently, SGX SDK in the simulation mode uses current
+	// time in *seconds* to seed random number generation. We need
+	// to wait at least one second to ensure that the enclave gets
+	// a unique epoch in that case.
+	time.Sleep(time.Second)
+
+	usig2, err := sgxusig.New(usigEnclaveFile, usig1.SealedKey())
+	require.NoError(t, err)
+	assert.Equal(t, pubKey, usig2.PublicKey())
+
+	usigAuthScheme2 := NewSGXUSIGAuthenticationScheme(usig2)
+
+	tag2, err := usigAuthScheme2.GenerateAuthenticationTag(testMessage, nil)
+	require.NoError(t, err)
+
+	err = usigAuthScheme1.VerifyAuthenticationTag(testMessage, tag2, pubKey)
+	assert.Error(t, err)
 }
 
 func TestCrypto(t *testing.T) {

@@ -43,11 +43,10 @@ func TestUIVerifier(t *testing.T) {
 		authen := mock_api.NewMockAuthenticator(ctrl)
 
 		replicaID := rand.Uint32()
-		epoch := rand.Uint64()
 		cv := rand.Uint64()
 
 		payload := []byte(fmt.Sprintf("MessageWithUI{replicaID: %d}", replicaID))
-		ui := &usig.UI{Epoch: epoch, Counter: cv, Cert: []byte{}}
+		ui := &usig.UI{Counter: cv, Cert: []byte{}}
 		uiBytes, _ := ui.MarshalBinary()
 		msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
 		msg.EXPECT().Payload().Return(payload).AnyTimes()
@@ -82,81 +81,65 @@ func TestUIAcceptor(t *testing.T) {
 	cases := []struct {
 		desc      string
 		replicaID int
-		epoch     int
 		cv        int
 		invalid   bool
 		ok        bool
 		new       bool
 	}{
 		{
-			desc:  "Invalid (zero) counter value",
-			epoch: 42, // arbitrary value
-			cv:    0,
+			desc: "Invalid (zero) counter value",
+			cv:   0,
 		}, {
 			desc:    "Invalid USIG certificate",
-			epoch:   42,
 			cv:      1,
 			invalid: true,
 		}, {
-			desc:  "First UI with too advanced counter value",
-			epoch: 42,
-			cv:    2,
+			desc: "First UI with too advanced counter value",
+			cv:   2,
 		}, {
-			desc:  "First valid UI",
-			epoch: 100,
-			cv:    1,
-			ok:    true,
-			new:   true,
+			desc: "First valid UI",
+			cv:   1,
+			ok:   true,
+			new:  true,
 		}, {
-			desc:  "The same UI again",
-			epoch: 100,
-			cv:    1,
-			ok:    true,
+			desc: "The same UI again",
+			cv:   1,
+			ok:   true,
 		}, {
-			desc:  "Divergent epoch value",
-			epoch: 42,
-			cv:    1,
-		}, {
-			desc:  "Too advanced counter value",
-			epoch: 100,
-			cv:    3,
+			desc: "Too advanced counter value",
+			cv:   3,
 		}, {
 			desc:      "First valid UI from another replica",
 			replicaID: 1,
-			epoch:     101,
 			cv:        1,
 			ok:        true,
 			new:       true,
 		}, {
 			desc:      "Second valid UI from another replica",
 			replicaID: 1,
-			epoch:     101,
 			cv:        2,
 			ok:        true,
 			new:       true,
 		}, {
-			desc:  "Second valid UI",
-			epoch: 100,
-			cv:    2,
-			ok:    true,
-			new:   true,
+			desc: "Second valid UI",
+			cv:   2,
+			ok:   true,
+			new:  true,
 		}, {
-			desc:  "Previous valid UI",
-			epoch: 100,
-			cv:    1,
-			ok:    true,
+			desc: "Previous valid UI",
+			cv:   1,
+			ok:   true,
 		}, {
-			desc:  "Third valid UI",
-			epoch: 100,
-			cv:    3,
-			ok:    true,
-			new:   true,
+			desc: "Third valid UI",
+			cv:   3,
+			ok:   true,
+			new:  true,
 		},
 	}
 
 	acceptor := makeUIAcceptor(fakeVerifier)
 	for _, c := range cases {
-		new, err := acceptor(&fakeMsgWithUI{c.replicaID, c.epoch, c.cv, !c.invalid})
+		new, err := acceptor(&fakeMsgWithUI{c.replicaID, c.cv, !c.invalid})
 		if c.ok {
 			require.NoErrorf(t, err, c.desc)
 		} else {
@@ -177,8 +160,7 @@ func TestUIAcceptorConcurrent(t *testing.T) {
 	for id := 0; id < nrConcurrent; id++ {
 		go func(workerID int) {
 			for cv := 1; cv <= nrUIs; cv++ {
-				epoch := 100 + workerID
-				new, err := acceptor(&fakeMsgWithUI{workerID, epoch, cv, true})
+				new, err := acceptor(&fakeMsgWithUI{workerID, cv, true})
 				assertMsg := fmt.Sprintf("Worker %d, UI %d", workerID, cv)
 				assert.NoErrorf(t, err, assertMsg)
 				assert.True(t, new, assertMsg)
@@ -216,7 +198,6 @@ func TestUIAssigner(t *testing.T) {
 
 type fakeMsgWithUI struct {
 	replicaID int
-	epoch     int
 	cv        int
 	valid     bool
 }
@@ -228,7 +209,7 @@ func (m *fakeMsgWithUI) AttachUI(ui []byte) {}
 
 func fakeVerifier(msg messages.MessageWithUI) (ui *usig.UI, err error) {
 	m := msg.(*fakeMsgWithUI)
-	ui = &usig.UI{Epoch: uint64(m.epoch), Counter: uint64(m.cv)}
+	ui = &usig.UI{Counter: uint64(m.cv)}
 	if !m.valid {
 		err = fmt.Errorf("USIG certificate invalid")
 	}

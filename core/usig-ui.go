@@ -54,13 +54,9 @@ func defaultUIAcceptor(auth api.Authenticator) uiAcceptor {
 // makeUIAcceptor constructs uiAcceptor using the supplied UI
 // verifier.
 func makeUIAcceptor(verifier uiVerifier) uiAcceptor {
-	type uiState struct {
-		epoch  uint64
-		lastCV uint64
-	}
 	var (
-		lock     sync.Mutex
-		uiStates = make(map[uint32]*uiState) // replica ID -> UI state
+		lock   sync.Mutex
+		lastCV = make(map[uint32]uint64) // replica ID -> last accepted CV
 	)
 
 	return func(msg messages.MessageWithUI) (new bool, err error) {
@@ -75,23 +71,16 @@ func makeUIAcceptor(verifier uiVerifier) uiAcceptor {
 
 		lock.Lock()
 		defer lock.Unlock()
-		state := uiStates[replicaID]
-		if state == nil {
-			state = &uiState{epoch: ui.Epoch}
-		}
 
-		if ui.Epoch != state.epoch {
-			return false, fmt.Errorf("Epoch value mismatch")
-		} else if ui.Counter-1 > state.lastCV {
+		if ui.Counter-1 > lastCV[replicaID] {
 			return false, fmt.Errorf("Previous counter value not yet accepted")
 		}
 
-		if ui.Counter <= state.lastCV {
+		if ui.Counter <= lastCV[replicaID] {
 			return false, nil
 		}
 
-		state.lastCV++
-		uiStates[replicaID] = state
+		lastCV[replicaID]++
 
 		return true, nil
 	}
