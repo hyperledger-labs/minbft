@@ -21,6 +21,7 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
 	"math/big"
@@ -161,9 +162,9 @@ func (au *USIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []byte
 	if err := ui.UnmarshalBinary(sig); err != nil {
 		return fmt.Errorf("failed to unmarshal UI: %v", err)
 	}
-	usigID, ok := pubKey.([]byte)
-	if !ok {
-		return fmt.Errorf("invalid type of public key: expected USIG identity")
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
+	if err != nil {
+		panic(fmt.Sprintf("x509.MarshalPKIXPublicKey failed: %v", err))
 	}
-	return au.usig.VerifyUI(m, &ui, usigID)
+	return au.usig.VerifyUI(m, &ui, pubKeyBytes)
 }

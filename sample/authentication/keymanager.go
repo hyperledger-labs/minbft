@@ -287,6 +287,7 @@ func getKeySpec(keySpecStr string) (keySpec, error) {
 //###### SGX_ECDSA #######
 
 type sgxEcdsaKeySpec struct {
+	ecdsaKeySpec
 	// path to the USIG enclave image file; used only for key generation
 	enclaveFile string
 }
@@ -305,16 +306,8 @@ func (spec *sgxEcdsaKeySpec) parsePrivateKey(privKeyStr string) (interface{}, er
 	return sealedKey, nil
 }
 
-// parsePublicKey parse a USIG identity in base64
-func (spec *sgxEcdsaKeySpec) parsePublicKey(pubKeyStr string) (interface{}, error) {
-	usigID, err := base64.StdEncoding.DecodeString(pubKeyStr)
-	if err != nil {
-		return nil, err
-	}
-	return usigID, nil
-}
-
-// generateKeyPair unimplemented. Only SGX enclave generates the key pair
+// generateKeyPair creates an SGX USIG instance to generate a key
+// pair, where the private key is sealed by the enclave.
 func (spec *sgxEcdsaKeySpec) generateKeyPair(securityParam int) (string, string, error) {
 	usig, err := sgxusig.New(spec.enclaveFile, nil)
 	if err != nil {

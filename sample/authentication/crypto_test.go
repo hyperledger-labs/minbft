@@ -75,7 +75,7 @@ func testUSIGAuthenScheme(t *testing.T) {
 	tag, err := usigAuthScheme.GenerateAuthenticationTag(testMessage, nil)
 	assert.NoError(t, err, "Failed to generate USIG authentication tag")
 
-	err = usigAuthScheme.VerifyAuthenticationTag(testMessage, tag, usig.ID())
+	err = usigAuthScheme.VerifyAuthenticationTag(testMessage, tag, usig.PublicKey())
 	assert.NoError(t, err, "Failed to verify USIG authentication tag")
 }
 
