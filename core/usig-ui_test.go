@@ -95,32 +95,19 @@ func TestMakeUICapturer(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	providePeerState, msg, peerState := setupPeerStateProviderMock(ctrl, mock)
+	replicaID := rand.Uint32()
+	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
 
-	verifyUI := func(msg messages.MessageWithUI) (*usig.UI, error) {
-		args := mock.MethodCalled("uiVerifier", msg)
-		return args.Get(0).(*usig.UI), args.Error(1)
-	}
+	captureUI := makeUICapturer(providePeerState)
 
-	captureUI := makeUICapturer(providePeerState, verifyUI)
+	ui := &usig.UI{Counter: rand.Uint64()}
 
-	mock.On("uiVerifier", msg).Return((*usig.UI)(nil), fmt.Errorf("Invalid UI")).Once()
-	new, err := captureUI(msg)
-	assert.Error(t, err)
-	assert.False(t, new)
-
-	ui := &usig.UI{Counter: uint64(1), Cert: []byte{}}
-
-	mock.On("uiVerifier", msg).Return(ui, nil).Once()
 	peerState.EXPECT().CaptureUI(ui).Return(false)
-	new, err = captureUI(msg)
-	assert.NoError(t, err)
+	new := captureUI(replicaID, ui)
 	assert.False(t, new)
 
-	mock.On("uiVerifier", msg).Return(ui, nil).Once()
 	peerState.EXPECT().CaptureUI(ui).Return(true)
-	new, err = captureUI(msg)
-	assert.NoError(t, err)
+	new = captureUI(replicaID, ui)
 	assert.True(t, new)
 }
 
@@ -131,33 +118,29 @@ func TestMakeUIReleaser(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	providePeerState, msg, peerState := setupPeerStateProviderMock(ctrl, mock)
+	replicaID := rand.Uint32()
+	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
 
 	releaseUI := makeUIReleaser(providePeerState)
 
-	ui := &usig.UI{Counter: uint64(1), Cert: []byte{}}
-	uiBytes, _ := ui.MarshalBinary()
-	msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
+	ui := &usig.UI{Counter: rand.Uint64()}
 
 	peerState.EXPECT().ReleaseUI(ui).Return(fmt.Errorf("UI already released"))
-	assert.Panics(t, func() { releaseUI(msg) })
+	assert.Panics(t, func() { releaseUI(replicaID, ui) })
 
 	peerState.EXPECT().ReleaseUI(ui).Return(nil)
-	assert.NotPanics(t, func() { releaseUI(msg) })
+	assert.NotPanics(t, func() { releaseUI(replicaID, ui) })
 }
 
-func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock) (peerstate.Provider, *mock_messages.MockMessageWithUI, *mock_peerstate.MockState) {
+func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock, replicaID uint32) (peerstate.Provider, *mock_peerstate.MockState) {
 	peerState := mock_peerstate.NewMockState(ctrl)
-	msg := mock_messages.NewMockMessageWithUI(ctrl)
 
 	providePeerState := func(replicaID uint32) peerstate.State {
 		args := mock.MethodCalled("peerStateProvider", replicaID)
 		return args.Get(0).(peerstate.State)
 	}
 
-	replicaID := rand.Uint32()
-	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
 	mock.On("peerStateProvider", replicaID).Return(peerState)
 
-	return providePeerState, msg, peerState
+	return providePeerState, peerState
 }
