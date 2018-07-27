@@ -50,21 +50,30 @@ func New(enclaveFile string, sealedKey []byte) (*USIG, error) {
 	return &USIG{enclave}, nil
 }
 
-// CreateUI creates a unique identifiers assigned to the message.
-func (usig *USIG) CreateUI(message []byte) (*usig.UI, error) {
-	return usig.USIGEnclave.CreateUI(sha256.Sum256(message))
+// CreateUI creates a unique identifier assigned to the message.
+func (u *USIG) CreateUI(message []byte) (*usig.UI, error) {
+	counter, signature, err := u.USIGEnclave.CreateUI(sha256.Sum256(message))
+	if err != nil {
+		return nil, err
+	}
+
+	return &usig.UI{
+		Epoch:   u.Epoch(),
+		Counter: counter,
+		Cert:    signature,
+	}, nil
 }
 
 // VerifyUI is just a wrapper around the VerifyUI function at the
 // package-level.
-func (usig *USIG) VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
+func (u *USIG) VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
 	return VerifyUI(message, ui, usigID)
 }
 
 // ID returns the SGXUSIG instance identity which is ASN.1 marshaled
 // public key of the enclave.
-func (usig *USIG) ID() []byte {
-	bytes, err := x509.MarshalPKIXPublicKey(usig.PublicKey())
+func (u *USIG) ID() []byte {
+	bytes, err := x509.MarshalPKIXPublicKey(u.PublicKey())
 	if err != nil {
 		panic(err)
 	}
