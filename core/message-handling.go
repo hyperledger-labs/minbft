@@ -54,18 +54,19 @@ type uiMessageConsumer func(msg messages.MessageWithUI)
 func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
 	n := config.N()
 
-	view := func() uint64 { return 0 } // view change is not implemented
-	verifyUI := makeUIVerifier(stack)
 	clientStates := clientstate.NewProvider()
 	peerStates := peerstate.NewProvider()
-	captureUI := makeUICapturer(peerStates, verifyUI)
+
+	view := func() uint64 { return 0 } // view change is not implemented
+	verifyUI := makeUIVerifier(stack)
+	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
 	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
 	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
-	handlePrepare := makePrepareHandler(id, n, view, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
-	handleCommit := makeCommitHandler(id, n, view, captureUI, handlePrepare, collectCommit, releaseUI)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, handlePrepare, handleCommit)
 }

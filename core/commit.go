@@ -57,15 +57,22 @@ func defaultCommitCollector(id uint32, clientStates clientstate.Provider, config
 
 // makeCommitHandler construct an instance of commitHandler using n as
 // the total number of nodes, and the supplied abstract interfaces.
-func makeCommitHandler(id, n uint32, view viewProvider, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector, releaseUI uiReleaser) commitHandler {
+func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector, releaseUI uiReleaser) commitHandler {
 	return func(commit *messages.Commit) (new bool, err error) {
-		if new, err = captureUI(commit); err != nil {
-			logger.Debugf("Replica %d handling Commit from replica %d: view=%d primary=%d seq=%d",
-				id, commit.Msg.ReplicaId, commit.Msg.View, commit.Msg.PrimaryId,
-				commit.Msg.Request.Msg.Seq)
-			return false, fmt.Errorf("Commit UI cannot be captured: %s", err)
-		} else if new {
-			defer releaseUI(commit)
+		replicaID := commit.ReplicaID()
+		logger.Debugf(
+			"Replica %d handling Commit from replica %d: view=%d primary=%d seq=%d",
+			id, replicaID, commit.Msg.View, commit.Msg.PrimaryId,
+			commit.Msg.Request.Msg.Seq)
+
+		ui, err := verifyUI(commit)
+		if err != nil {
+			return false, fmt.Errorf("UI is not valid: %s", err)
+		}
+
+		new = captureUI(replicaID, ui)
+		if new {
+			defer releaseUI(replicaID, ui)
 		}
 
 		if currentView := view(); commit.Msg.View != currentView {
