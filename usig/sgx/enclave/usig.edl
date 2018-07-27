@@ -40,7 +40,6 @@ enclave {
 
         public sgx_status_t ecall_usig_create_ui(
             [in, isary] sgx_sha256_hash_t digest,
-            [out] uint64_t *epoch,
             [out] uint64_t *counter,
             [out] sgx_ec256_signature_t *signature
         );

@@ -109,7 +109,7 @@ func (enclave *USIGEnclave) CreateUI(digest Digest) (*usig.UI, error) {
 	}
 
 	return &usig.UI{
-		Epoch:   uint64(ui.epoch),
+		Epoch:   enclave.epoch,
 		Counter: uint64(ui.counter),
 		Cert:    sgxEC256SigToASN1(&ui.signature),
 	}, nil

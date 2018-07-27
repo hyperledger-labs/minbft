@@ -29,13 +29,11 @@ extern "C" {
 
 /**
  * usig_ui - structure representing a unique identifier
- * @epoch:     unique value for each new USIG instance
  * @counter:   counter value
  * @signature: USIG signature over the digest followed by the epoch
  *             and counter values in little-endian byte order
  */
 typedef struct {
-        uint64_t epoch;
         uint64_t counter;
         sgx_ec256_signature_t signature;
 } usig_ui;

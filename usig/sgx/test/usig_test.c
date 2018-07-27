@@ -75,8 +75,6 @@ static void test_create_ui()
         assert(usig_get_epoch(usig, &e1) == SGX_SUCCESS);
 
         assert(usig_create_ui(usig, digest, &ui1) == SGX_SUCCESS);
-        // Epoch value in UI should match
-        assert(ui1.epoch == e1);
         // The first counter value must be one
         assert(ui1.counter == 1);
 
@@ -85,8 +83,6 @@ static void test_create_ui()
         assert(ui2.counter == ui1.counter + 1);
         // Certificate must be unique for each counter value
         assert(!signature_is_equal(&ui1, &ui2));
-        // Epoch should be the same for the same USIG instance
-        assert(ui1.epoch == ui2.epoch);
 
         // Destroy USIG instance
         assert(usig_destroy(usig) == SGX_SUCCESS);
@@ -97,8 +93,6 @@ static void test_create_ui()
         assert(usig_get_epoch(usig, &e2) == SGX_SUCCESS);
 
         assert(usig_create_ui(usig, digest, &ui3) == SGX_SUCCESS);
-        // Epoch value in UI should match
-        assert(ui3.epoch == e2);
         // Must fetch a fresh counter value
         assert(ui3.counter == 1);
 #ifndef SGX_SIM_MODE
