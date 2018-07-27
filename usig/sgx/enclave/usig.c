@@ -34,7 +34,6 @@ typedef struct __attribute__((__packed__)) {
 } usig_cert_data_t;
 
 sgx_status_t ecall_usig_create_ui(sgx_sha256_hash_t digest,
-                                  uint64_t *epoch,
                                   uint64_t *counter,
                                   sgx_ec256_signature_t *signature)
 {
@@ -55,7 +54,7 @@ sgx_status_t ecall_usig_create_ui(sgx_sha256_hash_t digest,
         }
 
         memcpy(data.digest, digest, sizeof(data.digest));
-        *epoch = data.epoch = usig_epoch;
+        data.epoch = usig_epoch;
         *counter = data.counter = usig_counter;
 
         ret = sgx_ecdsa_sign((uint8_t *)&data, sizeof(data),
