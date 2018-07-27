@@ -23,9 +23,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/nec-blockchain/minbft/api"
 	"github.com/nec-blockchain/minbft/usig"
-	fakeusig "github.com/nec-blockchain/minbft/usig/fake"
 	mock_usig "github.com/nec-blockchain/minbft/usig/mocks"
 )
 
@@ -81,26 +79,4 @@ func TestMockUsig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, assert.ObjectsAreEqual(&uisExp[2], ui2))
 	assert.NoError(t, mockUsig.VerifyUI(testMsg, &uis[0], []byte("usig id")))
-}
-
-func TestFakeUsigAuthenticator(t *testing.T) {
-	var uiRaw []byte
-	var err error
-
-	mockUsigAuth := fakeusig.NewFakeUsigAuthenticator()
-
-	uiRaw, _ = mockUsigAuth.GenerateMessageAuthenTag(api.USIGAuthen, []byte("any message"))
-	ui1 := &usig.UI{}
-	err = ui1.UnmarshalBinary(uiRaw)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), ui1.Counter)
-
-	uiRaw, _ = mockUsigAuth.GenerateMessageAuthenTag(api.USIGAuthen, []byte("any message"))
-	ui2 := &usig.UI{}
-	err = ui2.UnmarshalBinary(uiRaw)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(2), ui2.Counter)
-
-	err = mockUsigAuth.VerifyMessageAuthenTag(api.USIGAuthen, uint32(0), []byte("any message"), uiRaw)
-	assert.NoError(t, err)
 }
