@@ -10,7 +10,7 @@ jobs:
       - run:
           name: Install Go
           command: |
-            wget "https://golang.org/dl/go1.9.4.linux-amd64.tar.gz" -O golang.tar.gz
+            wget "https://golang.org/dl/go1.10.3.linux-amd64.tar.gz" -O golang.tar.gz
             sudo tar -C /usr/local -xaf golang.tar.gz
             rm golang.tar.gz
             echo 'export GOPATH=$HOME/go' >> $BASH_ENV
