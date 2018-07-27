@@ -70,10 +70,14 @@ func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, acc
 			return false, fmt.Errorf("UI is not valid: %s", err)
 		}
 
-		new = acceptUI(replicaID, ui)
-		if new {
-			defer commitUI(replicaID, ui)
+		if replicaID == id {
+			return false, nil
 		}
+
+		if new = acceptUI(replicaID, ui); !new {
+			return false, nil
+		}
+		defer commitUI(replicaID, ui)
 
 		if currentView := view(); commit.Msg.View != currentView {
 			return false, fmt.Errorf("Commit is for view %d, current view is %d",

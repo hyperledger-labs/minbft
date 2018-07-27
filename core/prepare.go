@@ -44,10 +44,14 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ac
 			return false, fmt.Errorf("UI not valid: %s", err)
 		}
 
-		new = acceptUI(replicaID, ui)
-		if new {
-			defer commitUI(replicaID, ui)
+		if replicaID == id {
+			return false, nil
 		}
+
+		if new = acceptUI(replicaID, ui); !new {
+			return false, nil
+		}
+		defer commitUI(replicaID, ui)
 
 		currentView := view()
 
@@ -61,9 +65,6 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ac
 
 		if _, _, err = handleRequest(prepare.Msg.Request, true); err != nil {
 			return false, fmt.Errorf("Failed to process request: %s", err)
-		}
-		if !new || isPrimary(currentView, id, n) {
-			return false, nil
 		}
 
 		commit := &messages.Commit{

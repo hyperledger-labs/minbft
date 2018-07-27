@@ -94,17 +94,26 @@ func TestMakeCommitHandler(t *testing.T) {
 		}
 	}
 
-	commit := makeCommitMsg(otherID, view)
+	commit := makeCommitMsg(id, view)
 
 	mock.On("uiVerifier", commit).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
 	_, err := handle(commit)
-	assert.Error(t, err, "UI check failed")
+	assert.Error(t, err, "Faked own UI")
+
+	mock.On("uiVerifier", commit).Return(ui, nil).Once()
+	new, err := handle(commit)
+	assert.NoError(t, err)
+	assert.False(t, new, "Own Commit")
+
+	commit = makeCommitMsg(otherID, view)
+
+	mock.On("uiVerifier", commit).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
+	_, err = handle(commit)
+	assert.Error(t, err, "UI not valid")
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
 	mock.On("uiAcceptor", otherID, ui).Return(false, nil).Once()
-	mock.On("prepareHandler", prepare).Return(false, nil).Once()
-	mock.On("collectCommit", commit).Return(nil).Once()
-	new, err := handle(commit)
+	new, err = handle(commit)
 	assert.NoError(t, err)
 	assert.False(t, new, "UI already processed")
 
