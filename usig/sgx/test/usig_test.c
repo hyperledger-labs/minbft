@@ -63,6 +63,7 @@ static void test_seal_key()
 static void test_create_ui()
 {
         sgx_enclave_id_t usig;
+        uint64_t e1, e2;
         void *sealed_data;
         size_t sealed_data_size;
         usig_ui ui1, ui2, ui3;
@@ -71,9 +72,14 @@ static void test_create_ui()
         assert(usig_init(enclave_file, &usig, NULL, 0) == SGX_SUCCESS);
         assert(usig_seal_key(usig, &sealed_data,
                              &sealed_data_size) == SGX_SUCCESS);
+        assert(usig_get_epoch(usig, &e1) == SGX_SUCCESS);
+
         assert(usig_create_ui(usig, digest, &ui1) == SGX_SUCCESS);
-        // The first counter value must be zero
+        // Epoch value in UI should match
+        assert(ui1.epoch == e1);
+        // The first counter value must be one
         assert(ui1.counter == 1);
+
         assert(usig_create_ui(usig, digest, &ui2) == SGX_SUCCESS);
         // The counter must be monotonic and sequential
         assert(ui2.counter == ui1.counter + 1);
@@ -81,11 +87,18 @@ static void test_create_ui()
         assert(!signature_is_equal(&ui1, &ui2));
         // Epoch should be the same for the same USIG instance
         assert(ui1.epoch == ui2.epoch);
+
+        // Destroy USIG instance
         assert(usig_destroy(usig) == SGX_SUCCESS);
+
         // Recreate USIG using the sealed secret from the first instance
         assert(usig_init(enclave_file, &usig, sealed_data,
                          sealed_data_size) == SGX_SUCCESS);
+        assert(usig_get_epoch(usig, &e2) == SGX_SUCCESS);
+
         assert(usig_create_ui(usig, digest, &ui3) == SGX_SUCCESS);
+        // Epoch value in UI should match
+        assert(ui3.epoch == e2);
         // Must fetch a fresh counter value
         assert(ui3.counter == 1);
 #ifndef SGX_SIM_MODE
@@ -94,9 +107,10 @@ static void test_create_ui()
         // don't want to wait that long and skip these checks.
         // Check for uniqueness of the epoch and certificate produced
         // by the new instance of the enclave
-        assert(ui1.epoch != ui3.epoch);
+        assert(e1 != e2);
         assert(!signature_is_equal(&ui1, &ui3));
 #endif
+
         assert(usig_destroy(usig) == SGX_SUCCESS);
         free(sealed_data);
 }

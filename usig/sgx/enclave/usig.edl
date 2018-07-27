@@ -32,6 +32,8 @@ enclave {
             uint32_t sealed_data_size
         );
 
+        public sgx_status_t ecall_usig_get_epoch([out] uint64_t *epoch);
+
         public sgx_status_t ecall_usig_get_pub_key(
             [out] sgx_ec256_public_t *pub_key
         );

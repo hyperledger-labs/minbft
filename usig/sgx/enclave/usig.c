@@ -76,6 +76,17 @@ out:
         return ret;
 }
 
+sgx_status_t ecall_usig_get_epoch(uint64_t *epoch)
+{
+        if (!initialized) {
+                return SGX_ERROR_UNEXPECTED;
+        }
+
+        *epoch = usig_epoch;
+
+        return SGX_SUCCESS;
+}
+
 sgx_status_t ecall_usig_get_pub_key(sgx_ec256_public_t *pub_key)
 {
         if (!initialized) {
