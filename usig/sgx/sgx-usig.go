@@ -18,14 +18,9 @@
 package sgx
 
 import (
-	"bytes"
-	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/asn1"
-	"encoding/binary"
 	"fmt"
-	"math/big"
 
 	"github.com/nec-blockchain/minbft/usig"
 )
@@ -52,7 +47,7 @@ func New(enclaveFile string, sealedKey []byte) (*USIG, error) {
 
 // CreateUI creates a unique identifier assigned to the message.
 func (u *USIG) CreateUI(message []byte) (*usig.UI, error) {
-	counter, signature, err := u.USIGEnclave.CreateUI(sha256.Sum256(message))
+	counter, signature, err := u.USIGEnclave.CreateUI(messageDigest(message))
 	if err != nil {
 		return nil, err
 	}
@@ -84,41 +79,14 @@ func (u *USIG) ID() []byte {
 // VerifyUI verifies unique identifier generated for the message by
 // USIG with the specified identity.
 func VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
-	usigPubKey, err := x509.ParsePKIXPublicKey(usigID)
+	pubKey, err := x509.ParsePKIXPublicKey(usigID)
 	if err != nil {
 		return fmt.Errorf("failed to parse USIG ID: %v", err)
 	}
 
-	ecdsaPubKey, ok := usigPubKey.(*ecdsa.PublicKey)
-	if !ok {
-		return fmt.Errorf("invalid USIG ID format: expected ECDSA public key")
-	}
+	return VerifySignature(pubKey, messageDigest(message), ui.Epoch, ui.Counter, ui.Cert)
+}
 
-	digest := sha256.Sum256(message)
-
-	certDataBuf := bytes.NewBuffer(digest[:])
-	err = binary.Write(certDataBuf, binary.LittleEndian, ui.Epoch)
-	if err != nil {
-		panic(err)
-	}
-	err = binary.Write(certDataBuf, binary.LittleEndian, ui.Counter)
-	if err != nil {
-		panic(err)
-	}
-
-	hash := sha256.Sum256(certDataBuf.Bytes())
-
-	signature := new(struct{ R, S *big.Int })
-	rest, err := asn1.Unmarshal(ui.Cert, signature)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal USIG signature: %v", err)
-	} else if len(rest) != 0 {
-		return fmt.Errorf("extra bytes in USIG signature")
-	}
-
-	if !ecdsa.Verify(ecdsaPubKey, hash[:], signature.R, signature.S) {
-		return fmt.Errorf("signature not valid")
-	}
-
-	return nil
+func messageDigest(message []byte) Digest {
+	return sha256.Sum256(message)
 }
