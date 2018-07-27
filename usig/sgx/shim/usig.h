@@ -28,17 +28,6 @@ extern "C" {
 #endif
 
 /**
- * usig_ui - structure representing a unique identifier
- * @counter:   counter value
- * @signature: USIG signature over the digest followed by the epoch
- *             and counter values in little-endian byte order
- */
-typedef struct {
-        uint64_t counter;
-        sgx_ec256_signature_t signature;
-} usig_ui;
-
-/**
  * usig_init() - Create and initialize an instance of USIG enclave
  * @enclave_file:     path to the enclave image file
  * @enclave_id:       pointer to store enclave ID to
@@ -72,17 +61,24 @@ sgx_status_t usig_init(const char *enalave_file, sgx_enclave_id_t *enclave_id,
 sgx_status_t usig_destroy(const sgx_enclave_id_t enclave_id);
 
 /**
- * usig_create_ui() - Create a unique identifier (UI) for the message
- *                    digest
+ * usig_create_ui() - Assign the next USIG counter value to a digest
  * @enclave_id: enclave ID of the USIG instance returned by usig_init()
  * @digest:     message digest to create UI for
- * @ui:         pointer to usig_ui structure to store the UI to
+ * @counter:    pointer to store the assigned counter value to
+ * @signature:  pointer to store USIG signature to
+ *
+ * This invocation will increment the value of the ephemeral counter
+ * maintained by the enclave instance and create a signature. The
+ * signature covers the message digest followed by the epoch and
+ * counter values in little-endian byte order. The signature is
+ * produced using the key pair of the enclave instance.
  *
  * Return: SGX_SUCCESS if no error; SGX error status, otherwise
  */
 sgx_status_t usig_create_ui(sgx_enclave_id_t enclave_id,
                             sgx_sha256_hash_t digest,
-                            usig_ui *ui);
+                            uint64_t *counter,
+                            sgx_ec256_signature_t *signature);
 
 /**
  * usig_get_epoch() - Get epoch value of the USIG instance
