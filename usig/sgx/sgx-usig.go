@@ -18,8 +18,11 @@
 package sgx
 
 import (
+	"bytes"
+	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/nec-blockchain/minbft/usig"
@@ -65,23 +68,25 @@ func (u *USIG) VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
 	return VerifyUI(message, ui, usigID)
 }
 
-// ID returns the SGXUSIG instance identity which is ASN.1 marshaled
-// public key of the enclave.
+// ID returns the USIG instance identity.
 func (u *USIG) ID() []byte {
-	bytes, err := x509.MarshalPKIXPublicKey(u.PublicKey())
+	id, err := MakeID(u.Epoch(), u.PublicKey())
 	if err != nil {
 		panic(err)
 	}
-
-	return bytes
+	return id
 }
 
 // VerifyUI verifies unique identifier generated for the message by
 // USIG with the specified identity.
 func VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
-	pubKey, err := x509.ParsePKIXPublicKey(usigID)
+	epoch, pubKey, err := ParseID(usigID)
 	if err != nil {
-		return fmt.Errorf("failed to parse USIG ID: %v", err)
+		return fmt.Errorf("failed to parse USIG ID: %s", err)
+	}
+
+	if ui.Epoch != epoch {
+		return fmt.Errorf("epoch value mismatch")
 	}
 
 	return VerifySignature(pubKey, messageDigest(message), ui.Epoch, ui.Counter, ui.Cert)
@@ -89,4 +94,42 @@ func VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
 
 func messageDigest(message []byte) Digest {
 	return sha256.Sum256(message)
+}
+
+// MakeID composes a USIG identity which is 64-bit big-endian encoded
+// epoch value followed by public key serialized in PKIX format.
+func MakeID(epoch uint64, publicKey interface{}) ([]byte, error) {
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize public key: %s", err)
+	}
+
+	buf := new(bytes.Buffer)
+
+	if err := binary.Write(buf, binary.BigEndian, epoch); err != nil {
+		panic(err)
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, publicKeyBytes); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// ParseID breaks a USIG identity down to epoch value and public key.
+func ParseID(usigID []byte) (epoch uint64, pubKey crypto.PublicKey, err error) {
+	buf := bytes.NewBuffer(usigID)
+
+	err = binary.Read(buf, binary.BigEndian, &epoch)
+	if err != nil {
+		return uint64(0), nil, fmt.Errorf("failed to extract epoch from USIG ID: %s", err)
+	}
+
+	pubKey, err = x509.ParsePKIXPublicKey(buf.Bytes())
+	if err != nil {
+		return uint64(0), nil, fmt.Errorf("failed to parse public key: %s", err)
+	}
+
+	return epoch, pubKey, err
 }

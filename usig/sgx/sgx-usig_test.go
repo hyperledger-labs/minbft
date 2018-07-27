@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -40,9 +41,8 @@ func TestSGXUSIG(t *testing.T) {
 	assert.NotNil(t, key, "Got nil sealed key")
 
 	// Get the public key from the fist instance
-	usigID := usig.ID()
-	assert.NotNil(t, usigID, "Got nil USIG identity")
-	assert.NotEqual(t, 0, len(usigID), "Got zero-length USIG identity")
+	usigPubKey := usig.PublicKey()
+	assert.NotNil(t, usigPubKey, "Got nil USIG public key")
 
 	// Destroy the fist instance, just to be sure
 	usig.Destroy()
@@ -52,6 +52,15 @@ func TestSGXUSIG(t *testing.T) {
 	assert.NoError(t, err, "Error creating SGXUSIG instance with key unsealing")
 	assert.NotNil(t, usig, "Got nil SGXUSIG instance")
 	defer usig.Destroy()
+
+	epoch := usig.Epoch()
+	usigID, err := MakeID(epoch, usigPubKey)
+	require.NoError(t, err)
+
+	parsedEpoch, parsedPubKey, err := ParseID(usigID)
+	assert.NoError(t, err)
+	assert.Equal(t, epoch, parsedEpoch)
+	assert.Equal(t, usigPubKey, parsedPubKey)
 
 	ui, err := usig.CreateUI(msg)
 	assert.NoError(t, err, "Error creating UI")
