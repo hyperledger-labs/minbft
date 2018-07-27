@@ -27,6 +27,7 @@ import (
 	"math/big"
 
 	"github.com/nec-blockchain/minbft/usig"
+	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
 )
 
 // SignatureCipher defines the interface of signature operations used by public cryptographic ciphers
@@ -122,24 +123,25 @@ func (a *PublicAuthenScheme) VerifyAuthenticationTag(m []byte, sig []byte, pubKe
 	return nil
 }
 
-// USIGAuthenticationScheme impelements AuthenticationScheme interface
-// by utilizing USIG to create/verify authentication tags.
-type USIGAuthenticationScheme struct {
-	usig usig.USIG
+// SGXUSIGAuthenticationScheme impelements AuthenticationScheme
+// interface by utilizing SGX USIG to create/verify authentication
+// tags.
+type SGXUSIGAuthenticationScheme struct {
+	usig *sgxusig.USIG
 }
 
-var _ AuthenticationScheme = (*USIGAuthenticationScheme)(nil)
+var _ AuthenticationScheme = (*SGXUSIGAuthenticationScheme)(nil)
 
-// NewUSIGAuthenticationScheme creates a new instance of USIG
+// NewSGXUSIGAuthenticationScheme creates a new instance of SGX USIG
 // authentication scheme.
-func NewUSIGAuthenticationScheme(usig usig.USIG) *USIGAuthenticationScheme {
-	return &USIGAuthenticationScheme{usig}
+func NewSGXUSIGAuthenticationScheme(usig *sgxusig.USIG) *SGXUSIGAuthenticationScheme {
+	return &SGXUSIGAuthenticationScheme{usig}
 }
 
 // GenerateAuthenticationTag creates a new authentication for the
 // message. Marshaled USIG UI represents an authentication tag.
 // Supplied private key is ignored.
-func (au *USIGAuthenticationScheme) GenerateAuthenticationTag(m []byte, privKey interface{}) ([]byte, error) {
+func (au *SGXUSIGAuthenticationScheme) GenerateAuthenticationTag(m []byte, privKey interface{}) ([]byte, error) {
 	ui, err := au.usig.CreateUI(m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create UI: %v", err)
@@ -153,18 +155,19 @@ func (au *USIGAuthenticationScheme) GenerateAuthenticationTag(m []byte, privKey 
 	return usigBytes, nil
 }
 
-// VerifyAuthenticationTag verifies the supplied USIG authentication
-// tag. Marshaled USIG UI represents an authentication tag. Public key
-// is supposed to be the USIG identity as returned by usig.USIG.ID()
-func (au *USIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []byte, pubKey interface{}) error {
+// VerifyAuthenticationTag verifies the supplied authentication tag.
+// Marshaled USIG UI represents an authentication tag.
+func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []byte, pubKey interface{}) error {
 	var ui usig.UI
 
 	if err := ui.UnmarshalBinary(sig); err != nil {
 		return fmt.Errorf("failed to unmarshal UI: %v", err)
 	}
+
 	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
 	if err != nil {
 		panic(fmt.Sprintf("x509.MarshalPKIXPublicKey failed: %v", err))
 	}
+
 	return au.usig.VerifyUI(m, &ui, pubKeyBytes)
 }
