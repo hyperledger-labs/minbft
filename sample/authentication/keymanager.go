@@ -316,10 +316,7 @@ func (spec *sgxEcdsaKeySpec) generateKeyPair(securityParam int) (string, string,
 	defer usig.Destroy()
 
 	pubKey := usig.ID()
-	privKey, err := usig.SealedKey()
-	if err != nil {
-		return "", "", err
-	}
+	privKey := usig.SealedKey()
 
 	pubKeyBase64 := base64.StdEncoding.EncodeToString(pubKey)
 	privKeyBase64 := base64.StdEncoding.EncodeToString(privKey)
