@@ -21,7 +21,6 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
 	"math/big"
@@ -164,10 +163,10 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 		return fmt.Errorf("failed to unmarshal UI: %v", err)
 	}
 
-	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
+	usigID, err := sgxusig.MakeID(ui.Epoch, pubKey)
 	if err != nil {
-		panic(fmt.Sprintf("x509.MarshalPKIXPublicKey failed: %v", err))
+		return fmt.Errorf("Failed to construct USIG identity: %s", err)
 	}
 
-	return au.usig.VerifyUI(m, &ui, pubKeyBytes)
+	return au.usig.VerifyUI(m, &ui, usigID)
 }

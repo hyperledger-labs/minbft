@@ -315,11 +315,14 @@ func (spec *sgxEcdsaKeySpec) generateKeyPair(securityParam int) (string, string,
 	}
 	defer usig.Destroy()
 
-	pubKey := usig.ID()
-	privKey := usig.SealedKey()
+	privKeyBytes := usig.SealedKey()
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(usig.PublicKey())
+	if err != nil {
+		return "", "", fmt.Errorf("failed to marshal USIG public key: %v", err)
+	}
 
-	pubKeyBase64 := base64.StdEncoding.EncodeToString(pubKey)
-	privKeyBase64 := base64.StdEncoding.EncodeToString(privKey)
+	privKeyBase64 := base64.StdEncoding.EncodeToString(privKeyBytes)
+	pubKeyBase64 := base64.StdEncoding.EncodeToString(pubKeyBytes)
 
 	return privKeyBase64, pubKeyBase64, nil
 }
