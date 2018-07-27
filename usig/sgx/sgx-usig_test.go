@@ -35,8 +35,8 @@ func TestSGXUSIG(t *testing.T) {
 	assert.NoError(t, err, "Error creating fist SGXUSIG instance")
 	assert.NotNil(t, usig, "Got nil SGXUSIG instance")
 
-	key, err := usig.SealedKey()
-	assert.NoError(t, err, "Error getting sealed key")
+	// Get the sealed key from the first instance
+	key := usig.SealedKey()
 	assert.NotNil(t, key, "Got nil sealed key")
 
 	// Get the public key from the fist instance

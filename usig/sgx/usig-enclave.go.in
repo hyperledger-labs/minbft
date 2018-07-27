@@ -128,21 +128,19 @@ func (enclave *USIGEnclave) PublicKey() crypto.PublicKey {
 // SealedKey retrieves the sealed key used by the USIG enclave. The
 // retrieved key can be supplied to subsequent calls to
 // NewUSIGEnclave() on the same physical machine.
-func (enclave *USIGEnclave) SealedKey() ([]byte, error) {
+func (enclave *USIGEnclave) SealedKey() []byte {
 	var sealedData unsafe.Pointer
 	var sealedDataSize C.size_t
 
 	enclave.ecallLock.Lock()
 	sgxErr := C.usig_seal_key(enclave.enclaveID, &sealedData, &sealedDataSize)
 	enclave.ecallLock.Unlock()
-	if err := sgxError(sgxErr); err != nil {
-		return nil, err
-	}
+	sgxSuccessOrPanic(sgxErr)
 
 	bytes := C.GoBytes(sealedData, C.int(sealedDataSize))
 	C.free(sealedData)
 
-	return bytes, nil
+	return bytes
 }
 
 func sgxError(sgxErr C.sgx_status_t) error {
