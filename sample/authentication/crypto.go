@@ -21,9 +21,12 @@ import (
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/nec-blockchain/minbft/usig"
 	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
@@ -122,11 +125,32 @@ func (a *PublicAuthenScheme) VerifyAuthenticationTag(m []byte, sig []byte, pubKe
 	return nil
 }
 
-// SGXUSIGAuthenticationScheme impelements AuthenticationScheme
-// interface by utilizing SGX USIG to create/verify authentication
-// tags.
+// usigKeyFingerprint is the first 8 bytes of SHA256 hash over the
+// USIG public key.
+type usigKeyFingerprint [8]byte
+
+// makeUSIGKeyFingerprint calculates USIG fingerprint from a serialized
+// USIG public key.
+func makeUSIGKeyFingerprint(pubKey interface{}) (fingerprint usigKeyFingerprint, err error) {
+	pubKeyBytes, err := x509.MarshalPKIXPublicKey(pubKey)
+	if err != nil {
+		return usigKeyFingerprint{}, err
+	}
+
+	pubKeyHash := sha256.Sum256(pubKeyBytes)
+	copy(fingerprint[:], pubKeyHash[:])
+
+	return fingerprint, nil
+}
+
+// SGXUSIGAuthenticationScheme impelements AuthenticationScheme interface
+// by utilizing SGX USIG to create/verify authentication tags.
 type SGXUSIGAuthenticationScheme struct {
 	usig *sgxusig.USIG
+
+	// USIG key fingerprint -> captured epoch value
+	epoch map[usigKeyFingerprint]uint64
+	lock  sync.Mutex
 }
 
 var _ AuthenticationScheme = (*SGXUSIGAuthenticationScheme)(nil)
@@ -134,7 +158,10 @@ var _ AuthenticationScheme = (*SGXUSIGAuthenticationScheme)(nil)
 // NewSGXUSIGAuthenticationScheme creates a new instance of SGX USIG
 // authentication scheme.
 func NewSGXUSIGAuthenticationScheme(usig *sgxusig.USIG) *SGXUSIGAuthenticationScheme {
-	return &SGXUSIGAuthenticationScheme{usig}
+	return &SGXUSIGAuthenticationScheme{
+		usig:  usig,
+		epoch: make(map[usigKeyFingerprint]uint64),
+	}
 }
 
 // GenerateAuthenticationTag creates a new authentication for the
@@ -163,10 +190,47 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 		return fmt.Errorf("failed to unmarshal UI: %v", err)
 	}
 
-	usigID, err := sgxusig.MakeID(ui.Epoch, pubKey)
+	fingerprint, err := makeUSIGKeyFingerprint(pubKey)
+	if err != nil {
+		return fmt.Errorf("Failed to calculate USIG key fingerprint: %s", err)
+	}
+
+	au.lock.Lock()
+	defer au.lock.Unlock()
+
+	// Capture the epoch value received with the first valid UI to
+	// dynamically determine the full USIG identity. Note that
+	// this relies on the assumption that all peer replicas are
+	// initially correct, each uses a unique USIG key pairs per
+	// consensus protocol instance and generates its first UI
+	// using a single USIG instance per replica. Moreover, those
+	// first UIs are assumed to be received and processed by
+	// correct replicas before any replica becomes faulty in a
+	// sense that it starts generating and sending UIs using
+	// another USIG instance initialized with the same sealed key
+	// pair.
+	//
+	// Those assumptions might be too strong in some environments.
+	// In that case, all correct replicas are required to use some
+	// other mechanism to agree on a single USIG instance identity
+	// per each replica and use that identity to verify received
+	// UIs. This, for example, can be achieved using some
+	// bootstrapping procedure.
+	epoch, ok := au.epoch[fingerprint]
+	if !ok && ui.Counter == uint64(1) {
+		epoch = ui.Epoch
+	}
+
+	usigID, err := sgxusig.MakeID(epoch, pubKey)
 	if err != nil {
 		return fmt.Errorf("Failed to construct USIG identity: %s", err)
 	}
 
-	return au.usig.VerifyUI(m, &ui, usigID)
+	if err := au.usig.VerifyUI(m, &ui, usigID); err != nil {
+		return err
+	}
+
+	au.epoch[fingerprint] = epoch
+
+	return nil
 }
