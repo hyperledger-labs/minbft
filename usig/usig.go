@@ -54,13 +54,13 @@ func (ui *UI) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// First, marshal the counter
-	err := binary.Write(buf, binary.LittleEndian, ui.Counter)
+	err := binary.Write(buf, binary.BigEndian, ui.Counter)
 	if err != nil {
 		return nil, err
 	}
 
 	// Then, append the USIG certificate bytes
-	err = binary.Write(buf, binary.LittleEndian, ui.Cert)
+	err = binary.Write(buf, binary.BigEndian, ui.Cert)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (ui *UI) UnmarshalBinary(in []byte) error {
 	buf := bytes.NewBuffer(in)
 
 	// First, unmarshal the counter
-	err := binary.Read(buf, binary.LittleEndian, &ui.Counter)
+	err := binary.Read(buf, binary.BigEndian, &ui.Counter)
 	if err != nil {
 		return err
 	}
