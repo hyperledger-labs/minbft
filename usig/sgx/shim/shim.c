@@ -69,6 +69,12 @@ sgx_status_t usig_create_ui(sgx_enclave_id_t enclave_id,
                           digest, &ui->epoch, &ui->counter, &ui->signature);
 }
 
+sgx_status_t usig_get_epoch(sgx_enclave_id_t enclave_id,
+                            uint64_t *epoch)
+{
+        return ECALL_USIG(enclave_id, get_epoch, epoch);
+}
+
 sgx_status_t usig_get_pub_key(sgx_enclave_id_t enclave_id,
                               sgx_ec256_public_t *pub_key)
 {
