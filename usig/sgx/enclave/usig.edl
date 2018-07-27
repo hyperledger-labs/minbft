@@ -40,7 +40,7 @@ enclave {
             [in, isary] sgx_sha256_hash_t digest,
             [out] uint64_t *epoch,
             [out] uint64_t *counter,
-            [out] sgx_ec256_signature_t *cert
+            [out] sgx_ec256_signature_t *signature
         );
     };
 
