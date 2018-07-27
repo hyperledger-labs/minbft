@@ -58,24 +58,30 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 		}
 	}
 
-	var replyChan chan *messages.Reply
-
 	prepare := makePrepareMsg(view, id)
 
 	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
 	_, err := handle(prepare)
-	assert.Error(t, err, "UI check failed")
+	assert.Error(t, err, "Faked own UI")
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
-	mock.On("uiCapturer", id, ui).Return(false, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, nil).Once()
 	new, err := handle(prepare)
 	assert.NoError(t, err)
-	assert.False(t, new, "UI already processed")
+	assert.False(t, new, "Own Prepare")
 
 	otherView := view + 1
 	otherPrimary := primaryID(n, otherView)
 	prepare = makePrepareMsg(otherView, otherPrimary)
+
+	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
+	_, err = handle(prepare)
+	assert.Error(t, err, "UI not valid")
+
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiCapturer", otherPrimary, ui).Return(false, nil).Once()
+	new, err = handle(prepare)
+	assert.NoError(t, err)
+	assert.False(t, new, "UI already processed")
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", otherPrimary, ui).Return(true, nil).Once()
@@ -91,23 +97,6 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 	mock.On("uiReleaser", backup, ui).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare is from backup replica")
-
-	prepare = makePrepareMsg(view, id)
-
-	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
-	mock.On("uiCapturer", id, ui).Return(true, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, fmt.Errorf("Invalid request")).Once()
-	mock.On("uiReleaser", id, ui).Once()
-	_, err = handle(prepare)
-	assert.Error(t, err, "Invalid request")
-
-	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
-	mock.On("uiCapturer", id, ui).Return(true, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
-	mock.On("uiReleaser", id, ui).Once()
-	new, err = handle(prepare)
-	assert.NoError(t, err)
-	assert.False(t, new)
 }
 
 func testMakePrepareHandlerBackup(t *testing.T) {
@@ -157,7 +146,6 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(false, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, nil).Once()
 	new, err := handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new, "UI already processed")
