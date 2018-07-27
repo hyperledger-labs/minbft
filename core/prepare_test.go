@@ -25,6 +25,7 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/nec-blockchain/minbft/messages"
+	"github.com/nec-blockchain/minbft/usig"
 )
 
 func TestMakePrepareHandler(t *testing.T) {
@@ -46,8 +47,7 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 			ClientId: rand.Uint32(),
 		},
 	}
-	prepareUIBytes := make([]byte, 1)
-	rand.Read(prepareUIBytes)
+	ui := &usig.UI{Counter: rand.Uint64()}
 	makePrepareMsg := func(view uint64, id uint32) *messages.Prepare {
 		return &messages.Prepare{
 			Msg: &messages.Prepare_M{
@@ -55,7 +55,6 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 				ReplicaId: id,
 				Request:   request,
 			},
-			ReplicaUi: prepareUIBytes,
 		}
 	}
 
@@ -63,40 +62,49 @@ func testMakePrepareHandlerPrimary(t *testing.T) {
 
 	prepare := makePrepareMsg(view, id)
 
-	mock.On("uiAcceptor", prepare).Return(false, fmt.Errorf("Invalid UI")).Once()
+	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
 	_, err := handle(prepare)
 	assert.Error(t, err, "UI check failed")
 
-	mock.On("uiAcceptor", prepare).Return(false, nil).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", id, ui).Return(false, nil).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, false, nil).Once()
 	new, err := handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new, "UI already processed")
 
-	prepare = makePrepareMsg(view+1, primaryID(n, view))
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
-	_, err = handle(prepare)
-	assert.Error(t, err, "Prepare is for different view")
+	otherView := view + 1
+	otherPrimary := primaryID(n, view+1)
+	prepare = makePrepareMsg(otherView, otherPrimary)
 
-	prepare = makePrepareMsg(view, randOtherReplicaID(id, n))
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", otherPrimary, ui).Return(true, nil).Once()
+	mock.On("uiCommitter", otherPrimary, ui).Once()
 	_, err = handle(prepare)
-	assert.Error(t, err, "Prepare creator is not primary in this view")
+	assert.Error(t, err, "Prepare for different view")
+
+	backup := randOtherReplicaID(id, n)
+	prepare = makePrepareMsg(view, backup)
+
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", backup, ui).Return(true, nil).Once()
+	mock.On("uiCommitter", backup, ui).Once()
+	_, err = handle(prepare)
+	assert.Error(t, err, "Prepare is from backup replica")
 
 	prepare = makePrepareMsg(view, id)
 
-	err = fmt.Errorf("Invalid request ID")
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, err).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", id, ui).Return(true, nil).Once()
+	mock.On("requestHandler", request, true).Return(replyChan, false, fmt.Errorf("Invalid request")).Once()
+	mock.On("uiCommitter", id, ui).Once()
 	_, err = handle(prepare)
-	assert.Error(t, err, "Invalid request ID")
+	assert.Error(t, err, "Invalid request")
 
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", id, ui).Return(true, nil).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
+	mock.On("uiCommitter", id, ui).Once()
 	new, err = handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new)
@@ -117,8 +125,8 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 			ClientId: rand.Uint32(),
 		},
 	}
-	prepareUIBytes := make([]byte, 1)
-	rand.Read(prepareUIBytes)
+	ui := &usig.UI{Counter: rand.Uint64()}
+	prepareUIBytes, _ := ui.MarshalBinary()
 	makePrepareMsg := func(view uint64, id uint32) *messages.Prepare {
 		return &messages.Prepare{
 			Msg: &messages.Prepare_M{
@@ -143,48 +151,58 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 
 	prepare := makePrepareMsg(view, primary)
 
-	mock.On("uiAcceptor", prepare).Return(false, fmt.Errorf("Invalid UI")).Once()
+	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("Invalid UI")).Once()
 	_, err := handle(prepare)
 	assert.Error(t, err, "UI check failed")
 
-	mock.On("uiAcceptor", prepare).Return(false, nil).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", primary, ui).Return(false, nil).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, false, nil).Once()
 	new, err := handle(prepare)
 	assert.NoError(t, err)
 	assert.False(t, new, "UI already processed")
 
-	prepare = makePrepareMsg(view+1, primaryID(n, view))
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	otherView := view + 1
+	otherPrimary := primaryID(n, view+1)
+	prepare = makePrepareMsg(otherView, otherPrimary)
+
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", otherPrimary, ui).Return(true, nil).Once()
+	mock.On("uiCommitter", otherPrimary, ui).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Prepare is for different view")
 
-	prepare = makePrepareMsg(view, randOtherReplicaID(primary, n))
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	backup := randOtherReplicaID(primary, n)
+	prepare = makePrepareMsg(view, backup)
+
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", backup, ui).Return(true, nil).Once()
+	mock.On("uiCommitter", backup, ui).Once()
 	_, err = handle(prepare)
-	assert.Error(t, err, "Prepare creator is not primary in this view")
+	assert.Error(t, err, "Prepare is from backup replica")
 
 	prepare = makePrepareMsg(view, primary)
 
-	err = fmt.Errorf("Invalid request ID")
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, err).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", primary, ui).Return(true, nil).Once()
+	mock.On("requestHandler", request, true).Return(replyChan, false, fmt.Errorf("Invalid request")).Once()
+	mock.On("uiCommitter", primary, ui).Once()
 	_, err = handle(prepare)
-	assert.Error(t, err, "Invalid request ID")
+	assert.Error(t, err, "Invalid request")
 
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", primary, ui).Return(true, nil).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
+	mock.On("uiCommitter", primary, ui).Once()
 	assert.Panics(t, func() { _, _ = handle(prepare) }, "Failed collecting own Commit")
 
-	mock.On("uiAcceptor", prepare).Return(true, nil).Once()
-	mock.On("uiCommitter", prepare).Once()
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiAcceptor", primary, ui).Return(true, nil).Once()
 	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
 	mock.On("commitCollector", commit).Return(nil)
 	mock.On("generatedUIMessageHandler", commit).Once()
+	mock.On("uiCommitter", primary, ui).Once()
 	new, err = handle(prepare)
 	assert.NoError(t, err)
 	assert.True(t, new)
@@ -195,9 +213,13 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
 	}
-	acceptUI := func(msg messages.MessageWithUI) (new bool, err error) {
-		args := mock.MethodCalled("uiAcceptor", msg)
-		return args.Bool(0), args.Error(1)
+	verifyUI := func(msg messages.MessageWithUI) (*usig.UI, error) {
+		args := mock.MethodCalled("uiVerifier", msg)
+		return args.Get(0).(*usig.UI), args.Error(1)
+	}
+	acceptUI := func(replicaID uint32, ui *usig.UI) (new bool) {
+		args := mock.MethodCalled("uiAcceptor", replicaID, ui)
+		return args.Bool(0)
 	}
 	handleRequest := func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error) {
 		args := mock.MethodCalled("requestHandler", request, prepared)
@@ -210,9 +232,9 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	commitUI := func(msg messages.MessageWithUI) {
-		mock.MethodCalled("uiCommitter", msg)
+	commitUI := func(replicaID uint32, ui *usig.UI) {
+		mock.MethodCalled("uiCommitter", replicaID, ui)
 	}
 	mock.On("viewProvider").Return(view)
-	return makePrepareHandler(id, n, provideView, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage, commitUI)
+	return makePrepareHandler(id, n, provideView, verifyUI, acceptUI, handleRequest, collectCommit, handleGeneratedUIMessage, commitUI)
 }
