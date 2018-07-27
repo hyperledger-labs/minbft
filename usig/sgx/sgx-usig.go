@@ -56,9 +56,8 @@ func (u *USIG) CreateUI(message []byte) (*usig.UI, error) {
 	}
 
 	return &usig.UI{
-		Epoch:   u.Epoch(),
 		Counter: counter,
-		Cert:    signature,
+		Cert:    MakeCert(u.epoch, signature),
 	}, nil
 }
 
@@ -85,11 +84,16 @@ func VerifyUI(message []byte, ui *usig.UI, usigID []byte) error {
 		return fmt.Errorf("failed to parse USIG ID: %s", err)
 	}
 
-	if ui.Epoch != epoch {
+	uiEpoch, signature, err := ParseCert(ui.Cert)
+	if err != nil {
+		return fmt.Errorf("failed to parse UI cert: %s", err)
+	}
+
+	if uiEpoch != epoch {
 		return fmt.Errorf("epoch value mismatch")
 	}
 
-	return VerifySignature(pubKey, messageDigest(message), ui.Epoch, ui.Counter, ui.Cert)
+	return VerifySignature(pubKey, messageDigest(message), epoch, ui.Counter, signature)
 }
 
 func messageDigest(message []byte) Digest {
@@ -132,4 +136,33 @@ func ParseID(usigID []byte) (epoch uint64, pubKey crypto.PublicKey, err error) {
 	}
 
 	return epoch, pubKey, err
+}
+
+// MakeCert composes a USIG certificate which is 64-bit big-endian
+// encoded epoch value followed by serialized USIG signature.
+func MakeCert(epoch uint64, signature []byte) []byte {
+	buf := new(bytes.Buffer)
+
+	if err := binary.Write(buf, binary.BigEndian, epoch); err != nil {
+		panic(err)
+	}
+
+	if err := binary.Write(buf, binary.BigEndian, signature); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
+}
+
+// ParseCert breaks a USIG certificate down to epoch value and
+// serialized USIG signature.
+func ParseCert(cert []byte) (epoch uint64, signature []byte, err error) {
+	buf := bytes.NewBuffer(cert)
+
+	err = binary.Read(buf, binary.BigEndian, &epoch)
+	if err != nil {
+		return uint64(0), nil, fmt.Errorf("failed to extract epoch from USIG cert: %s", err)
+	}
+
+	return epoch, buf.Bytes(), nil
 }

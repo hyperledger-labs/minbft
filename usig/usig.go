@@ -41,9 +41,6 @@ type USIG interface {
 
 // UI is a unique identifier assigned to a message by a USIG
 type UI struct {
-	// Unique value for each USIG instance
-	Epoch uint64
-
 	// Unique, monotonic, and sequential counter
 	Counter uint64
 
@@ -56,12 +53,8 @@ type UI struct {
 func (ui *UI) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
-	// First, marshal the epoch and counter
-	err := binary.Write(buf, binary.LittleEndian, ui.Epoch)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(buf, binary.LittleEndian, ui.Counter)
+	// First, marshal the counter
+	err := binary.Write(buf, binary.LittleEndian, ui.Counter)
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +72,8 @@ func (ui *UI) MarshalBinary() ([]byte, error) {
 func (ui *UI) UnmarshalBinary(in []byte) error {
 	buf := bytes.NewBuffer(in)
 
-	// First, unmarshal the epoch and counter
-	err := binary.Read(buf, binary.LittleEndian, &ui.Epoch)
-	if err != nil {
-		return err
-	}
-	err = binary.Read(buf, binary.LittleEndian, &ui.Counter)
+	// First, unmarshal the counter
+	err := binary.Read(buf, binary.LittleEndian, &ui.Counter)
 	if err != nil {
 		return err
 	}

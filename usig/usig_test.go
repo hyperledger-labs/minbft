@@ -18,6 +18,7 @@
 package usig_test
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -28,10 +29,11 @@ import (
 )
 
 func TestUIMarshalUnmarshal(t *testing.T) {
+	cert := make([]byte, 1)
+	rand.Read(cert)
 	uiIn := &usig.UI{
-		Epoch:   13,
-		Counter: 42,
-		Cert:    []byte("test cert"),
+		Counter: rand.Uint64(),
+		Cert:    cert,
 	}
 	bytes, err := uiIn.MarshalBinary()
 	assert.NoError(t, err)

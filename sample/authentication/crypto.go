@@ -218,7 +218,10 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 	// bootstrapping procedure.
 	epoch, ok := au.epoch[fingerprint]
 	if !ok && ui.Counter == uint64(1) {
-		epoch = ui.Epoch
+		epoch, _, err = sgxusig.ParseCert(ui.Cert)
+		if err != nil {
+			return fmt.Errorf("Failed to parse UI certificate: %s", err)
+		}
 	}
 
 	usigID, err := sgxusig.MakeID(epoch, pubKey)
