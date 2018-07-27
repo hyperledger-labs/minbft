@@ -39,9 +39,9 @@ static void test_init_destroy()
         assert(usig_destroy(eid) == SGX_SUCCESS);
 }
 
-static inline bool cert_is_equal(usig_ui *ui1, usig_ui *ui2)
+static inline bool signature_is_equal(usig_ui *ui1, usig_ui *ui2)
 {
-        return memcmp(&ui1->cert, &ui2->cert, sizeof(ui1->cert)) == 0;
+        return memcmp(&ui1->signature, &ui2->signature, sizeof(ui1->signature)) == 0;
 }
 
 static void test_seal_key()
@@ -78,7 +78,7 @@ static void test_create_ui()
         // The counter must be monotonic and sequential
         assert(ui2.counter == ui1.counter + 1);
         // Certificate must be unique for each counter value
-        assert(!cert_is_equal(&ui1, &ui2));
+        assert(!signature_is_equal(&ui1, &ui2));
         // Epoch should be the same for the same USIG instance
         assert(ui1.epoch == ui2.epoch);
         assert(usig_destroy(usig) == SGX_SUCCESS);
@@ -95,7 +95,7 @@ static void test_create_ui()
         // Check for uniqueness of the epoch and certificate produced
         // by the new instance of the enclave
         assert(ui1.epoch != ui3.epoch);
-        assert(!cert_is_equal(&ui1, &ui3));
+        assert(!signature_is_equal(&ui1, &ui3));
 #endif
         assert(usig_destroy(usig) == SGX_SUCCESS);
         free(sealed_data);

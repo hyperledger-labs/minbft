@@ -36,12 +36,12 @@ typedef struct __attribute__((__packed__)) {
 sgx_status_t ecall_usig_create_ui(sgx_sha256_hash_t digest,
                                   uint64_t *epoch,
                                   uint64_t *counter,
-                                  sgx_ec256_signature_t *cert)
+                                  sgx_ec256_signature_t *signature)
 {
         static uint64_t usig_counter = 1;
         sgx_status_t ret;
         sgx_ecc_state_handle_t ecc_handle;
-        sgx_ec256_signature_t signature;
+        sgx_ec256_signature_t signature_buf;
         usig_cert_data_t data;
 
         if (!initialized) {
@@ -59,7 +59,7 @@ sgx_status_t ecall_usig_create_ui(sgx_sha256_hash_t digest,
         *counter = data.counter = usig_counter;
 
         ret = sgx_ecdsa_sign((uint8_t *)&data, sizeof(data),
-                             &usig_priv_key, &signature, ecc_handle);
+                             &usig_priv_key, &signature_buf, ecc_handle);
         if (ret != SGX_SUCCESS) {
                 goto close_context;
         }
@@ -68,7 +68,7 @@ sgx_status_t ecall_usig_create_ui(sgx_sha256_hash_t digest,
         // a valid signature to the untrusted world. That makes sure
         // the counter value cannot be reused to sign another message.
         usig_counter++;
-        memcpy(cert, &signature, sizeof(signature));
+        memcpy(signature, &signature_buf, sizeof(signature_buf));
 
 close_context:
         sgx_ecc256_close_context(ecc_handle);
