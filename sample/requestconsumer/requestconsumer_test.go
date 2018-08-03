@@ -77,8 +77,8 @@ func testSimpleLedger(t *testing.T) {
 	n := 5
 	block := mockBlock(nil, testMessage)
 	for i := 0; i < n; i++ {
-		result := l.Deliver(testMessage)
-		assert.Equal(t, mockResult(block), result)
+		resChan := l.Deliver(testMessage)
+		assert.Equal(t, mockResult(block), <-resChan)
 		block = mockBlock(block, testMessage)
 	}
 

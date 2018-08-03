@@ -178,9 +178,9 @@ func (m *MockRequestConsumer) EXPECT() *MockRequestConsumerMockRecorder {
 }
 
 // Deliver mocks base method
-func (m *MockRequestConsumer) Deliver(arg0 []byte) []byte {
+func (m *MockRequestConsumer) Deliver(arg0 []byte) <-chan []byte {
 	ret := m.ctrl.Call(m, "Deliver", arg0)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(<-chan []byte)
 	return ret0
 }
 

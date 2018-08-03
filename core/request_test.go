@@ -263,33 +263,33 @@ func TestMakeOperationExecutor(t *testing.T) {
 	expectedRes := make([]byte, 1)
 	rand.Read(op)
 	rand.Read(expectedRes)
+	resChan := make(chan []byte, 1)
 
+	// Normal execution
+	resChan <- expectedRes
+	consumer.EXPECT().Deliver(op).Return(resChan)
+	res := executor(op)
+	assert.Equal(t, expectedRes, res)
+
+	// Concurrent execution
 	started := make(chan struct{})
-	executed := make(chan struct{})
+	exit := make(chan struct{})
 	done := make(chan struct{})
-	consumer.EXPECT().Deliver(op).Return(expectedRes).Do(func([]byte) {
-		started <- struct{}{}
-		<-executed
-	}).AnyTimes()
-	runExecutor := func() {
+	consumer.EXPECT().Deliver(op).Return(resChan).Do(func([]byte) {
+		close(started)
+		<-exit
+	})
+	go func() {
 		res := executor(op)
 		assert.Equal(t, expectedRes, res)
 		done <- struct{}{}
-	}
-
-	// Normal execution
-	go runExecutor()
-	<-started
-	executed <- struct{}{}
-	<-done
-
-	// Concurrent execution
-	go runExecutor()
+	}()
 	<-started
 	assert.Panics(t, func() {
 		_ = executor(op)
 	})
-	executed <- struct{}{}
+	close(exit)
+	resChan <- expectedRes
 	<-done
 }
 

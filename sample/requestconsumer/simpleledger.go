@@ -143,11 +143,11 @@ func (l *SimpleLedger) GetLength() uint64 {
 
 // Deliver implements the RequestConsumer interface. It forwards the committed
 // transaction message to the processing queue and returns the result
-func (l *SimpleLedger) Deliver(msg []byte) []byte {
+func (l *SimpleLedger) Deliver(msg []byte) <-chan []byte {
 	resultChan := make(chan []byte)
 	l.acceptedMsgQueue <- &acceptedMessage{requestPayload: msg, resultChan: resultChan}
 
-	return <-resultChan
+	return resultChan
 }
 
 // StateDigest returns the hash of the latest block as the digest of the system state

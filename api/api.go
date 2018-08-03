@@ -127,11 +127,12 @@ type Authenticator interface {
 // RequestConsumer defines the interface for the local copy of the
 // replicated state machine.
 //
-// Deliver triggers execution of the operation op by the state machine
-// and returns the result of the operation execution.
+// Deliver triggers execution of the operation op by the state
+// machine. The result of the operation execution is send to the
+// returned channel once it is ready.
 //
 // StateDigest returns the digest of the current system state.
 type RequestConsumer interface {
-	Deliver(op []byte) []byte
+	Deliver(op []byte) <-chan []byte
 	StateDigest() []byte
 }

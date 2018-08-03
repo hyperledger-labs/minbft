@@ -178,10 +178,10 @@ func makeOperationExecutor(consumer api.RequestConsumer) operationExecutor {
 		if wasBusy := atomic.SwapUint32(&busy, uint32(1)); wasBusy != uint32(0) {
 			panic("Concurrent operation execution detected")
 		}
-		result := consumer.Deliver(op)
+		resultChan := consumer.Deliver(op)
 		atomic.StoreUint32(&busy, uint32(0))
 
-		return result
+		return <-resultChan
 	}
 }
 
