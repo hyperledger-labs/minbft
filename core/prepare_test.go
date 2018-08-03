@@ -136,8 +136,6 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 		},
 	}
 
-	var replyChan chan *messages.Reply
-
 	prepare := makePrepareMsg(view, primary)
 
 	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("Invalid UI")).Once()
@@ -173,21 +171,21 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, false, fmt.Errorf("Invalid request")).Once()
+	mock.On("requestHandler", request, true).Return(false, fmt.Errorf("Invalid request")).Once()
 	mock.On("uiReleaser", primary, ui).Once()
 	_, err = handle(prepare)
 	assert.Error(t, err, "Invalid request")
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
+	mock.On("requestHandler", request, true).Return(true, nil).Once()
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
 	mock.On("uiReleaser", primary, ui).Once()
 	assert.Panics(t, func() { _, _ = handle(prepare) }, "Failed collecting own Commit")
 
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
-	mock.On("requestHandler", request, true).Return(replyChan, true, nil).Once()
+	mock.On("requestHandler", request, true).Return(true, nil).Once()
 	mock.On("commitCollector", commit).Return(nil)
 	mock.On("generatedUIMessageHandler", commit).Once()
 	mock.On("uiReleaser", primary, ui).Once()
@@ -209,9 +207,9 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("uiCapturer", replicaID, ui)
 		return args.Bool(0)
 	}
-	handleRequest := func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error) {
+	handleRequest := func(request *messages.Request, prepared bool) (new bool, err error) {
 		args := mock.MethodCalled("requestHandler", request, prepared)
-		return args.Get(0).(chan *messages.Reply), args.Bool(1), args.Error(2)
+		return args.Bool(0), args.Error(1)
 	}
 	collectCommit := func(commit *messages.Commit) error {
 		args := mock.MethodCalled("commitCollector", commit)

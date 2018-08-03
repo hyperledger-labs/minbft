@@ -30,12 +30,15 @@ import (
 //
 // The Request message will be fully verified and processed. True
 // prepared argument indicates that the Request was extracted from a
-// valid Prepare message. If prepared is false then the corresponding
-// Reply message will be send to the returned channel when it becomes
-// ready; otherwise nil channel is returned. The return value new
-// indicates if the consensus protocol has not already been started
-// for this Request by this replica before.
-type requestHandler func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error)
+// valid Prepare message. The return value new indicates if the
+// consensus protocol has not already been started for this Request by
+// this replica before.
+type requestHandler func(request *messages.Request, prepared bool) (new bool, err error)
+
+// requestReplier returns a channel that can be used to receive a
+// Reply message corresponding to the supplied Request message. It is
+// safe to invoke concurrently.
+type requestReplier func(request *messages.Request) <-chan *messages.Reply
 
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
@@ -61,11 +64,6 @@ type operationExecutor func(operation []byte) (result []byte)
 // safe to invoke concurrently.
 type requestSeqAcceptor func(request *messages.Request, prepared bool) (new bool, err error)
 
-// requestReplier returns a channel that can be used to receive a
-// Reply message corresponding to the supplied Request message. It is
-// safe to invoke concurrently.
-type requestReplier func(request *messages.Request) <-chan *messages.Reply
-
 // replyConsumer performs further processing of the supplied Reply
 // message produced locally. The message should be ready to serialize
 // and deliver to the client. It is safe to invoke concurrently.
@@ -77,9 +75,8 @@ type replyConsumer func(reply *messages.Reply, clientID uint32)
 func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authenticator, clientStates clientstate.Provider, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	verifier := makeMessageSignatureVerifier(authen)
 	seqAcceptor := makeRequestSeqAcceptor(clientStates)
-	replier := makeRequestReplier(clientStates)
 
-	return makeRequestHandler(id, n, view, verifier, seqAcceptor, replier, handleGeneratedUIMessage)
+	return makeRequestHandler(id, n, view, verifier, seqAcceptor, handleGeneratedUIMessage)
 }
 
 // defaultRequestExecutor constructs a standard requestExecutor using
@@ -94,14 +91,14 @@ func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack 
 // makeRequestHandler constructs an instance of requestHandler using
 // id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
-func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatureVerifier, seqAcceptor requestSeqAcceptor, replier requestReplier, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
-	return func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error) {
+func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatureVerifier, seqAcceptor requestSeqAcceptor, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
+	return func(request *messages.Request, prepared bool) (new bool, err error) {
 		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
 			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
 
 		if err = verifier(request); err != nil {
 			err = fmt.Errorf("Failed to authenticate Request message: %s", err)
-			return nil, false, err
+			return false, err
 		}
 
 		view := view()
@@ -113,7 +110,7 @@ func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatu
 		new, err = seqAcceptor(request, prepared || primary)
 		if err != nil {
 			err = fmt.Errorf("Failed to check/accept request ID: %s", err)
-			return nil, false, err
+			return false, err
 		}
 
 		// TODO: The request timer should be started in backup
@@ -139,11 +136,16 @@ func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatu
 			handleGeneratedUIMessage(prepare)
 		}
 
-		if prepared {
-			return nil, new, nil
-		}
+		return new, nil
+	}
+}
 
-		return replier(request), new, nil
+// makeRequestReplier constructs an instance of requestReplier using
+// the supplied client state provider.
+func makeRequestReplier(provider clientstate.Provider) requestReplier {
+	return func(request *messages.Request) <-chan *messages.Reply {
+		state := provider(request.Msg.ClientId)
+		return state.ReplyChannel(request.Msg.Seq)
 	}
 }
 
@@ -194,15 +196,6 @@ func makeRequestSeqAcceptor(provider clientstate.Provider) requestSeqAcceptor {
 		}
 
 		return state.AcceptRequestSeq(request.Msg.Seq)
-	}
-}
-
-// makeRequestReplier constructs an instance of requestReplier using
-// the supplied client state provider.
-func makeRequestReplier(provider clientstate.Provider) requestReplier {
-	return func(request *messages.Request) <-chan *messages.Reply {
-		state := provider(request.Msg.ClientId)
-		return state.ReplyChannel(request.Msg.Seq)
 	}
 }
 

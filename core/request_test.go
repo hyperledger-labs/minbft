@@ -61,26 +61,18 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 			Request:   request,
 		},
 	}
-	reply := &messages.Reply{
-		Msg: &messages.Reply_M{
-			Seq: seq,
-		},
-	}
-	replyIn := make(chan *messages.Reply, 1)
 
 	// Invalid client signature from client
 	err := fmt.Errorf("invalid signature")
 	mock.On("messageSignatureVerifier", request).Return(err).Once()
-	replyOut, new, err := handler(request, false)
-	assert.Nil(t, replyOut)
+	new, err := handler(request, false)
 	assert.False(t, new)
 	assert.Error(t, err)
 
 	// Invalid client signature from Prepare
 	err = fmt.Errorf("invalid signature")
 	mock.On("messageSignatureVerifier", request).Return(err).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.False(t, new)
 	assert.Error(t, err)
 
@@ -88,8 +80,7 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	err = fmt.Errorf("invalid request ID")
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(false, err).Once()
-	replyOut, new, err = handler(request, false)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, false)
 	assert.False(t, new)
 	assert.Error(t, err)
 
@@ -97,27 +88,22 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	err = fmt.Errorf("invalid request ID")
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(false, err).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.False(t, new)
 	assert.Error(t, err)
 
 	// Already accepted request ID from Prepare
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(false, nil).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.False(t, new)
 	assert.NoError(t, err)
 
 	// New Request from client
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(true, nil).Once()
-	mock.On("requestReplier", request).Return(replyIn).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	replyOut, new, err = handler(request, false)
-	replyIn <- reply
-	assert.Equal(t, reply, <-replyOut)
+	new, err = handler(request, false)
 	assert.True(t, new)
 	assert.NoError(t, err)
 }
@@ -138,26 +124,18 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 			Seq:      seq,
 		},
 	}
-	reply := &messages.Reply{
-		Msg: &messages.Reply_M{
-			Seq: seq,
-		},
-	}
-	replyIn := make(chan *messages.Reply, 1)
 
 	// Invalid client signature from client
 	err := fmt.Errorf("invalid signature")
 	mock.On("messageSignatureVerifier", request).Return(err).Once()
-	replyOut, new, err := handler(request, false)
-	assert.Nil(t, replyOut)
+	new, err := handler(request, false)
 	assert.False(t, new)
 	assert.Error(t, err)
 
 	// Invalid client signature from Prepare
 	err = fmt.Errorf("invalid signature")
 	mock.On("messageSignatureVerifier", request).Return(err).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.False(t, new)
 	assert.Error(t, err)
 
@@ -165,8 +143,7 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 	err = fmt.Errorf("invalid request ID")
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, false).Return(false, err).Once()
-	replyOut, new, err = handler(request, false)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, false)
 	assert.False(t, new)
 	assert.Error(t, err)
 
@@ -174,36 +151,28 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 	err = fmt.Errorf("invalid request ID")
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(false, err).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.False(t, new)
 	assert.Error(t, err)
 
 	// Already accepted request ID from client
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, false).Return(false, nil).Once()
-	mock.On("requestReplier", request).Return(replyIn).Once()
-	replyOut, new, err = handler(request, false)
-	replyIn <- reply
-	assert.Equal(t, reply, <-replyOut)
+	new, err = handler(request, false)
 	assert.False(t, new)
 	assert.NoError(t, err)
 
 	// New Request from client
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, false).Return(true, nil).Once()
-	mock.On("requestReplier", request).Return(replyIn).Once()
-	replyOut, new, err = handler(request, false)
-	replyIn <- reply
-	assert.Equal(t, reply, <-replyOut)
+	new, err = handler(request, false)
 	assert.True(t, new)
 	assert.NoError(t, err)
 
 	// New Request from Prepare
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(true, nil).Once()
-	replyOut, new, err = handler(request, true)
-	assert.Nil(t, replyOut)
+	new, err = handler(request, true)
 	assert.True(t, new)
 	assert.NoError(t, err)
 }
@@ -221,15 +190,11 @@ func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("requestSeqAcceptor", request, prepared)
 		return args.Bool(0), args.Error(1)
 	}
-	replier := func(request *messages.Request) <-chan *messages.Reply {
-		args := mock.MethodCalled("requestReplier", request)
-		return args.Get(0).(chan *messages.Reply)
-	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
 	mock.On("viewProvider").Return(view)
-	return makeRequestHandler(id, n, provideView, verifier, seqAcceptor, replier, handleGeneratedUIMessage)
+	return makeRequestHandler(id, n, provideView, verifier, seqAcceptor, handleGeneratedUIMessage)
 }
 
 func TestMakeRequestExecutor(t *testing.T) {

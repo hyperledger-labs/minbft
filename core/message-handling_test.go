@@ -37,9 +37,9 @@ func TestMakeMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	handleRequest := func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error) {
+	handleRequest := func(request *messages.Request, prepared bool) (new bool, err error) {
 		args := mock.MethodCalled("requestHandler", request, prepared)
-		return args.Get(0).(chan *messages.Reply), args.Bool(1), args.Error(2)
+		return args.Bool(0), args.Error(1)
 	}
 	handlePrepare := func(prepare *messages.Prepare) (new bool, err error) {
 		args := mock.MethodCalled("prepareHandler", prepare)
@@ -49,8 +49,12 @@ func TestMakeMessageHandler(t *testing.T) {
 		args := mock.MethodCalled("commitHandler", commit)
 		return args.Bool(0), args.Error(1)
 	}
+	replyRequest := func(request *messages.Request) <-chan *messages.Reply {
+		args := mock.MethodCalled("requestReplier", request)
+		return args.Get(0).(chan *messages.Reply)
+	}
 
-	handle := makeMessageHandler(handleRequest, handlePrepare, handleCommit)
+	handle := makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -77,15 +81,15 @@ func TestMakeMessageHandler(t *testing.T) {
 		_, _, _ = handle(struct{}{})
 	})
 
-	var replyChan chan *messages.Reply
 	err := fmt.Errorf("Failed to handle Request")
-	mock.On("requestHandler", request, false).Return(replyChan, false, err).Once()
+	mock.On("requestHandler", request, false).Return(false, err).Once()
 	_, _, err = handle(request)
 	assert.Error(t, err)
 
-	replyChan = make(chan *messages.Reply, 1)
+	replyChan := make(chan *messages.Reply, 1)
 	replyChan <- reply
-	mock.On("requestHandler", request, false).Return(replyChan, false, nil).Once()
+	mock.On("requestHandler", request, false).Return(false, nil).Once()
+	mock.On("requestReplier", request).Return(replyChan).Once()
 	ch, new, err := handle(request)
 	assert.NoError(t, err)
 	assert.False(t, new)
@@ -93,7 +97,8 @@ func TestMakeMessageHandler(t *testing.T) {
 
 	replyChan = make(chan *messages.Reply, 1)
 	replyChan <- reply
-	mock.On("requestHandler", request, false).Return(replyChan, true, nil).Once()
+	mock.On("requestHandler", request, false).Return(true, nil).Once()
+	mock.On("requestReplier", request).Return(replyChan).Once()
 	ch, new, err = handle(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
