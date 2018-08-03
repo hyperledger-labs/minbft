@@ -46,10 +46,10 @@ type requestReplier func(request *messages.Request) <-chan *messages.Reply
 type requestExecutor func(request *messages.Request)
 
 // operationExecutor executes an operation on the local instance of
-// the replicated state machine. It will block until the result of the
-// operation execution is ready. It is not allowed to execute
-// concurrently.
-type operationExecutor func(operation []byte) (result []byte)
+// the replicated state machine. The result of operation execution
+// will be send to the returned channel once it is ready. It is not
+// allowed to invoke concurrently.
+type operationExecutor func(operation []byte) (resultChan <-chan []byte)
 
 // requestSeqAcceptor checks if the request identifier, seq, in the
 // supplied Request message is consistent with previously accepted
@@ -154,18 +154,22 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // reply consumer.
 func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer replicaMessageSigner, consumer replyConsumer) requestExecutor {
 	return func(request *messages.Request) {
-		result := executor(request.Msg.Payload)
-		reply := &messages.Reply{
-			Msg: &messages.Reply_M{
-				ReplicaId: replicaID,
-				Seq:       request.Msg.Seq,
-				Result:    result,
-			},
-		}
-		signer(reply)
-		logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
-			replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
-		consumer(reply, request.Msg.ClientId)
+		resultChan := executor(request.Msg.Payload)
+		go func() {
+			result := <-resultChan
+
+			reply := &messages.Reply{
+				Msg: &messages.Reply_M{
+					ReplicaId: replicaID,
+					Seq:       request.Msg.Seq,
+					Result:    result,
+				},
+			}
+			signer(reply)
+			logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
+				replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
+			consumer(reply, request.Msg.ClientId)
+		}()
 	}
 }
 
@@ -174,14 +178,14 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 func makeOperationExecutor(consumer api.RequestConsumer) operationExecutor {
 	busy := uint32(0) // atomic flag to check for concurrent execution
 
-	return func(op []byte) []byte {
+	return func(op []byte) <-chan []byte {
 		if wasBusy := atomic.SwapUint32(&busy, uint32(1)); wasBusy != uint32(0) {
 			panic("Concurrent operation execution detected")
 		}
 		resultChan := consumer.Deliver(op)
 		atomic.StoreUint32(&busy, uint32(0))
 
-		return <-resultChan
+		return resultChan
 	}
 }
 

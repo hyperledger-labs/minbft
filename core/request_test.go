@@ -231,9 +231,9 @@ func TestMakeRequestExecutor(t *testing.T) {
 		Signature: expectedSignature,
 	}
 
-	mockOperationExecutor := func(operation []byte) []byte {
+	mockOperationExecutor := func(operation []byte) <-chan []byte {
 		args := mock.MethodCalled("operationExecutor", operation)
-		return args.Get(0).([]byte)
+		return args.Get(0).(chan []byte)
 	}
 	mockReplicaMessageSigner := func(msg messages.MessageWithSignature) {
 		mock.MethodCalled("replicaMessageSigner", msg)
@@ -246,10 +246,16 @@ func TestMakeRequestExecutor(t *testing.T) {
 	requestExecutor := makeRequestExecutor(replicaID,
 		mockOperationExecutor, mockReplicaMessageSigner, mockReplyConsumer)
 
-	mock.On("operationExecutor", expectedOperation).Return(expectedResult).Once()
+	resultChan := make(chan []byte, 1)
+	resultChan <- expectedResult
+	done := make(chan struct{})
+	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
 	mock.On("replicaMessageSigner", expectedUnsignedReply).Once()
-	mock.On("replyConsumer", expectedSignedReply, clientID).Once()
+	mock.On("replyConsumer", expectedSignedReply, clientID).Run(
+		func(testifymock.Arguments) { close(done) },
+	).Once()
 	requestExecutor(request)
+	<-done
 }
 
 func TestMakeOperationExecutor(t *testing.T) {
@@ -268,7 +274,7 @@ func TestMakeOperationExecutor(t *testing.T) {
 	// Normal execution
 	resChan <- expectedRes
 	consumer.EXPECT().Deliver(op).Return(resChan)
-	res := executor(op)
+	res := <-executor(op)
 	assert.Equal(t, expectedRes, res)
 
 	// Concurrent execution
@@ -280,7 +286,7 @@ func TestMakeOperationExecutor(t *testing.T) {
 		<-exit
 	})
 	go func() {
-		res := executor(op)
+		res := <-executor(op)
 		assert.Equal(t, expectedRes, res)
 		done <- struct{}{}
 	}()
