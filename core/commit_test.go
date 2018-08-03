@@ -21,7 +21,6 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	testifymock "github.com/stretchr/testify/mock"
@@ -186,12 +185,10 @@ func TestMakeCommitCollector(t *testing.T) {
 	err = collector(commit)
 	assert.NoError(t, err)
 
-	requestExecuted := make(chan time.Time)
 	mock.On("commitCounter", commit).Return(true, nil).Once()
-	mock.On("requestExecutor", request).WaitUntil(requestExecuted).Once()
+	mock.On("requestExecutor", request).Once()
 	err = collector(commit)
 	assert.NoError(t, err)
-	requestExecuted <- time.Time{}
 }
 
 func TestMakeCommitCounter(t *testing.T) {

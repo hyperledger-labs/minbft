@@ -107,12 +107,7 @@ func makeCommitCollector(counter commitCounter, executor requestExecutor) commit
 			request := commit.Request()
 			// TODO: This is probably the place to stop
 			// the request timer.
-
-			// It is safe to execute the request
-			// concurrently, because the consensus
-			// protocol ensures this will only happen
-			// after the last request has been executed.
-			go executor(request)
+			executor(request)
 		}
 
 		return nil
