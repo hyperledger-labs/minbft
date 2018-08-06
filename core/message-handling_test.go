@@ -19,6 +19,7 @@ package minbft
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -26,8 +27,10 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/nec-blockchain/minbft/messages"
+	"github.com/nec-blockchain/minbft/usig"
 
 	mock_messagelog "github.com/nec-blockchain/minbft/core/internal/messagelog/mocks"
+	mock_messages "github.com/nec-blockchain/minbft/messages/mocks"
 )
 
 func TestMakeMessageHandler(t *testing.T) {
@@ -71,7 +74,7 @@ func TestMakeMessageHandler(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		handle(struct{}{})
+		_, _, _ = handle(struct{}{})
 	})
 
 	var replyChan chan *messages.Reply
@@ -153,16 +156,56 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 		ReplicaUi: uiBytes,
 	}
 
-	ch := make(chan messages.MessageWithUI, 1)
-	ch <- msg
-	close(ch)
-
 	mock.On("uiAssigner", msg).Run(func(args testifymock.Arguments) {
 		m := args.Get(0).(messages.MessageWithUI)
 		m.AttachUI(uiBytes)
 	}).Once()
 	mock.On("uiMessageConsumer", msgWithUI).Once()
-	handle(ch)
+	handle(msg)
+}
+
+func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
+	const nrMessages = 10
+	const nrConcurrent = 5
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cv := uint64(0)
+	log := make([]messages.MessageWithUI, 0, nrMessages*nrConcurrent)
+
+	assignUI := func(msg messages.MessageWithUI) {
+		cv++
+		ui := &usig.UI{Counter: cv}
+		uiBytes, _ := ui.MarshalBinary()
+		mockMsg := msg.(*mock_messages.MockMessageWithUI)
+		mockMsg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
+	}
+	consume := func(msg messages.MessageWithUI) {
+		log = append(log, msg)
+	}
+	handle := makeGeneratedUIMessageHandler(assignUI, consume)
+
+	wg := new(sync.WaitGroup)
+	wg.Add(nrConcurrent)
+	for i := 0; i < nrConcurrent; i++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < nrMessages; i++ {
+				handle(mock_messages.NewMockMessageWithUI(ctrl))
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Len(t, log, nrMessages*nrConcurrent)
+	for i, m := range log {
+		ui := new(usig.UI)
+		err := ui.UnmarshalBinary(m.UIBytes())
+		if assert.NoError(t, err) {
+			assert.EqualValues(t, i+1, ui.Counter)
+		}
+	}
 }
 
 func TestMakeUIMessageConsumer(t *testing.T) {
