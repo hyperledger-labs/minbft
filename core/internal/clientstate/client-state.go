@@ -55,14 +55,20 @@ func NewProvider() Provider {
 // State represents the state maintained by the replica for each
 // client instance. All methods are safe to invoke concurrently.
 //
-// AcceptRequestSeq accepts a request identifier seq. If the request
-// with the last accepted identifier is still in progress, it will
-// block until it is finished. A request is said to be in progress
-// (not finished) if its identifier has been accepted, but the
-// corresponding Reply message has not yet been supplied. A request
-// identifier is new if it is greater than the greatest accepted. The
-// return value new indicates if the supplied request identifier was
-// new.
+// CaptureRequestSeq captures a request identifier seq. The greatest
+// captured identifier has to be released before a new identifier can
+// be captured. A new captured identifier has to be released before
+// any identifier that is greater than the last released can be
+// captured. An identifier is new if it is greater than the greatest
+// captured. If an identifier cannot be captured immediately, it will
+// block until the identifier can be captured. The return value new
+// indicates if the supplied identifier was new.
+//
+// ReleaseRequestSeq releases the last captured new request identifier
+// seq so that another new identifier of the same identifier can be
+// captured. It is an error attempting to release an identifier that
+// has not been captured before or to release the same identifier more
+// than once.
 //
 // AddReply accepts a Reply message. Reply messages should be added in
 // sequence of corresponding request identifiers. Only a single Reply
@@ -75,24 +81,33 @@ func NewProvider() Provider {
 // there will be no Reply message to be added for the supplied request
 // identifier.
 type State interface {
-	AcceptRequestSeq(seq uint64) (new bool)
+	CaptureRequestSeq(seq uint64) (new bool)
+	ReleaseRequestSeq(seq uint64) error
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
 
 // New creates a new instance of client state representation.
 func New() State {
-	return &clientState{}
+	c := &clientState{}
+	c.seqReleased = sync.NewCond(c)
+	return c
 }
 
 type clientState struct {
 	sync.Mutex
 
-	// Last accepted request ID
-	lastAcceptedSeq uint64
+	// Last captured request ID
+	lastCapturedSeq uint64
+
+	// Last released request ID
+	lastReleasedSeq uint64
+
+	// Cond to signal on when ID is released
+	seqReleased *sync.Cond
 
 	// Last replied request ID
-	lastExecutedSeq uint64
+	lastRepliedSeq uint64
 
 	// Last Reply message
 	reply *messages.Reply
@@ -101,25 +116,51 @@ type clientState struct {
 	replyAdded []chan<- struct{}
 }
 
-func (c *clientState) AcceptRequestSeq(seq uint64) (new bool) {
+func (c *clientState) CaptureRequestSeq(seq uint64) (new bool) {
 	c.Lock()
 	defer c.Unlock()
 
 	for {
-		if seq <= c.lastAcceptedSeq {
+		if seq <= c.lastCapturedSeq {
+			// The request ID is not new.
+			// Wait until it gets released.
+			for seq > c.lastReleasedSeq {
+				c.seqReleased.Wait()
+			}
+
 			return false
 		}
 
-		if c.lastAcceptedSeq != c.lastExecutedSeq {
-			c.waitForReplyLocked()
+		// The request ID might be new. Check if the greatest
+		// captured ID got released.
+		if c.lastCapturedSeq > c.lastReleasedSeq {
+			// The greatest captured ID is not released.
+			// Wait for it to get released and try again.
+			c.seqReleased.Wait()
 
-			continue // recheck
+			continue
 		}
 
-		c.lastAcceptedSeq = seq
+		c.lastCapturedSeq = seq
 
 		return true
 	}
+}
+
+func (c *clientState) ReleaseRequestSeq(seq uint64) error {
+	c.Lock()
+	defer c.Unlock()
+
+	if seq != c.lastCapturedSeq {
+		return fmt.Errorf("request ID is not the last captured")
+	} else if seq <= c.lastReleasedSeq {
+		return fmt.Errorf("request ID already released")
+	}
+
+	c.lastReleasedSeq = seq
+	c.seqReleased.Broadcast()
+
+	return nil
 }
 
 func (c *clientState) AddReply(reply *messages.Reply) error {
@@ -128,12 +169,12 @@ func (c *clientState) AddReply(reply *messages.Reply) error {
 	c.Lock()
 	defer c.Unlock()
 
-	if seq <= c.lastExecutedSeq {
+	if seq <= c.lastRepliedSeq {
 		return fmt.Errorf("old request ID")
 	}
 
 	c.reply = reply
-	c.lastExecutedSeq = seq
+	c.lastRepliedSeq = seq
 
 	for _, ch := range c.replyAdded {
 		close(ch)
@@ -150,7 +191,7 @@ func (c *clientState) ReplyChannel(seq uint64) <-chan *messages.Reply {
 		defer close(out)
 
 		c.Lock()
-		for c.lastExecutedSeq < seq {
+		for c.lastRepliedSeq < seq {
 			c.waitForReplyLocked()
 		}
 		reply := c.reply

@@ -17,6 +17,7 @@
 package clientstate
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
@@ -26,71 +27,66 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAcceptRequestSeq(t *testing.T) {
+func TestCaptureReleaseRequestSeq(t *testing.T) {
 	s := New()
 
 	cases := []struct {
 		desc string
 		seq  int
 
-		accept bool
-		reply  bool
+		capture bool
+		release bool
 
 		ok  bool
 		new bool
 	}{{
-		desc:   "Accept and reply the first ID",
-		seq:    100,
-		accept: true,
-		reply:  true,
-		ok:     true,
-		new:    true,
+		desc:    "Capture and release the first ID",
+		seq:     100,
+		capture: true,
+		release: true,
+		ok:      true,
+		new:     true,
 	}, {
-		desc:   "Accept another ID",
-		seq:    200,
-		accept: true,
-		ok:     true,
-		new:    true,
+		desc:    "Release the same ID again",
+		seq:     100,
+		release: true,
+		ok:      false,
 	}, {
-		desc:   "Accept last replied ID before next reply",
-		seq:    100,
-		accept: true,
-		new:    false,
+		desc:    "Release new ID before capturing",
+		seq:     200,
+		release: true,
+		ok:      false,
 	}, {
-		desc:   "Accept last accepted ID before corresponding reply",
-		seq:    200,
-		accept: true,
-		new:    false,
+		desc:    "Capture another ID",
+		seq:     200,
+		capture: true,
+		ok:      true,
+		new:     true,
 	}, {
-		desc:   "Accept delayed older ID before next reply",
-		seq:    150,
-		accept: true,
-		new:    false,
+		desc:    "Capture older ID",
+		seq:     50,
+		capture: true,
+		new:     false,
 	}, {
-		desc:  "Reply the last ID",
-		seq:   200,
-		reply: true,
-		ok:    true,
+		desc:    "Release not captured ID",
+		seq:     150,
+		release: true,
+		ok:      false,
 	}, {
-		desc:   "Accept last accepted and replied ID",
-		seq:    100,
-		accept: true,
-		new:    false,
-	}, {
-		desc:   "Accept delayed older ID after reply",
-		seq:    150,
-		accept: true,
-		new:    false,
+		desc:    "Release last captured ID",
+		seq:     200,
+		release: true,
+		ok:      true,
 	}}
 
 	for _, c := range cases {
 		seq := uint64(c.seq)
-		if c.accept {
-			new := s.AcceptRequestSeq(seq)
+		if c.capture {
+			new := s.CaptureRequestSeq(seq)
 			require.Equal(t, c.new, new, c.desc)
 		}
-		if c.reply {
-			err := s.AddReply(makeReply(seq))
+		if c.release {
+			err := s.ReleaseRequestSeq(seq)
 			if c.ok {
 				require.NoError(t, err, c.desc)
 			} else {
@@ -98,6 +94,40 @@ func TestAcceptRequestSeq(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestCaptureReleaseRequestSeqConcurrent(t *testing.T) {
+	const nrConcurrent = 5
+	const nrSeqs = 10
+
+	seqs := make([]bool, nrSeqs)
+	wg := new(sync.WaitGroup)
+
+	state := New()
+
+	wg.Add(nrConcurrent)
+	for workerID := 0; workerID < nrConcurrent; workerID++ {
+		workerID := workerID
+
+		go func() {
+			defer wg.Done()
+
+			for seq := 1; seq <= nrSeqs; seq++ {
+				assertMsg := fmt.Sprintf("Worker %d, seq %d", workerID, seq)
+
+				if new := state.CaptureRequestSeq(uint64(seq)); new {
+					assert.False(t, seqs[seq-1], assertMsg)
+					seqs[seq-1] = true
+					err := state.ReleaseRequestSeq(uint64(seq))
+					assert.NoError(t, err, assertMsg)
+				} else {
+					assert.True(t, seqs[seq-1])
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 }
 
 func TestAddReply(t *testing.T) {
@@ -178,7 +208,7 @@ func TestReplyChannel(t *testing.T) {
 	assert.False(t, more, "Channel should be closed")
 }
 
-func TestClientStateConcurrent(t *testing.T) {
+func TestReplyChannelConcurrent(t *testing.T) {
 	const nrConcurrent = 5
 	const nrRequests = 10
 
@@ -193,9 +223,6 @@ func TestClientStateConcurrent(t *testing.T) {
 		rly := rly
 		seq := rly.Msg.Seq
 
-		new := s.AcceptRequestSeq(uint64(seq))
-		require.True(t, new)
-
 		for workerID := 0; workerID < nrConcurrent; workerID++ {
 			workerID := workerID
 			wg.Add(1)
@@ -207,37 +234,45 @@ func TestClientStateConcurrent(t *testing.T) {
 			}()
 		}
 
-		go func() {
-			err := s.AddReply(rly)
-			assert.NoError(t, err, "seq=%d", seq)
-		}()
+		err := s.AddReply(rly)
+		assert.NoError(t, err, "seq=%d", seq)
 
 		wg.Wait()
 	}
 }
 
-func TestClientStateProvider(t *testing.T) {
-	const nrConcurrent = 5
-	const nrClientStates = 10
+func TestProviderConcurrent(t *testing.T) {
+	const nrConcurrent = 10
+
+	clientStates := make([]State, nrConcurrent)
+	wg := new(sync.WaitGroup)
 
 	provider := NewProvider()
 
-	wg := new(sync.WaitGroup)
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {
 		workerID := workerID
+
 		go func() {
 			defer wg.Done()
 
-			for clientID := 0; clientID < nrClientStates; clientID++ {
-				state := provider(uint32(clientID))
-				assert.NotNil(t, state,
-					"workerID=%d, clientID=%d", workerID, clientID)
+			assertMsg := fmt.Sprintf("Worker %d", workerID)
+			state := provider(uint32(workerID))
+			if assert.NotNil(t, state, assertMsg) {
+				clientStates[workerID] = state
 			}
 		}()
 	}
 
 	wg.Wait()
+
+	for i, s1 := range clientStates {
+		for j, s2 := range clientStates[i+1:] {
+			if s1 == s2 && s1 != nil {
+				t.Errorf("Clients %d and %d got the same instance", i, j)
+			}
+		}
+	}
 }
 
 func makeReply(seq uint64) *messages.Reply {

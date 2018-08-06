@@ -33,18 +33,6 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
-// AcceptRequestSeq mocks base method
-func (m *MockState) AcceptRequestSeq(arg0 uint64) bool {
-	ret := m.ctrl.Call(m, "AcceptRequestSeq", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// AcceptRequestSeq indicates an expected call of AcceptRequestSeq
-func (mr *MockStateMockRecorder) AcceptRequestSeq(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcceptRequestSeq", reflect.TypeOf((*MockState)(nil).AcceptRequestSeq), arg0)
-}
-
 // AddReply mocks base method
 func (m *MockState) AddReply(arg0 *messages.Reply) error {
 	ret := m.ctrl.Call(m, "AddReply", arg0)
@@ -55,6 +43,30 @@ func (m *MockState) AddReply(arg0 *messages.Reply) error {
 // AddReply indicates an expected call of AddReply
 func (mr *MockStateMockRecorder) AddReply(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReply", reflect.TypeOf((*MockState)(nil).AddReply), arg0)
+}
+
+// CaptureRequestSeq mocks base method
+func (m *MockState) CaptureRequestSeq(arg0 uint64) bool {
+	ret := m.ctrl.Call(m, "CaptureRequestSeq", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// CaptureRequestSeq indicates an expected call of CaptureRequestSeq
+func (mr *MockStateMockRecorder) CaptureRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CaptureRequestSeq", reflect.TypeOf((*MockState)(nil).CaptureRequestSeq), arg0)
+}
+
+// ReleaseRequestSeq mocks base method
+func (m *MockState) ReleaseRequestSeq(arg0 uint64) error {
+	ret := m.ctrl.Call(m, "ReleaseRequestSeq", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReleaseRequestSeq indicates an expected call of ReleaseRequestSeq
+func (mr *MockStateMockRecorder) ReleaseRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseRequestSeq", reflect.TypeOf((*MockState)(nil).ReleaseRequestSeq), arg0)
 }
 
 // ReplyChannel mocks base method
