@@ -17,7 +17,7 @@
 package clientstate
 
 import (
-	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 
@@ -26,129 +26,76 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCheckRequestSeq(t *testing.T) {
-	s := New()
-
-	cases := []struct {
-		desc   string
-		seq    int
-		ok     bool
-		new    bool
-		accept int // need to accept the ID
-		reply  int // need to reply the ID
-	}{{
-		desc: "First valid new ID",
-		seq:  1,
-		ok:   true,
-		new:  true,
-	}, {
-		desc: "Another valid new ID",
-		seq:  2,
-		ok:   true,
-		new:  true,
-	}, {
-		desc:   "Accept the first ID",
-		accept: 1,
-	}, {
-		desc: "Another ID before Reply",
-		seq:  2,
-		ok:   true,
-		new:  true,
-	}, {
-		desc: "Last accepted ID before Reply",
-		seq:  1,
-		ok:   true,
-		new:  false,
-	}, {
-		desc:  "Reply the last accepted ID",
-		reply: 1,
-	}, {
-		desc: "Last accepted ID after Reply",
-		seq:  1,
-		ok:   true,
-		new:  false,
-	}, {
-		desc: "Another valid new ID",
-		seq:  2,
-		ok:   true,
-		new:  true,
-	}, {
-		desc:   "Accept another ID",
-		accept: 2,
-	}, {
-		desc: "No longer valid ID",
-		seq:  1,
-		ok:   false,
-	}}
-
-	for _, c := range cases {
-		switch {
-		case c.accept != 0:
-			_, err := s.AcceptRequestSeq(uint64(c.accept))
-			require.NoError(t, err, c.desc)
-		case c.reply != 0:
-			err := s.AddReply(makeReply(uint64(c.reply)))
-			require.NoError(t, err, c.desc)
-		case c.seq != 0:
-			new, err := s.CheckRequestSeq(uint64(c.seq))
-			if c.ok {
-				require.NoError(t, err, c.desc)
-			} else {
-				require.Error(t, err, c.desc)
-			}
-			require.Equal(t, c.new, new, c.desc)
-		}
-
-	}
-}
-
 func TestAcceptRequestSeq(t *testing.T) {
 	s := New()
 
 	cases := []struct {
-		desc  string
-		seq   int
-		ok    bool
-		new   bool
-		reply int // need to reply the ID
+		desc string
+		seq  int
+
+		accept bool
+		reply  bool
+
+		ok  bool
+		new bool
 	}{{
-		desc: "First ID to accept",
-		seq:  1,
-		ok:   true,
-		new:  true,
+		desc:   "Accept and reply the first ID",
+		seq:    100,
+		accept: true,
+		reply:  true,
+		ok:     true,
+		new:    true,
 	}, {
-		desc:  "Reply last accepted ID",
-		reply: 1,
+		desc:   "Accept another ID",
+		seq:    200,
+		accept: true,
+		ok:     true,
+		new:    true,
 	}, {
-		desc: "Last accepted ID",
-		seq:  1,
-		ok:   true,
-		new:  false,
+		desc:   "Accept last replied ID before next reply",
+		seq:    100,
+		accept: true,
+		new:    false,
 	}, {
-		desc: "One more ID to accept",
-		seq:  2,
-		ok:   true,
-		new:  true,
+		desc:   "Accept last accepted ID before corresponding reply",
+		seq:    200,
+		accept: true,
+		new:    false,
 	}, {
-		desc: "No longer valid ID",
-		seq:  1,
-		ok:   false,
+		desc:   "Accept delayed older ID before next reply",
+		seq:    150,
+		accept: true,
+		new:    false,
+	}, {
+		desc:  "Reply the last ID",
+		seq:   200,
+		reply: true,
+		ok:    true,
+	}, {
+		desc:   "Accept last accepted and replied ID",
+		seq:    100,
+		accept: true,
+		new:    false,
+	}, {
+		desc:   "Accept delayed older ID after reply",
+		seq:    150,
+		accept: true,
+		new:    false,
 	}}
 
 	for _, c := range cases {
-		switch {
-		case c.reply != 0:
-			err := s.AddReply(makeReply(uint64(c.reply)))
-			require.NoError(t, err, c.desc)
-			continue
-		default:
-			new, err := s.AcceptRequestSeq(uint64(c.seq))
+		seq := uint64(c.seq)
+		if c.accept {
+			new := s.AcceptRequestSeq(seq)
+			require.Equal(t, c.new, new, c.desc)
+		}
+		if c.reply {
+			err := s.AddReply(makeReply(seq))
 			if c.ok {
 				require.NoError(t, err, c.desc)
 			} else {
 				require.Error(t, err, c.desc)
 			}
-			require.Equal(t, c.new, new, c.desc)
 		}
 	}
 }
@@ -156,44 +103,38 @@ func TestAcceptRequestSeq(t *testing.T) {
 func TestAddReply(t *testing.T) {
 	s := New()
 
-	seq1 := uint64(1)
-	rly1 := makeReply(seq1)
+	cases := []struct {
+		desc string
+		seq  int
 
-	err := s.AddReply(rly1)
-	assert.Error(t, err, "No accepted request ID")
+		ok bool
+	}{{
+		desc: "Add first Reply",
+		seq:  100,
+		ok:   true,
+	}, {
+		desc: "Add duplicate Reply",
+		seq:  100,
+		ok:   false,
+	}, {
+		desc: "Add another Reply",
+		seq:  200,
+		ok:   true,
+	}, {
+		desc: "Add older Reply",
+		seq:  150,
+		ok:   false,
+	}}
 
-	new, err := s.CheckRequestSeq(seq1)
-	require.NoError(t, err)
-	require.True(t, new)
-
-	err = s.AddReply(rly1)
-	assert.Error(t, err, "Checked, but not accepted request ID")
-
-	new, err = s.AcceptRequestSeq(seq1)
-	require.NoError(t, err)
-	require.True(t, new)
-
-	seq2 := seq1 + 1
-	rly2 := makeReply(seq2)
-
-	accepted := make(chan struct{})
-	go func() {
-		new, err := s.AcceptRequestSeq(seq2) // nolint: vetshadow
-		assert.NoError(t, err, "Waiting for Reply before accepting next ID")
-		assert.True(t, new)
-		close(accepted)
-	}()
-
-	err = s.AddReply(rly2)
-	assert.Error(t, err, "Request ID mismatch")
-
-	err = s.AddReply(rly1)
-	require.NoError(t, err, "Accepted request ID")
-
-	err = s.AddReply(rly1)
-	assert.Error(t, err, "Already supplied Reply")
-
-	<-accepted
+	for _, c := range cases {
+		reply := makeReply(uint64(c.seq))
+		err := s.AddReply(reply)
+		if c.ok {
+			require.NoError(t, err, c.desc)
+		} else {
+			require.Error(t, err, c.desc)
+		}
+	}
 }
 
 func TestReplyChannel(t *testing.T) {
@@ -204,14 +145,10 @@ func TestReplyChannel(t *testing.T) {
 	rly1 := makeReply(seq1)
 	rly2 := makeReply(seq2)
 
-	new, err := s.AcceptRequestSeq(seq1)
-	require.NoError(t, err)
-	require.True(t, new)
-
 	ch1Seq1 := s.ReplyChannel(seq1)
 	require.NotNil(t, ch1Seq1)
 
-	err = s.AddReply(rly1)
+	err := s.AddReply(rly1)
 	require.NoError(t, err)
 
 	ch2Seq1 := s.ReplyChannel(seq1)
@@ -223,10 +160,6 @@ func TestReplyChannel(t *testing.T) {
 	assert.False(t, more, "Channel should be closed")
 	_, more = <-ch2Seq1
 	assert.False(t, more, "Channel should be closed")
-
-	new, err = s.AcceptRequestSeq(seq2)
-	require.NoError(t, err)
-	require.True(t, new)
 
 	ch1Seq2 := s.ReplyChannel(seq2)
 	require.NotNil(t, ch1Seq2)
@@ -259,10 +192,8 @@ func TestClientStateConcurrent(t *testing.T) {
 	for _, rly := range replies {
 		rly := rly
 		seq := rly.Msg.Seq
-		assertMsg := fmt.Sprintf("seq=%d", seq)
 
-		new, err := s.AcceptRequestSeq(uint64(seq))
-		require.NoError(t, err, assertMsg)
+		new := s.AcceptRequestSeq(uint64(seq))
 		require.True(t, new)
 
 		for workerID := 0; workerID < nrConcurrent; workerID++ {
@@ -310,9 +241,12 @@ func TestClientStateProvider(t *testing.T) {
 }
 
 func makeReply(seq uint64) *messages.Reply {
+	result := make([]byte, 1)
+	rand.Read(result)
 	return &messages.Reply{
 		Msg: &messages.Reply_M{
-			Seq: seq,
+			Seq:    seq,
+			Result: result,
 		},
 	}
 }

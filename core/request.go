@@ -28,12 +28,10 @@ import (
 
 // requestHandler fully handles a Request message.
 //
-// The Request message will be fully verified and processed. True
-// prepared argument indicates that the Request was extracted from a
-// valid Prepare message. The return value new indicates if the
-// consensus protocol has not already been started for this Request by
+// The Request message will be fully verified and processed. The
+// return value new indicates if the Request has not been processed by
 // this replica before.
-type requestHandler func(request *messages.Request, prepared bool) (new bool, err error)
+type requestHandler func(request *messages.Request) (new bool, err error)
 
 // requestReplier returns a channel that can be used to receive a
 // Reply message corresponding to the supplied Request message. It is
@@ -51,18 +49,16 @@ type requestExecutor func(request *messages.Request)
 // allowed to invoke concurrently.
 type operationExecutor func(operation []byte) (resultChan <-chan []byte)
 
-// requestSeqAcceptor checks if the request identifier, seq, in the
-// supplied Request message is consistent with previously accepted
-// identifiers and executed requests from the client so that the
-// request can be further processed. If the request is indicated as
-// prepared then the consensus process is assumed to be started for it
-// and the identifier should be accepted, otherwise only the
-// consistency check is performed. If the identifier cannot be
-// accepted immediately, it will block until the identifier can be
-// accepted or inconsistency detected. The return value new indicates
-// if the consistent identifier has not been accepted before. It is
-// safe to invoke concurrently.
-type requestSeqAcceptor func(request *messages.Request, prepared bool) (new bool, err error)
+// requestSeqAcceptor accepts request identifier of Request message.
+//
+// A new request identifier cannot be accepted until a Reply message
+// for the greatest accepted identifier from that client has been
+// supplied. A request identifier is new if it is greater than the
+// greatest accepted. If the request identifier cannot be accepted
+// immediately, it will block until the identifier can be accepted.
+// The return value new indicates if the request identifier in the
+// supplied message was new. It is safe to invoke concurrently.
+type requestSeqAcceptor func(request *messages.Request) (new bool)
 
 // replyConsumer performs further processing of the supplied Reply
 // message produced locally. The message should be ready to serialize
@@ -92,7 +88,7 @@ func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack 
 // id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
 func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatureVerifier, seqAcceptor requestSeqAcceptor, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
-	return func(request *messages.Request, prepared bool) (new bool, err error) {
+	return func(request *messages.Request) (new bool, err error) {
 		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
 			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
 
@@ -101,28 +97,18 @@ func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatu
 			return false, err
 		}
 
-		view := view()
-		primary := isPrimary(view, id, n)
-		// The primary will now generate a Prapare message for
-		// this request. In that case, the consensus protocol
-		// is started for this request and the request
-		// identifier should be accepted.
-		new, err = seqAcceptor(request, prepared || primary)
-		if err != nil {
-			err = fmt.Errorf("Failed to check/accept request ID: %s", err)
-			return false, err
+		if new = seqAcceptor(request); !new {
+			return false, nil
 		}
 
-		// TODO: The request timer should be started in backup
-		// replicas when received a new request from a client.
-		// It must probably be done atomically with checking
-		// the request ID, otherwise there might be a race
-		// condition between checking the request ID and
-		// starting the timer here versus stopping the timer
-		// and supplying a Reply message when the request gets
-		// executed.
+		view := view()
+		primary := isPrimary(view, id, n)
 
-		if new && primary {
+		// TODO: A new request ID has arrived; the request
+		// timer should be re-/started in backup replicas at
+		// this point.
+
+		if primary {
 			prepare := &messages.Prepare{
 				Msg: &messages.Prepare_M{
 					View:      view,
@@ -136,7 +122,7 @@ func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatu
 			handleGeneratedUIMessage(prepare)
 		}
 
-		return new, nil
+		return true, nil
 	}
 }
 
@@ -191,15 +177,12 @@ func makeOperationExecutor(consumer api.RequestConsumer) operationExecutor {
 
 // makeRequestSeqAcceptor constructs an instance of requestSeqAcceptor
 // using the supplied client state provider.
-func makeRequestSeqAcceptor(provider clientstate.Provider) requestSeqAcceptor {
-	return func(request *messages.Request, prepared bool) (new bool, err error) {
-		state := provider(request.Msg.ClientId)
+func makeRequestSeqAcceptor(provideClientState clientstate.Provider) requestSeqAcceptor {
+	return func(request *messages.Request) (new bool) {
+		clientID := request.Msg.ClientId
+		seq := request.Msg.Seq
 
-		if !prepared {
-			return state.CheckRequestSeq(request.Msg.Seq)
-		}
-
-		return state.AcceptRequestSeq(request.Msg.Seq)
+		return provideClientState(clientID).AcceptRequestSeq(seq)
 	}
 }
 

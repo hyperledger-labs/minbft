@@ -118,7 +118,7 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 		switch msg := msg.(type) {
 		case *messages.Request:
 			outChan := make(chan interface{})
-			new, err := handleRequest(msg, false)
+			new, err := handleRequest(msg)
 			if err != nil {
 				err = fmt.Errorf("Failed to handle Request message: %s", err)
 				return nil, false, err

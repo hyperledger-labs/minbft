@@ -37,8 +37,8 @@ func TestMakeMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	handleRequest := func(request *messages.Request, prepared bool) (new bool, err error) {
-		args := mock.MethodCalled("requestHandler", request, prepared)
+	handleRequest := func(request *messages.Request) (new bool, err error) {
+		args := mock.MethodCalled("requestHandler", request)
 		return args.Bool(0), args.Error(1)
 	}
 	handlePrepare := func(prepare *messages.Prepare) (new bool, err error) {
@@ -82,13 +82,13 @@ func TestMakeMessageHandler(t *testing.T) {
 	})
 
 	err := fmt.Errorf("Failed to handle Request")
-	mock.On("requestHandler", request, false).Return(false, err).Once()
+	mock.On("requestHandler", request).Return(false, err).Once()
 	_, _, err = handle(request)
 	assert.Error(t, err)
 
 	replyChan := make(chan *messages.Reply, 1)
 	replyChan <- reply
-	mock.On("requestHandler", request, false).Return(false, nil).Once()
+	mock.On("requestHandler", request).Return(false, nil).Once()
 	mock.On("requestReplier", request).Return(replyChan).Once()
 	ch, new, err := handle(request)
 	assert.NoError(t, err)
@@ -97,7 +97,7 @@ func TestMakeMessageHandler(t *testing.T) {
 
 	replyChan = make(chan *messages.Reply, 1)
 	replyChan <- reply
-	mock.On("requestHandler", request, false).Return(true, nil).Once()
+	mock.On("requestHandler", request).Return(true, nil).Once()
 	mock.On("requestReplier", request).Return(replyChan).Once()
 	ch, new, err = handle(request)
 	assert.NoError(t, err)

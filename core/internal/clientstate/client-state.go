@@ -35,7 +35,7 @@ func NewProvider() Provider {
 	var (
 		lock sync.Mutex
 		// Client ID -> client state
-		clientStates = make(map[uint32]*clientState)
+		clientStates = make(map[uint32]State)
 	)
 
 	return func(clientID uint32) State {
@@ -44,7 +44,7 @@ func NewProvider() Provider {
 
 		state := clientStates[clientID]
 		if state == nil {
-			state = new(clientState)
+			state = New()
 			clientStates[clientID] = state
 		}
 
@@ -55,32 +55,27 @@ func NewProvider() Provider {
 // State represents the state maintained by the replica for each
 // client instance. All methods are safe to invoke concurrently.
 //
-// CheckRequestSeq checks if a request identifier seq is valid and
-// consistent with previously accepted identifiers and supplied Reply
-// messages. An identifier is valid if it is greater or equal to the
-// last accepted. The return value new indicates if the valid
-// identifier has not been accepted before.
+// AcceptRequestSeq accepts a request identifier seq. If the request
+// with the last accepted identifier is still in progress, it will
+// block until it is finished. A request is said to be in progress
+// (not finished) if its identifier has been accepted, but the
+// corresponding Reply message has not yet been supplied. A request
+// identifier is new if it is greater than the greatest accepted. The
+// return value new indicates if the supplied request identifier was
+// new.
 //
-// AcceptRequestSeq accepts a request identifier seq. Only valid
-// identifier can be accepted, as determined by CheckRequestSeq. If
-// the request with the last accepted identifier is still in progress,
-// it will block until the identifier can be accepted or the
-// identifier is no longer valid. A request is said to be in progress
-// if its identifier has been accepted, but the corresponding Reply
-// message has not yet been supplied. The return value new indicates
-// if the valid identifier has not been accepted before.
-//
-// AddReply accepts a Reply message corresponding to the last accepted
-// request sequence. It will never be blocked by any of the channels
-// returned from replyChannel.
+// AddReply accepts a Reply message. Reply messages should be added in
+// sequence of corresponding request identifiers. Only a single Reply
+// message should be added for each request identifier. It will never
+// be blocked by any of the channels returned from ReplyChannel.
 //
 // ReplyChannel returns a channel to receive the Reply message
 // corresponding to the supplied request identifier. The returned
-// channel will be closed after the Reply message is sent to it or the
-// supplied request identifier is no longer valid.
+// channel will be closed after the Reply message is sent to it or
+// there will be no Reply message to be added for the supplied request
+// identifier.
 type State interface {
-	CheckRequestSeq(seq uint64) (new bool, err error)
-	AcceptRequestSeq(seq uint64) (new bool, err error)
+	AcceptRequestSeq(seq uint64) (new bool)
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
@@ -99,42 +94,20 @@ type clientState struct {
 	// Last replied request ID
 	lastExecutedSeq uint64
 
-	// Last Reply
+	// Last Reply message
 	reply *messages.Reply
 
 	// Channels to close when new Reply added
 	replyAdded []chan<- struct{}
 }
 
-func (c *clientState) CheckRequestSeq(seq uint64) (new bool, err error) {
+func (c *clientState) AcceptRequestSeq(seq uint64) (new bool) {
 	c.Lock()
 	defer c.Unlock()
 
-	return c.checkRequestSeqLocked(seq)
-}
-
-func (c *clientState) AcceptRequestSeq(seq uint64) (new bool, err error) {
-	c.Lock()
-	defer c.Unlock()
-
-	return c.acceptRequestSeqLocked(seq)
-}
-
-func (c *clientState) checkRequestSeqLocked(seq uint64) (new bool, err error) {
-	if seq < c.lastAcceptedSeq {
-		return false, fmt.Errorf("request ID no longer valid")
-	}
-
-	return seq > c.lastAcceptedSeq, nil
-}
-
-func (c *clientState) acceptRequestSeqLocked(seq uint64) (new bool, err error) {
 	for {
-		new, err = c.checkRequestSeqLocked(seq)
-		if err != nil {
-			return false, err
-		} else if !new {
-			return false, nil
+		if seq <= c.lastAcceptedSeq {
+			return false
 		}
 
 		if c.lastAcceptedSeq != c.lastExecutedSeq {
@@ -144,9 +117,8 @@ func (c *clientState) acceptRequestSeqLocked(seq uint64) (new bool, err error) {
 		}
 
 		c.lastAcceptedSeq = seq
-		c.reply = nil
 
-		return true, nil
+		return true
 	}
 }
 
@@ -156,10 +128,8 @@ func (c *clientState) AddReply(reply *messages.Reply) error {
 	c.Lock()
 	defer c.Unlock()
 
-	if seq != c.lastAcceptedSeq {
-		return fmt.Errorf("request ID mismatch")
-	} else if seq == c.lastExecutedSeq {
-		return fmt.Errorf("duplicate Reply")
+	if seq <= c.lastExecutedSeq {
+		return fmt.Errorf("old request ID")
 	}
 
 	c.reply = reply

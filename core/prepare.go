@@ -63,7 +63,7 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ca
 				replicaID, currentView)
 		}
 
-		if _, err = handleRequest(prepare.Msg.Request, true); err != nil {
+		if _, err = handleRequest(prepare.Msg.Request); err != nil {
 			return false, fmt.Errorf("Failed to process request: %s", err)
 		}
 
