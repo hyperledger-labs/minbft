@@ -328,6 +328,32 @@ func TestMakeRequestSeqPreparer(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestMakeRequestSeqRetirer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	expectedClientID := rand.Uint32()
+	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
+
+	retireSeq := makeRequestSeqRetirer(provider)
+
+	seq := rand.Uint64()
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: expectedClientID,
+			Seq:      seq,
+		},
+	}
+
+	state.EXPECT().RetireRequestSeq(seq).Return(fmt.Errorf("old request ID"))
+	err := retireSeq(request)
+	assert.Error(t, err)
+
+	state.EXPECT().RetireRequestSeq(seq).Return(nil)
+	err = retireSeq(request)
+	assert.NoError(t, err)
+}
+
 func TestMakeRequestReplier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

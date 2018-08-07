@@ -155,20 +155,25 @@ func TestMakeCommitCollector(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	counter := func(commit *messages.Commit) (done bool, err error) {
+	countCommits := func(commit *messages.Commit) (done bool, err error) {
 		args := mock.MethodCalled("commitCounter", commit)
 		return args.Bool(0), args.Error(1)
 	}
-	executor := func(request *messages.Request) {
+	retireSeq := func(request *messages.Request) error {
+		args := mock.MethodCalled("requestSeqRetirer", request)
+		return args.Error(0)
+	}
+	executeRequest := func(request *messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
 
-	collector := makeCommitCollector(counter, executor)
+	collector := makeCommitCollector(countCommits, retireSeq, executeRequest)
 
 	clientID := rand.Uint32()
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			ClientId: clientID,
+			Seq:      rand.Uint64(),
 		},
 	}
 	commit := &messages.Commit{
@@ -186,6 +191,12 @@ func TestMakeCommitCollector(t *testing.T) {
 	assert.NoError(t, err)
 
 	mock.On("commitCounter", commit).Return(true, nil).Once()
+	mock.On("requestSeqRetirer", request).Return(fmt.Errorf("old request ID")).Once()
+	err = collector(commit)
+	assert.Error(t, err)
+
+	mock.On("commitCounter", commit).Return(true, nil).Once()
+	mock.On("requestSeqRetirer", request).Return(nil).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collector(commit)
 	assert.NoError(t, err)

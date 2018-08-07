@@ -50,9 +50,10 @@ type commitCounter func(commit *messages.Commit) (done bool, err error)
 // defaultCommitCollector construct a standard commitCollector using
 // id as the current replica ID, and the supplied abstract interfaces.
 func defaultCommitCollector(id uint32, clientStates clientstate.Provider, config api.Configer, stack Stack) commitCollector {
-	counter := makeCommitCounter(config.F())
+	countCommits := makeCommitCounter(config.F())
 	executeRequest := defaultRequestExecutor(id, clientStates, stack)
-	return makeCommitCollector(counter, executeRequest)
+	retireSeq := makeRequestSeqRetirer(clientStates)
+	return makeCommitCollector(countCommits, retireSeq, executeRequest)
 }
 
 // makeCommitHandler construct an instance of commitHandler using n as
@@ -97,18 +98,25 @@ func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, cap
 }
 
 // makeCommitCollector constructs an instance of commitCollector using
-// the supplied commitCounter, requestExecutor and
-// requestTimerStopper.
-func makeCommitCollector(counter commitCounter, executor requestExecutor) commitCollector {
+// the supplied abstractions.
+func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitCollector {
 	return func(commit *messages.Commit) error {
-		if done, err := counter(commit); err != nil {
+		if done, err := countCommits(commit); err != nil {
 			return err
-		} else if done {
-			request := commit.Request()
-			// TODO: This is probably the place to stop
-			// the request timer.
-			executor(request)
+		} else if !done {
+			return nil
 		}
+
+		request := commit.Request()
+
+		if err := retireSeq(request); err != nil {
+			return fmt.Errorf("Failed to check request ID: %s", err)
+		}
+
+		// TODO: This is probably the place to stop the
+		// request timer.
+
+		executeRequest(request)
 
 		return nil
 	}

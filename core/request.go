@@ -75,6 +75,13 @@ type requestSeqReleaser func(request *messages.Request)
 // before. It is safe to invoke concurrently.
 type requestSeqPreparer func(request *messages.Request) error
 
+// requestSeqRetirer ensures request identifier has not been retired.
+//
+// It succeeds only if it is guaranteed that the same request
+// identifier from the same client could not have been retired before.
+// It is safe to invoke concurrently.
+type requestSeqRetirer func(request *messages.Request) error
+
 // replyConsumer performs further processing of the supplied Reply
 // message produced locally. The message should be ready to serialize
 // and deliver to the client. It is safe to invoke concurrently.
@@ -235,6 +242,17 @@ func makeRequestSeqPreparer(provideClientState clientstate.Provider) requestSeqP
 		seq := request.Msg.Seq
 
 		return provideClientState(clientID).PrepareRequestSeq(seq)
+	}
+}
+
+// makeRequestSeqRetirer constructs an instance of requestSeqRetirer
+// using the supplied interface.
+func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRetirer {
+	return func(request *messages.Request) error {
+		clientID := request.Msg.ClientId
+		seq := request.Msg.Seq
+
+		return provideClientState(clientID).RetireRequestSeq(seq)
 	}
 }
 

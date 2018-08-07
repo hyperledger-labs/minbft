@@ -190,6 +190,69 @@ func TestPrepareRequestSeq(t *testing.T) {
 	}
 }
 
+func TestRetireRequestSeq(t *testing.T) {
+	s := New()
+
+	cases := []struct {
+		desc string
+		seq  int
+
+		prepare bool
+		retire  bool
+
+		ok bool
+	}{{
+		desc:    "Prepare and retire first ID",
+		seq:     100,
+		prepare: true,
+		retire:  true,
+		ok:      true,
+	}, {
+		desc:   "Retire the same ID",
+		seq:    100,
+		retire: true,
+		ok:     false,
+	}, {
+		desc:   "Retire older ID",
+		seq:    50,
+		retire: true,
+		ok:     false,
+	}, {
+		desc:   "Retire before prepare",
+		seq:    200,
+		retire: true,
+		ok:     false,
+	}, {
+		desc:    "Prepare and retire another ID",
+		seq:     200,
+		prepare: true,
+		retire:  true,
+		ok:      true,
+	}}
+
+	for _, c := range cases {
+		seq := uint64(c.seq)
+		if c.prepare {
+			new := s.CaptureRequestSeq(seq)
+			require.True(t, new, c.desc)
+
+			err := s.ReleaseRequestSeq(seq)
+			require.NoError(t, err, c.desc)
+
+			err = s.PrepareRequestSeq(seq)
+			require.NoError(t, err, c.desc)
+		}
+		if c.retire {
+			err := s.RetireRequestSeq(seq)
+			if c.ok {
+				require.NoError(t, err, c.desc)
+			} else {
+				require.Error(t, err, c.desc)
+			}
+		}
+	}
+}
+
 func TestAddReply(t *testing.T) {
 	s := New()
 

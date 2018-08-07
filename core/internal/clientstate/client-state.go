@@ -74,6 +74,10 @@ func NewProvider() Provider {
 // An identifier can only be prepared if it is greater than the last
 // prepared and has been captured and released before.
 //
+// RetireRequestSeq records the request identifier seq as retired. An
+// identifier can only be retired if it is greater than the last
+// retired and has been prepared before.
+//
 // AddReply accepts a Reply message. Reply messages should be added in
 // sequence of corresponding request identifiers. Only a single Reply
 // message should be added for each request identifier. It will never
@@ -88,6 +92,7 @@ type State interface {
 	CaptureRequestSeq(seq uint64) (new bool)
 	ReleaseRequestSeq(seq uint64) error
 	PrepareRequestSeq(seq uint64) error
+	RetireRequestSeq(seq uint64) error
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
@@ -113,6 +118,9 @@ type clientState struct {
 
 	// Last prepared request ID
 	lastPreparedSeq uint64
+
+	// Last retired request ID
+	lastRetiredSeq uint64
 
 	// Last replied request ID
 	lastRepliedSeq uint64
@@ -182,6 +190,21 @@ func (c *clientState) PrepareRequestSeq(seq uint64) error {
 	}
 
 	c.lastPreparedSeq = seq
+
+	return nil
+}
+
+func (c *clientState) RetireRequestSeq(seq uint64) error {
+	c.Lock()
+	defer c.Unlock()
+
+	if seq <= c.lastRetiredSeq {
+		return fmt.Errorf("old request ID")
+	} else if seq > c.lastPreparedSeq {
+		return fmt.Errorf("request ID not prepared")
+	}
+
+	c.lastRetiredSeq = seq
 
 	return nil
 }
