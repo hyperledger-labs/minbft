@@ -28,7 +28,8 @@ import (
 type USIG interface {
 	// CreateUI returns a unique identifier for the specified
 	// message. A unique, monotonic, and sequential counter is
-	// incremented on each invocation to produce the UI
+	// incremented on each invocation to produce the UI. The first
+	// assigned counter value should be one.
 	CreateUI(message []byte) (*UI, error)
 
 	// VerifyUI verifies if the UI is valid for the message and
