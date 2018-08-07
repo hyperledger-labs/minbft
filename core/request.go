@@ -68,6 +68,13 @@ type requestSeqCapturer func(request *messages.Request) (new bool)
 // by requestSeqCapturer. It is safe to invoke concurrently.
 type requestSeqReleaser func(request *messages.Request)
 
+// requestSeqPreparer ensures request identifier has not been prepared.
+//
+// It succeeds only if it is guaranteed that the same request
+// identifier from the same client could not have been prepared
+// before. It is safe to invoke concurrently.
+type requestSeqPreparer func(request *messages.Request) error
+
 // replyConsumer performs further processing of the supplied Reply
 // message produced locally. The message should be ready to serialize
 // and deliver to the client. It is safe to invoke concurrently.
@@ -80,8 +87,9 @@ func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authentic
 	verify := makeMessageSignatureVerifier(authen)
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	releaseSeq := makeRequestSeqReleaser(clientStates)
+	prepareSeq := makeRequestSeqPreparer(clientStates)
 
-	return makeRequestHandler(id, n, view, verify, captureSeq, releaseSeq, handleGeneratedUIMessage)
+	return makeRequestHandler(id, n, view, verify, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 }
 
 // defaultRequestExecutor constructs a standard requestExecutor using
@@ -96,7 +104,7 @@ func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack 
 // makeRequestHandler constructs an instance of requestHandler using
 // id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
-func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
+func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	return func(request *messages.Request) (new bool, err error) {
 		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
 			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
@@ -106,13 +114,12 @@ func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignature
 			return false, err
 		}
 
+		view := view()
+		primary := isPrimary(view, id, n)
+
 		if new = captureSeq(request); !new {
 			return false, nil
 		}
-		defer releaseSeq(request)
-
-		view := view()
-		primary := isPrimary(view, id, n)
 
 		// TODO: A new request ID has arrived; the request
 		// timer should be re-/started in backup replicas at
@@ -126,10 +133,20 @@ func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignature
 					Request:   request,
 				},
 			}
+
 			logger.Debugf("Replica %d generated Prepare: view=%d client=%d seq=%d",
 				prepare.Msg.ReplicaId, prepare.Msg.View,
 				prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
+
 			handleGeneratedUIMessage(prepare)
+		}
+
+		releaseSeq(request)
+
+		if primary {
+			if err := prepareSeq(request); err != nil {
+				panic(err)
+			}
 		}
 
 		return true, nil
@@ -207,6 +224,17 @@ func makeRequestSeqReleaser(provideClientState clientstate.Provider) requestSeqR
 		if err != nil {
 			panic(err)
 		}
+	}
+}
+
+// makeRequestSeqPreparer constructs an instance of requestSeqPreparer
+// using the supplied interface.
+func makeRequestSeqPreparer(provideClientState clientstate.Provider) requestSeqPreparer {
+	return func(request *messages.Request) error {
+		clientID := request.Msg.ClientId
+		seq := request.Msg.Seq
+
+		return provideClientState(clientID).PrepareRequestSeq(seq)
 	}
 }
 

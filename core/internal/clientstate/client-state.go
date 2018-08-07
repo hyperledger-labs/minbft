@@ -70,6 +70,10 @@ func NewProvider() Provider {
 // has not been captured before or to release the same identifier more
 // than once.
 //
+// PrepareRequestSeq records the request identifier seq as prepared.
+// An identifier can only be prepared if it is greater than the last
+// prepared and has been captured and released before.
+//
 // AddReply accepts a Reply message. Reply messages should be added in
 // sequence of corresponding request identifiers. Only a single Reply
 // message should be added for each request identifier. It will never
@@ -83,6 +87,7 @@ func NewProvider() Provider {
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool)
 	ReleaseRequestSeq(seq uint64) error
+	PrepareRequestSeq(seq uint64) error
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
@@ -105,6 +110,9 @@ type clientState struct {
 
 	// Cond to signal on when ID is released
 	seqReleased *sync.Cond
+
+	// Last prepared request ID
+	lastPreparedSeq uint64
 
 	// Last replied request ID
 	lastRepliedSeq uint64
@@ -159,6 +167,21 @@ func (c *clientState) ReleaseRequestSeq(seq uint64) error {
 
 	c.lastReleasedSeq = seq
 	c.seqReleased.Broadcast()
+
+	return nil
+}
+
+func (c *clientState) PrepareRequestSeq(seq uint64) error {
+	c.Lock()
+	defer c.Unlock()
+
+	if seq <= c.lastPreparedSeq {
+		return fmt.Errorf("old request ID")
+	} else if seq > c.lastReleasedSeq {
+		return fmt.Errorf("request ID not captured/released")
+	}
+
+	c.lastPreparedSeq = seq
 
 	return nil
 }

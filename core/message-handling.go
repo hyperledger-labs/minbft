@@ -58,6 +58,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	peerStates := peerstate.NewProvider()
 
 	view := func() uint64 { return 0 } // view change is not implemented
+	prepareRequestSeq := makeRequestSeqPreparer(clientStates)
 	verifyUI := makeUIVerifier(stack)
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
@@ -66,7 +67,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 
 	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
 	replyRequest := makeRequestReplier(clientStates)
-	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareRequestSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
 	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)

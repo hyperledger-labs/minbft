@@ -130,6 +130,66 @@ func TestCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
+func TestPrepareRequestSeq(t *testing.T) {
+	s := New()
+
+	cases := []struct {
+		desc string
+		seq  int
+
+		release bool
+		prepare bool
+
+		ok bool
+	}{{
+		desc:    "Release and prepare first ID",
+		seq:     100,
+		release: true,
+		prepare: true,
+		ok:      true,
+	}, {
+		desc:    "Prepare the same ID",
+		seq:     100,
+		prepare: true,
+		ok:      false,
+	}, {
+		desc:    "Prepare older ID",
+		seq:     50,
+		prepare: true,
+		ok:      false,
+	}, {
+		desc:    "Prepare before release",
+		seq:     200,
+		prepare: true,
+		ok:      false,
+	}, {
+		desc:    "Release and prepare another ID",
+		seq:     200,
+		release: true,
+		prepare: true,
+		ok:      true,
+	}}
+
+	for _, c := range cases {
+		seq := uint64(c.seq)
+		if c.release {
+			new := s.CaptureRequestSeq(seq)
+			require.True(t, new, c.desc)
+
+			err := s.ReleaseRequestSeq(seq)
+			require.NoError(t, err, c.desc)
+		}
+		if c.prepare {
+			err := s.PrepareRequestSeq(seq)
+			if c.ok {
+				require.NoError(t, err, c.desc)
+			} else {
+				require.Error(t, err, c.desc)
+			}
+		}
+	}
+}
+
 func TestAddReply(t *testing.T) {
 	s := New()
 

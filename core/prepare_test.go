@@ -179,6 +179,15 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
 	mock.On("requestHandler", request).Return(true, nil).Once()
+	mock.On("requestSeqPreparer", request).Return(fmt.Errorf("old request ID")).Once()
+	mock.On("uiReleaser", primary, ui).Once()
+	_, err = handle(prepare)
+	assert.Error(t, err, "Old request ID")
+
+	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
+	mock.On("requestHandler", request).Return(true, nil).Once()
+	mock.On("requestSeqPreparer", request).Return(nil).Once()
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
 	mock.On("uiReleaser", primary, ui).Once()
 	assert.Panics(t, func() { _, _ = handle(prepare) }, "Failed collecting own Commit")
@@ -186,7 +195,8 @@ func testMakePrepareHandlerBackup(t *testing.T) {
 	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
 	mock.On("uiCapturer", primary, ui).Return(true, nil).Once()
 	mock.On("requestHandler", request).Return(true, nil).Once()
-	mock.On("commitCollector", commit).Return(nil)
+	mock.On("requestSeqPreparer", request).Return(nil).Once()
+	mock.On("commitCollector", commit).Return(nil).Once()
 	mock.On("generatedUIMessageHandler", commit).Once()
 	mock.On("uiReleaser", primary, ui).Once()
 	new, err = handle(prepare)
@@ -211,6 +221,10 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("requestHandler", request)
 		return args.Bool(0), args.Error(1)
 	}
+	prepareRequestSeq := func(request *messages.Request) error {
+		args := mock.MethodCalled("requestSeqPreparer", request)
+		return args.Error(0)
+	}
 	collectCommit := func(commit *messages.Commit) error {
 		args := mock.MethodCalled("commitCollector", commit)
 		return args.Error(0)
@@ -222,5 +236,5 @@ func setupMakePrepareHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		mock.MethodCalled("uiReleaser", replicaID, ui)
 	}
 	mock.On("viewProvider").Return(view)
-	return makePrepareHandler(id, n, provideView, verifyUI, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	return makePrepareHandler(id, n, provideView, verifyUI, captureUI, prepareRequestSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
 }
