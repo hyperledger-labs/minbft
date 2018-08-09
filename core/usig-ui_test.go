@@ -19,199 +19,128 @@ package minbft
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/nec-blockchain/minbft/api"
 	"github.com/nec-blockchain/minbft/messages"
 	"github.com/nec-blockchain/minbft/usig"
 
+	"github.com/nec-blockchain/minbft/core/internal/peerstate"
+
 	mock_api "github.com/nec-blockchain/minbft/api/mocks"
+	mock_peerstate "github.com/nec-blockchain/minbft/core/internal/peerstate/mocks"
 	mock_messages "github.com/nec-blockchain/minbft/messages/mocks"
 )
 
-func TestUIVerifier(t *testing.T) {
+func TestMakeUIVerifier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	setExpectation := func(ok bool) (api.Authenticator, messages.MessageWithUI, *usig.UI) {
+	authen := mock_api.NewMockAuthenticator(ctrl)
+
+	makeMsg := func(cv uint64) (messages.MessageWithUI, *usig.UI) {
 		msg := mock_messages.NewMockMessageWithUI(ctrl)
-		authen := mock_api.NewMockAuthenticator(ctrl)
+		msg.EXPECT().ReplicaID().Return(rand.Uint32()).AnyTimes()
 
-		replicaID := rand.Uint32()
-		cv := rand.Uint64()
-
-		payload := []byte(fmt.Sprintf("MessageWithUI{replicaID: %d}", replicaID))
-		ui := &usig.UI{Counter: cv, Cert: []byte{}}
-		uiBytes, _ := ui.MarshalBinary()
-		msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
+		payload := make([]byte, 1)
+		rand.Read(payload)
 		msg.EXPECT().Payload().Return(payload).AnyTimes()
+
+		cert := make([]byte, 1)
+		rand.Read(cert)
+		ui := &usig.UI{Counter: cv, Cert: cert}
+		uiBytes, _ := ui.MarshalBinary()
 		msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 
-		var err error
-		if !ok {
-			err = fmt.Errorf("USIG certificate invalid")
-		}
-		authen.EXPECT().VerifyMessageAuthenTag(
-			api.USIGAuthen, replicaID, payload, uiBytes,
-		).Return(err).AnyTimes()
-		return authen, msg, ui
+		return msg, ui
 	}
 
+	verifyUI := makeUIVerifier(authen)
+
+	cv := rand.Uint64()
+
 	// Correct UI
-	authen, msg, expectedUI := setExpectation(true)
-	verifier := makeUIVerifier(authen)
-	actualUI, err := verifier(msg)
+	msg, expectedUI := makeMsg(cv)
+	authen.EXPECT().VerifyMessageAuthenTag(
+		api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes(),
+	).Return(nil)
+	actualUI, err := verifyUI(msg)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedUI, actualUI)
 
 	// Failed USIG certificate verification
-	authen, msg, _ = setExpectation(false)
-	verifier = makeUIVerifier(authen)
-	actualUI, err = verifier(msg)
+	msg, _ = makeMsg(cv)
+	authen.EXPECT().VerifyMessageAuthenTag(
+		api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes(),
+	).Return(fmt.Errorf("USIG certificate invalid"))
+	actualUI, err = verifyUI(msg)
+	assert.Error(t, err)
+	assert.Nil(t, actualUI)
+
+	// Invalid (zero) counter value
+	msg, _ = makeMsg(uint64(0))
+	actualUI, err = verifyUI(msg)
 	assert.Error(t, err)
 	assert.Nil(t, actualUI)
 }
 
-func TestUIAcceptor(t *testing.T) {
-	cases := []struct {
-		desc      string
-		replicaID int
-		cv        int
-		invalid   bool
-		ok        bool
-		new       bool
-	}{
-		{
-			desc: "Invalid (zero) counter value",
-			cv:   0,
-		}, {
-			desc:    "Invalid USIG certificate",
-			cv:      1,
-			invalid: true,
-		}, {
-			desc: "First UI with too advanced counter value",
-			cv:   2,
-		}, {
-			desc: "First valid UI",
-			cv:   1,
-			ok:   true,
-			new:  true,
-		}, {
-			desc: "The same UI again",
-			cv:   1,
-			ok:   true,
-		}, {
-			desc: "Too advanced counter value",
-			cv:   3,
-		}, {
-			desc:      "First valid UI from another replica",
-			replicaID: 1,
-			cv:        1,
-			ok:        true,
-			new:       true,
-		}, {
-			desc:      "Second valid UI from another replica",
-			replicaID: 1,
-			cv:        2,
-			ok:        true,
-			new:       true,
-		}, {
-			desc: "Second valid UI",
-			cv:   2,
-			ok:   true,
-			new:  true,
-		}, {
-			desc: "Previous valid UI",
-			cv:   1,
-			ok:   true,
-		}, {
-			desc: "Third valid UI",
-			cv:   3,
-			ok:   true,
-			new:  true,
-		},
-	}
-
-	acceptor := makeUIAcceptor(fakeVerifier)
-	for _, c := range cases {
-		new, err := acceptor(&fakeMsgWithUI{c.replicaID, c.cv, !c.invalid})
-		if c.ok {
-			require.NoErrorf(t, err, c.desc)
-		} else {
-			require.Error(t, err, c.desc)
-		}
-		require.Equal(t, c.new, new, c.desc)
-	}
-}
-
-func TestUIAcceptorConcurrent(t *testing.T) {
-	const nrConcurrent = 5
-	const nrUIs = 10
-
-	wg := new(sync.WaitGroup)
-	wg.Add(nrConcurrent)
-
-	acceptor := makeUIAcceptor(fakeVerifier)
-	for id := 0; id < nrConcurrent; id++ {
-		go func(workerID int) {
-			for cv := 1; cv <= nrUIs; cv++ {
-				new, err := acceptor(&fakeMsgWithUI{workerID, cv, true})
-				assertMsg := fmt.Sprintf("Worker %d, UI %d", workerID, cv)
-				assert.NoErrorf(t, err, assertMsg)
-				assert.True(t, new, assertMsg)
-			}
-			defer wg.Done()
-		}(id)
-	}
-
-	wg.Wait()
-}
-
-func TestUIAssigner(t *testing.T) {
+func TestMakeUICapturer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	msg := mock_messages.NewMockMessageWithUI(ctrl)
-	authen := mock_api.NewMockAuthenticator(ctrl)
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
 
-	payload := make([]byte, 1)
-	uiBytes := make([]byte, 1)
-	rand.Read(payload)
-	rand.Read(uiBytes)
-	msg.EXPECT().Payload().Return(payload).AnyTimes()
+	replicaID := rand.Uint32()
+	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
 
-	assignUI := makeUIAssigner(authen)
+	captureUI := makeUICapturer(providePeerState)
 
-	err := fmt.Errorf("Failed to generate UI")
-	authen.EXPECT().GenerateMessageAuthenTag(api.USIGAuthen, payload).Return(nil, err)
-	assert.Panics(t, func() { assignUI(msg) })
+	ui := &usig.UI{Counter: rand.Uint64()}
 
-	authen.EXPECT().GenerateMessageAuthenTag(api.USIGAuthen, payload).Return(uiBytes, nil)
-	msg.EXPECT().AttachUI(uiBytes)
-	assignUI(msg)
+	peerState.EXPECT().CaptureUI(ui).Return(false)
+	new := captureUI(replicaID, ui)
+	assert.False(t, new)
+
+	peerState.EXPECT().CaptureUI(ui).Return(true)
+	new = captureUI(replicaID, ui)
+	assert.True(t, new)
 }
 
-type fakeMsgWithUI struct {
-	replicaID int
-	cv        int
-	valid     bool
+func TestMakeUIReleaser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	replicaID := rand.Uint32()
+	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
+
+	releaseUI := makeUIReleaser(providePeerState)
+
+	ui := &usig.UI{Counter: rand.Uint64()}
+
+	peerState.EXPECT().ReleaseUI(ui).Return(fmt.Errorf("UI already released"))
+	assert.Panics(t, func() { releaseUI(replicaID, ui) })
+
+	peerState.EXPECT().ReleaseUI(ui).Return(nil)
+	assert.NotPanics(t, func() { releaseUI(replicaID, ui) })
 }
 
-func (m *fakeMsgWithUI) ReplicaID() uint32  { return uint32(m.replicaID) }
-func (m *fakeMsgWithUI) Payload() []byte    { return nil }
-func (m *fakeMsgWithUI) UIBytes() []byte    { return nil }
-func (m *fakeMsgWithUI) AttachUI(ui []byte) {}
+func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock, replicaID uint32) (peerstate.Provider, *mock_peerstate.MockState) {
+	peerState := mock_peerstate.NewMockState(ctrl)
 
-func fakeVerifier(msg messages.MessageWithUI) (ui *usig.UI, err error) {
-	m := msg.(*fakeMsgWithUI)
-	ui = &usig.UI{Counter: uint64(m.cv)}
-	if !m.valid {
-		err = fmt.Errorf("USIG certificate invalid")
+	providePeerState := func(replicaID uint32) peerstate.State {
+		args := mock.MethodCalled("peerStateProvider", replicaID)
+		return args.Get(0).(peerstate.State)
 	}
-	return
+
+	mock.On("peerStateProvider", replicaID).Return(peerState)
+
+	return providePeerState, peerState
 }

@@ -18,12 +18,14 @@ package minbft
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 
 	"github.com/nec-blockchain/minbft/api"
 	"github.com/nec-blockchain/minbft/core/internal/clientstate"
 	"github.com/nec-blockchain/minbft/core/internal/messagelog"
+	"github.com/nec-blockchain/minbft/core/internal/peerstate"
 	"github.com/nec-blockchain/minbft/messages"
 )
 
@@ -38,32 +40,33 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // message hasn't been processed before.
 type messageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
 
-// generatedUIMessageHandler receives generated messages from in
-// stream, assigns a UI to it and arranges it to be delivered to peer
-// replicas.
-type generatedUIMessageHandler func(in <-chan messages.MessageWithUI)
+// generatedUIMessageHandler assigns and attaches a UI to a generated
+// message and arranges it to be delivered to peer replicas. It is
+// safe to invoke concurrently.
+type generatedUIMessageHandler func(msg messages.MessageWithUI)
 
-// uiMessageConsumer receives generated messages with UI attached and
-// arranges them to be delivered to peer replicas.
+// uiMessageConsumer receives a generated message with UI attached and
+// arranges it to be delivered to peer replicas.
 type uiMessageConsumer func(msg messages.MessageWithUI)
 
 // defaultMessageHandler construct a standard messageHandler using id
 // as the current replica ID and the supplied interfaces.
 func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
 	n := config.N()
-	uiMessageChan := make(chan messages.MessageWithUI)
+
+	clientStates := clientstate.NewProvider()
+	peerStates := peerstate.NewProvider()
 
 	view := func() uint64 { return 0 } // view change is not implemented
-	clientStates := clientstate.NewProvider()
-	acceptUI := defaultUIAcceptor(stack)
+	verifyUI := makeUIVerifier(stack)
+	captureUI := makeUICapturer(peerStates)
+	releaseUI := makeUIReleaser(peerStates)
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
-	handleGeneratedUIMessages := defaultGeneratedUIMessageHandler(stack, log)
+	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
-	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, uiMessageChan)
-	handlePrepare := makePrepareHandler(id, n, view, acceptUI, handleRequest, collectCommit, uiMessageChan)
-	handleCommit := makeCommitHandler(id, n, view, acceptUI, handlePrepare, collectCommit)
-
-	go handleGeneratedUIMessages(uiMessageChan)
+	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, handlePrepare, handleCommit)
 }
@@ -149,11 +152,14 @@ func makeMessageHandler(handleRequest requestHandler, handlePrepare prepareHandl
 // makeGeneratedUIMessageHandler constructs generatedUIMessageHandler
 // using the supplied abstractions.
 func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume uiMessageConsumer) generatedUIMessageHandler {
-	return func(in <-chan messages.MessageWithUI) {
-		for msg := range in {
-			assignUI(msg)
-			consume(msg)
-		}
+	var lock sync.Mutex
+
+	return func(msg messages.MessageWithUI) {
+		lock.Lock()
+		defer lock.Unlock()
+
+		assignUI(msg)
+		consume(msg)
 	}
 }
 
