@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/nec-blockchain/minbft/tree/master.svg?style=svg)](https://circleci.com/gh/nec-blockchain/minbft/tree/master)
+[![CircleCI](https://circleci.com/gh/hyperledger-labs/minbft.svg?style=svg)](https://circleci.com/gh/hyperledger-labs/minbft)
 [![GoDoc](https://godoc.org/github.com/nec-blockchain/minbft?status.svg)](https://godoc.org/github.com/nec-blockchain/minbft)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nec-blockchain/minbft)](https://goreportcard.com/report/github.com/nec-blockchain/minbft)
 
