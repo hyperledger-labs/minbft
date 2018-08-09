@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/nec-blockchain/minbft/api"
+	"github.com/hyperledger-labs/minbft/api"
 )
 
 func testReplicaAuthenticator(t *testing.T, ks []byte) {

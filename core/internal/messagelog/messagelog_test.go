@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 func TestAppend(t *testing.T) {

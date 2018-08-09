@@ -16,7 +16,7 @@
 
 package main
 
-import "github.com/nec-blockchain/minbft/sample/authentication/keytool/cmd"
+import "github.com/hyperledger-labs/minbft/sample/authentication/keytool/cmd"
 
 func main() {
 	cmd.Execute()

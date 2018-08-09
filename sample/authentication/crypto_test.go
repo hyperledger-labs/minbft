@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
+	sgxusig "github.com/hyperledger-labs/minbft/usig/sgx"
 )
 
 var (

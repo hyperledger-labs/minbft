@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/core/internal/clientstate"
-	"github.com/nec-blockchain/minbft/messages"
-	"github.com/nec-blockchain/minbft/usig"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // commitHandler fully handles a Commit message. The Commit message

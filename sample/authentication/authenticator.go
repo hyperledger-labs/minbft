@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/usig"
-	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/usig"
+	sgxusig "github.com/hyperledger-labs/minbft/usig/sgx"
 )
 
 //========== Authenticator implementations ==========

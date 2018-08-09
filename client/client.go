@@ -21,8 +21,8 @@ package client
 import (
 	"fmt"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/client/internal/requestbuffer"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
 
 	logging "github.com/op/go-logging"
 )

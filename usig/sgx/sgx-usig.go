@@ -25,7 +25,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/nec-blockchain/minbft/usig"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // USIG implements USIG interface around USIGEnclave.

@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/nec-blockchain/minbft/api Configer,Authenticator,RequestConsumer
+//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/api Configer,Authenticator,RequestConsumer
 
 package mock_api //nolint
