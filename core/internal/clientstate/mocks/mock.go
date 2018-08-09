@@ -95,3 +95,23 @@ func (m *MockState) RetireRequestSeq(arg0 uint64) (bool, error) {
 func (mr *MockStateMockRecorder) RetireRequestSeq(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetireRequestSeq", reflect.TypeOf((*MockState)(nil).RetireRequestSeq), arg0)
 }
+
+// StartRequestTimer mocks base method
+func (m *MockState) StartRequestTimer(arg0 func()) {
+	m.ctrl.Call(m, "StartRequestTimer", arg0)
+}
+
+// StartRequestTimer indicates an expected call of StartRequestTimer
+func (mr *MockStateMockRecorder) StartRequestTimer(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRequestTimer", reflect.TypeOf((*MockState)(nil).StartRequestTimer), arg0)
+}
+
+// StopRequestTimer mocks base method
+func (m *MockState) StopRequestTimer() {
+	m.ctrl.Call(m, "StopRequestTimer")
+}
+
+// StopRequestTimer indicates an expected call of StopRequestTimer
+func (mr *MockStateMockRecorder) StopRequestTimer() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopRequestTimer", reflect.TypeOf((*MockState)(nil).StopRequestTimer))
+}
