@@ -29,8 +29,9 @@ import (
 // with a client given its ID. It is safe to invoke concurrently.
 type Provider func(clientID uint32) State
 
-// NewProvider creates an instance of Provider
-func NewProvider() Provider {
+// NewProvider creates an instance of Provider. Optional parameters
+// can be specified as opts.
+func NewProvider(opts ...Option) Provider {
 	var (
 		lock sync.Mutex
 		// Client ID -> client state
@@ -43,7 +44,7 @@ func NewProvider() Provider {
 
 		state := clientStates[clientID]
 		if state == nil {
-			state = New()
+			state = New(opts...)
 			clientStates[clientID] = state
 		}
 
@@ -92,16 +93,32 @@ type State interface {
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
 
-// New creates a new instance of client state representation.
-func New() State {
-	s := &clientState{}
+// New creates a new instance of client state representation. Optional
+// arguments opts specify initialization parameters.
+func New(opts ...Option) State {
+	s := &clientState{opts: defaultOptions}
+
+	for _, opt := range opts {
+		opt(&s.opts)
+	}
+
 	s.seqState = newSeqState()
 	s.replyState = newReplyState()
 
 	return s
 }
 
+// Option represents a parameter to initialize State with.
+type Option func(*options)
+
+type options struct {
+}
+
+var defaultOptions options
+
 type clientState struct {
 	*seqState
 	*replyState
+
+	opts options
 }
