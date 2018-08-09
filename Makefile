@@ -34,8 +34,6 @@ help:
 	@echo '  clean            - Remove all build artifacts'
 	@echo '  check|test       - Run all tests'
 	@echo '  lint             - Run code quality checks'
-	@echo '  protos           - Generate protobuf messages'
-	@echo '  mocks            - Generate the gomock files'
 	@echo '  generate         - Generate dependent files'
 	@echo ''
 	@echo 'Specific targets:'
