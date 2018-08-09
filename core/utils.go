@@ -18,8 +18,8 @@
 package minbft
 
 import (
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // replicaMessageSigner generates and attaches a normal replica

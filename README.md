@@ -1,6 +1,6 @@
 [![CircleCI](https://circleci.com/gh/nec-blockchain/minbft/tree/master.svg?style=svg)](https://circleci.com/gh/nec-blockchain/minbft/tree/master)
-[![GoDoc](https://godoc.org/github.com/nec-blockchain/minbft?status.svg)](https://godoc.org/github.com/nec-blockchain/minbft)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nec-blockchain/minbft)](https://goreportcard.com/report/github.com/nec-blockchain/minbft)
+[![GoDoc](https://godoc.org/github.com/hyperledger-labs/minbft?status.svg)](https://godoc.org/github.com/hyperledger-labs/minbft)
+[![Go Report Card](https://goreportcard.com/badge/github.com/hyperledger-labs/minbft)](https://goreportcard.com/report/github.com/hyperledger-labs/minbft)
 
 # MinBFT #
 
@@ -157,7 +157,7 @@ export SGX_MODE=SIM
 ## Getting Started ##
 
 The project source code should be placed in
-`$GOPATH/src/github.com/nec-blockchain/minbft/` directory. All
+`$GOPATH/src/github.com/hyperledger-labs/minbft/` directory. All
 following commands are supposed to be run from that directory.
 
 ### Building ###
@@ -325,8 +325,8 @@ The following features are considered to be implemented:
 
 Any kind of feedback is highly appreciated. Questions, suggestions,
 bug reports, change requests etc are welcome. Please [file a GitHub
-issue](https://github.com/nec-blockchain/minbft/issues/new) or [submit
-a pull request](https://github.com/nec-blockchain/minbft/compare), as
+issue](https://github.com/hyperledger-labs/minbft/issues/new) or [submit
+a pull request](https://github.com/hyperledger-labs/minbft/compare), as
 appropriate.
 
 ## License ##

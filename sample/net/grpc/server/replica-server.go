@@ -29,8 +29,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/sample/net/grpc/proto"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/sample/net/grpc/proto"
 )
 
 // ReplicaServer implements a gRPC server to serve incoming

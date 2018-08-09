@@ -20,7 +20,7 @@ package minbft
 import (
 	"fmt"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // prepareHandler fully handles a Prepare message. The Prepare message

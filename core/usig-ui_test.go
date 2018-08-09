@@ -26,12 +26,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/messages"
-	"github.com/nec-blockchain/minbft/usig"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/usig"
 
-	mock_api "github.com/nec-blockchain/minbft/api/mocks"
-	mock_messages "github.com/nec-blockchain/minbft/messages/mocks"
+	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
+	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
 func TestUIVerifier(t *testing.T) {

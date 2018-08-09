@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // Provider returns an instance of state representation associated

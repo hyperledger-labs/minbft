@@ -21,7 +21,7 @@ package messagelog
 import (
 	"sync"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // MessageLog represents the message storage. It allows to
