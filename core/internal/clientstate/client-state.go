@@ -20,7 +20,6 @@
 package clientstate
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/messages"
@@ -93,169 +92,21 @@ type State interface {
 	ReleaseRequestSeq(seq uint64) error
 	PrepareRequestSeq(seq uint64) error
 	RetireRequestSeq(seq uint64) error
+
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 }
 
 // New creates a new instance of client state representation.
 func New() State {
-	c := &clientState{}
-	c.seqReleased = sync.NewCond(c)
-	return c
+	s := &clientState{}
+	s.seqState = newSeqState()
+	s.replyState = newReplyState()
+
+	return s
 }
 
 type clientState struct {
-	sync.Mutex
-
-	// Last captured request ID
-	lastCapturedSeq uint64
-
-	// Last released request ID
-	lastReleasedSeq uint64
-
-	// Cond to signal on when ID is released
-	seqReleased *sync.Cond
-
-	// Last prepared request ID
-	lastPreparedSeq uint64
-
-	// Last retired request ID
-	lastRetiredSeq uint64
-
-	// Last replied request ID
-	lastRepliedSeq uint64
-
-	// Last Reply message
-	reply *messages.Reply
-
-	// Channels to close when new Reply added
-	replyAdded []chan<- struct{}
-}
-
-func (c *clientState) CaptureRequestSeq(seq uint64) (new bool) {
-	c.Lock()
-	defer c.Unlock()
-
-	for {
-		if seq <= c.lastCapturedSeq {
-			// The request ID is not new.
-			// Wait until it gets released.
-			for seq > c.lastReleasedSeq {
-				c.seqReleased.Wait()
-			}
-
-			return false
-		}
-
-		// The request ID might be new. Check if the greatest
-		// captured ID got released.
-		if c.lastCapturedSeq > c.lastReleasedSeq {
-			// The greatest captured ID is not released.
-			// Wait for it to get released and try again.
-			c.seqReleased.Wait()
-
-			continue
-		}
-
-		c.lastCapturedSeq = seq
-
-		return true
-	}
-}
-
-func (c *clientState) ReleaseRequestSeq(seq uint64) error {
-	c.Lock()
-	defer c.Unlock()
-
-	if seq != c.lastCapturedSeq {
-		return fmt.Errorf("request ID is not the last captured")
-	} else if seq <= c.lastReleasedSeq {
-		return fmt.Errorf("request ID already released")
-	}
-
-	c.lastReleasedSeq = seq
-	c.seqReleased.Broadcast()
-
-	return nil
-}
-
-func (c *clientState) PrepareRequestSeq(seq uint64) error {
-	c.Lock()
-	defer c.Unlock()
-
-	if seq <= c.lastPreparedSeq {
-		return fmt.Errorf("old request ID")
-	} else if seq > c.lastReleasedSeq {
-		return fmt.Errorf("request ID not captured/released")
-	}
-
-	c.lastPreparedSeq = seq
-
-	return nil
-}
-
-func (c *clientState) RetireRequestSeq(seq uint64) error {
-	c.Lock()
-	defer c.Unlock()
-
-	if seq <= c.lastRetiredSeq {
-		return fmt.Errorf("old request ID")
-	} else if seq > c.lastPreparedSeq {
-		return fmt.Errorf("request ID not prepared")
-	}
-
-	c.lastRetiredSeq = seq
-
-	return nil
-}
-
-func (c *clientState) AddReply(reply *messages.Reply) error {
-	seq := reply.Msg.Seq
-
-	c.Lock()
-	defer c.Unlock()
-
-	if seq <= c.lastRepliedSeq {
-		return fmt.Errorf("old request ID")
-	}
-
-	c.reply = reply
-	c.lastRepliedSeq = seq
-
-	for _, ch := range c.replyAdded {
-		close(ch)
-	}
-	c.replyAdded = nil
-
-	return nil
-}
-
-func (c *clientState) ReplyChannel(seq uint64) <-chan *messages.Reply {
-	out := make(chan *messages.Reply, 1)
-
-	go func() {
-		defer close(out)
-
-		c.Lock()
-		for c.lastRepliedSeq < seq {
-			c.waitForReplyLocked()
-		}
-		reply := c.reply
-		c.Unlock()
-
-		if reply.Msg.Seq == seq {
-			out <- reply
-		}
-	}()
-
-	return out
-}
-
-func (c *clientState) waitForReplyLocked() {
-	replyAdded := make(chan struct{})
-	c.replyAdded = append(c.replyAdded, replyAdded)
-
-	c.Unlock()
-	<-replyAdded
-	c.Lock()
+	*seqState
+	*replyState
 }
