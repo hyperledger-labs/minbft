@@ -27,8 +27,8 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nec-blockchain/minbft/messages"
-	"github.com/nec-blockchain/minbft/usig"
+	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 func TestMakeCommitHandler(t *testing.T) {

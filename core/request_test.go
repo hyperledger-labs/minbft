@@ -26,11 +26,11 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nec-blockchain/minbft/core/internal/clientstate"
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/messages"
 
-	mock_api "github.com/nec-blockchain/minbft/api/mocks"
-	mock_clientstate "github.com/nec-blockchain/minbft/core/internal/clientstate/mocks"
+	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
+	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 )
 
 func TestMakeRequestHandler(t *testing.T) {

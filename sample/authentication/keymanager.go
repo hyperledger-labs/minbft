@@ -28,8 +28,8 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/nec-blockchain/minbft/api"
-	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
+	"github.com/hyperledger-labs/minbft/api"
+	sgxusig "github.com/hyperledger-labs/minbft/usig/sgx"
 
 	yaml "gopkg.in/yaml.v2"
 )

@@ -21,7 +21,7 @@ package connector
 import (
 	"fmt"
 
-	"github.com/nec-blockchain/minbft/api"
+	"github.com/hyperledger-labs/minbft/api"
 )
 
 // ReplicaConnector allows to connect replica instances in the same

@@ -26,19 +26,19 @@ import (
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 
-	"github.com/nec-blockchain/minbft/api"
-	minbft "github.com/nec-blockchain/minbft/core"
-	authen "github.com/nec-blockchain/minbft/sample/authentication"
-	"github.com/nec-blockchain/minbft/sample/config"
-	"github.com/nec-blockchain/minbft/sample/net/grpc/connector"
-	"github.com/nec-blockchain/minbft/sample/net/grpc/server"
-	"github.com/nec-blockchain/minbft/sample/requestconsumer"
+	"github.com/hyperledger-labs/minbft/api"
+	minbft "github.com/hyperledger-labs/minbft/core"
+	authen "github.com/hyperledger-labs/minbft/sample/authentication"
+	"github.com/hyperledger-labs/minbft/sample/config"
+	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
+	"github.com/hyperledger-labs/minbft/sample/net/grpc/server"
+	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 )
 
 const (
 	defConsensusCfgFile = "consensus.yaml"
 	defKeysFile         = "keys.yaml"
-	defUsigEnclaveFile  = "$GOPATH/src/github.com/nec-blockchain/minbft/" +
+	defUsigEnclaveFile  = "$GOPATH/src/github.com/hyperledger-labs/minbft/" +
 		"usig/sgx/enclave/libusig.signed.so"
 )
 

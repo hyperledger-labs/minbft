@@ -25,9 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	testifymock "github.com/stretchr/testify/mock"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 
-	mock_messagelog "github.com/nec-blockchain/minbft/core/internal/messagelog/mocks"
+	mock_messagelog "github.com/hyperledger-labs/minbft/core/internal/messagelog/mocks"
 )
 
 func TestMakeMessageHandler(t *testing.T) {

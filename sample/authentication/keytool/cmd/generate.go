@@ -25,7 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	authen "github.com/nec-blockchain/minbft/sample/authentication"
+	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 )
 
 const (
@@ -37,7 +37,7 @@ const (
 	defClientKeySpec   = "ECDSA"
 	defClientSecParam  = 256
 
-	defUsigEnclaveFile = "$GOPATH/src/github.com/nec-blockchain/minbft/" +
+	defUsigEnclaveFile = "$GOPATH/src/github.com/hyperledger-labs/minbft/" +
 		"usig/sgx/enclave/libusig.signed.so"
 )
 

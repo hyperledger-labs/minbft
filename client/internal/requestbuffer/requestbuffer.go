@@ -23,7 +23,7 @@ package requestbuffer
 import (
 	"sync"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // T implements the storage to keep and coordinate flow and processing
