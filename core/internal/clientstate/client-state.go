@@ -21,7 +21,9 @@ package clientstate
 
 import (
 	"sync"
+	"time"
 
+	"github.com/hyperledger-labs/minbft/core/internal/timer"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -84,6 +86,13 @@ func NewProvider(opts ...Option) Provider {
 // channel will be closed after the Reply message is sent to it or
 // there will be no Reply message to be added for the supplied request
 // identifier.
+//
+// StartRequestTimer starts a timer to expire after the duration of
+// request timeout. The supplied callback function handleTimeout is
+// invoked asynchronously upon timer expiration. If the previous timer
+// has not yet expired, it will be canceled and a new timer started.
+//
+// StopRequestTimer stops timer started by StartRequestTimer, if any.
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
@@ -91,6 +100,9 @@ type State interface {
 
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
+
+	StartRequestTimer(handleTimeout func())
+	StopRequestTimer()
 }
 
 // New creates a new instance of client state representation. Optional
@@ -104,6 +116,7 @@ func New(opts ...Option) State {
 
 	s.seqState = newSeqState()
 	s.replyState = newReplyState()
+	s.requestTimerState = newRequestTimeoutState(&s.opts)
 
 	return s
 }
@@ -112,13 +125,36 @@ func New(opts ...Option) State {
 type Option func(*options)
 
 type options struct {
+	timerProvider  timer.Provider
+	requestTimeout func() time.Duration
 }
 
-var defaultOptions options
+var defaultOptions = options{
+	timerProvider:  timer.Standard(),
+	requestTimeout: func() time.Duration { return time.Duration(0) },
+}
+
+// WithTimerProvider specifies the abstract timer implementation to
+// use. Standard timer implementation is used by default.
+func WithTimerProvider(timerProvider timer.Provider) Option {
+	return func(opts *options) {
+		opts.timerProvider = timerProvider
+	}
+}
+
+// WithRequestTimeout specifies a function that returns the duration
+// to use when starting a new request timeout timer. Zero or negative
+// duration disables the timeout. The timeout is disabled by default.
+func WithRequestTimeout(timeout func() time.Duration) Option {
+	return func(opts *options) {
+		opts.requestTimeout = timeout
+	}
+}
 
 type clientState struct {
 	*seqState
 	*replyState
+	*requestTimerState
 
 	opts options
 }
