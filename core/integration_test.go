@@ -25,13 +25,13 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/nec-blockchain/minbft/api"
-	cl "github.com/nec-blockchain/minbft/client"
-	minbft "github.com/nec-blockchain/minbft/core"
-	authen "github.com/nec-blockchain/minbft/sample/authentication"
-	"github.com/nec-blockchain/minbft/sample/config"
-	dummyConnector "github.com/nec-blockchain/minbft/sample/net/dummy/connector"
-	"github.com/nec-blockchain/minbft/sample/requestconsumer"
+	"github.com/hyperledger-labs/minbft/api"
+	cl "github.com/hyperledger-labs/minbft/client"
+	minbft "github.com/hyperledger-labs/minbft/core"
+	authen "github.com/hyperledger-labs/minbft/sample/authentication"
+	"github.com/hyperledger-labs/minbft/sample/config"
+	dummyConnector "github.com/hyperledger-labs/minbft/sample/net/dummy/connector"
+	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 
 	"github.com/stretchr/testify/assert"
 )

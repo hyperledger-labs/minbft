@@ -25,4 +25,4 @@ clients:
 # USIG options
 usig:
   # Path to USIG enclave file (environment substitution supported)
-  enclaveFile: "$GOPATH/src/github.com/nec-blockchain/minbft/usig/sgx/enclave/libusig.signed.so"
+  enclaveFile: "$GOPATH/src/github.com/hyperledger-labs/minbft/usig/sgx/enclave/libusig.signed.so"

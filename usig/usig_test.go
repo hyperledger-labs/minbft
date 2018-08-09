@@ -24,8 +24,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/nec-blockchain/minbft/usig"
-	mock_usig "github.com/nec-blockchain/minbft/usig/mocks"
+	"github.com/hyperledger-labs/minbft/usig"
+	mock_usig "github.com/hyperledger-labs/minbft/usig/mocks"
 )
 
 func TestUIMarshalUnmarshal(t *testing.T) {

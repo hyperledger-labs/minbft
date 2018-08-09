@@ -16,7 +16,7 @@
 
 package main
 
-import "github.com/nec-blockchain/minbft/sample/peer/cmd"
+import "github.com/hyperledger-labs/minbft/sample/peer/cmd"
 
 func main() {
 	cmd.Execute()

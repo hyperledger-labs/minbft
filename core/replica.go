@@ -24,8 +24,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	logging "github.com/op/go-logging"
 
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/core/internal/messagelog"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 )
 
 const (

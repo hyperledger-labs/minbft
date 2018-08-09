@@ -28,8 +28,8 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/nec-blockchain/minbft/usig"
-	sgxusig "github.com/nec-blockchain/minbft/usig/sgx"
+	"github.com/hyperledger-labs/minbft/usig"
+	sgxusig "github.com/hyperledger-labs/minbft/usig/sgx"
 )
 
 // SignatureCipher defines the interface of signature operations used by public cryptographic ciphers

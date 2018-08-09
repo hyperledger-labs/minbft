@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

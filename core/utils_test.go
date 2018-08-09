@@ -24,9 +24,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/nec-blockchain/minbft/api"
+	"github.com/hyperledger-labs/minbft/api"
 
-	mock_api "github.com/nec-blockchain/minbft/api/mocks"
+	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
 )
 
 func TestMakeReplicaMessageSigner(t *testing.T) {

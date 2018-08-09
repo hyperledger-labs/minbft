@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/nec-blockchain/minbft/core/internal/messagelog MessageLog
+//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/core/internal/messagelog MessageLog
 
 package mock_messagelog //nolint

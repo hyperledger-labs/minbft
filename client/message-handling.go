@@ -21,9 +21,9 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/nec-blockchain/minbft/api"
-	"github.com/nec-blockchain/minbft/client/internal/requestbuffer"
-	"github.com/nec-blockchain/minbft/messages"
+	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // startReplicaConnections initiates connections to all replicas and

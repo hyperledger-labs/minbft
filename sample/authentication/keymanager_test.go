@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nec-blockchain/minbft/api"
+	"github.com/hyperledger-labs/minbft/api"
 
 	"github.com/stretchr/testify/assert"
 )
