@@ -73,15 +73,13 @@ type replyConsumer func(reply *messages.Reply, clientID uint32)
 
 // defaultRequestHandler constructs a standard requestHandler using id
 // as the current replica ID, n as the total number of nodes, and the
-// supplied abstract interfaces. The returned handler will send
-// generated Prepare messages to out channel for UI assignment and
-// delivery to peer replicas.
-func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authenticator, clientStates clientstate.Provider, out chan<- messages.MessageWithUI) requestHandler {
+// supplied abstract interfaces.
+func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authenticator, clientStates clientstate.Provider, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	verifier := makeMessageSignatureVerifier(authen)
 	seqAcceptor := makeRequestSeqAcceptor(clientStates)
 	replier := makeRequestReplier(clientStates)
 
-	return makeRequestHandler(id, n, view, verifier, seqAcceptor, replier, out)
+	return makeRequestHandler(id, n, view, verifier, seqAcceptor, replier, handleGeneratedUIMessage)
 }
 
 // defaultRequestExecutor constructs a standard requestExecutor using
@@ -95,10 +93,8 @@ func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack 
 
 // makeRequestHandler constructs an instance of requestHandler using
 // id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces. The returned handler will send
-// generated Prepare messages to out channel for UI assignment and
-// delivery to peer replicas.
-func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatureVerifier, seqAcceptor requestSeqAcceptor, replier requestReplier, out chan<- messages.MessageWithUI) requestHandler {
+// the supplied abstract interfaces.
+func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatureVerifier, seqAcceptor requestSeqAcceptor, replier requestReplier, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	return func(request *messages.Request, prepared bool) (reply <-chan *messages.Reply, new bool, err error) {
 		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
 			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
@@ -140,7 +136,7 @@ func makeRequestHandler(id, n uint32, view viewProvider, verifier messageSignatu
 			logger.Debugf("Replica %d generated Prepare: view=%d client=%d seq=%d",
 				prepare.Msg.ReplicaId, prepare.Msg.View,
 				prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
-			out <- prepare
+			handleGeneratedUIMessage(prepare)
 		}
 
 		if prepared {

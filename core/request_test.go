@@ -45,8 +45,7 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	n := randN()
 	view := randView()
 	id := primaryID(n, view)
-	out := make(chan messages.MessageWithUI, 1)
-	handler := setupMakeRequestHandlerMock(mock, id, n, view, out)
+	handler := setupMakeRequestHandlerMock(mock, id, n, view)
 	clientID := rand.Uint32()
 	seq := rand.Uint64()
 	request := &messages.Request{
@@ -76,7 +75,6 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	assert.Nil(t, replyOut)
 	assert.False(t, new)
 	assert.Error(t, err)
-	assert.Empty(t, out)
 
 	// Invalid client signature from Prepare
 	err = fmt.Errorf("invalid signature")
@@ -94,7 +92,6 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	assert.Nil(t, replyOut)
 	assert.False(t, new)
 	assert.Error(t, err)
-	assert.Empty(t, out)
 
 	// Wrong request ID from Prepare
 	err = fmt.Errorf("invalid request ID")
@@ -117,12 +114,12 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqAcceptor", request, true).Return(true, nil).Once()
 	mock.On("requestReplier", request).Return(replyIn).Once()
+	mock.On("generatedUIMessageHandler", prepare).Once()
 	replyOut, new, err = handler(request, false)
 	replyIn <- reply
 	assert.Equal(t, reply, <-replyOut)
 	assert.True(t, new)
 	assert.NoError(t, err)
-	assert.Equal(t, prepare, <-out)
 }
 
 func testMakeRequestHandlerBackup(t *testing.T) {
@@ -132,7 +129,7 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 	n := randN()
 	view := randView()
 	id := randBackupID(n, view)
-	handler := setupMakeRequestHandlerMock(mock, id, n, view, nil)
+	handler := setupMakeRequestHandlerMock(mock, id, n, view)
 	clientID := rand.Uint32()
 	seq := rand.Uint64()
 	request := &messages.Request{
@@ -211,7 +208,7 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint64, out chan<- messages.MessageWithUI) requestHandler {
+func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint64) requestHandler {
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
@@ -228,8 +225,11 @@ func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		args := mock.MethodCalled("requestReplier", request)
 		return args.Get(0).(chan *messages.Reply)
 	}
+	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("generatedUIMessageHandler", msg)
+	}
 	mock.On("viewProvider").Return(view)
-	return makeRequestHandler(id, n, provideView, verifier, seqAcceptor, replier, out)
+	return makeRequestHandler(id, n, provideView, verifier, seqAcceptor, replier, handleGeneratedUIMessage)
 }
 
 func TestMakeRequestExecutor(t *testing.T) {

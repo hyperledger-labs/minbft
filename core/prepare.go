@@ -30,33 +30,41 @@ type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 
 // makePrepareHandler constructs and instance of prepareHandler using
 // id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces. The returned handler will send
-// generated Commit messages to out channel for UI assignment and
-// delivery to peer replicas.
-func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, handleRequest requestHandler, collectCommit commitCollector, out chan<- messages.MessageWithUI) prepareHandler {
+// the supplied abstract interfaces.
+func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler, releaseUI uiReleaser) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
-		logger.Debugf("Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
-			id, prepare.Msg.ReplicaId, prepare.Msg.View,
+		replicaID := prepare.ReplicaID()
+		logger.Debugf(
+			"Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
+			id, replicaID, prepare.Msg.View,
 			prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
-		currentView := view()
 
-		if new, err = acceptUI(prepare); err != nil {
-			return false, fmt.Errorf("Prepare UI cannot be accepted: %s", err)
+		ui, err := verifyUI(prepare)
+		if err != nil {
+			return false, fmt.Errorf("UI not valid: %s", err)
 		}
+
+		if replicaID == id {
+			return false, nil
+		}
+
+		if new = captureUI(replicaID, ui); !new {
+			return false, nil
+		}
+		defer releaseUI(replicaID, ui)
+
+		currentView := view()
 
 		if prepare.Msg.View != currentView {
 			return false, fmt.Errorf("Prepare is for view %d, current view is %d",
 				prepare.Msg.View, currentView)
-		} else if !isPrimary(currentView, prepare.ReplicaID(), n) {
+		} else if !isPrimary(currentView, replicaID, n) {
 			return false, fmt.Errorf("Prepare from backup %d in view %d",
-				prepare.Msg.ReplicaId, currentView)
+				replicaID, currentView)
 		}
 
 		if _, _, err = handleRequest(prepare.Msg.Request, true); err != nil {
 			return false, fmt.Errorf("Failed to process request: %s", err)
-		}
-		if !new || isPrimary(currentView, id, n) {
-			return false, nil
 		}
 
 		commit := &messages.Commit{
@@ -71,10 +79,12 @@ func makePrepareHandler(id, n uint32, view viewProvider, acceptUI uiAcceptor, ha
 		if err := collectCommit(commit); err != nil {
 			panic("Failed to collect own Commit")
 		}
+
 		logger.Debugf("Replica %d generated Commit: view=%d primary=%d client=%d seq=%d",
 			id, commit.Msg.View, commit.Msg.PrimaryId,
 			commit.Msg.Request.Msg.ClientId, commit.Msg.Request.Msg.Seq)
-		out <- commit
+
+		handleGeneratedUIMessage(commit)
 
 		return new, nil
 	}
