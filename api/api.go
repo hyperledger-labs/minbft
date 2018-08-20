@@ -124,14 +124,15 @@ type Authenticator interface {
 
 //======= Interface for module 'requestconsumer' ========
 
-// RequestConsumer defines the interface for the replicated state machine. It
-// accepts the *accepted* requests from the BFT core and triggers further
-// actions such as execution of the message
+// RequestConsumer defines the interface for the local copy of the
+// replicated state machine.
+//
+// Deliver triggers execution of the operation op by the state
+// machine. The result of the operation execution is send to the
+// returned channel once it is ready.
+//
+// StateDigest returns the digest of the current system state.
 type RequestConsumer interface {
-	// Deliver delivers an accepted message and returns the result once the
-	// delivered message has been executed
-	Deliver(msg []byte) []byte
-
-	// State returns the digest of the current system state
+	Deliver(op []byte) <-chan []byte
 	StateDigest() []byte
 }

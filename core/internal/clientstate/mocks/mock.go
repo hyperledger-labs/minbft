@@ -33,19 +33,6 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
-// AcceptRequestSeq mocks base method
-func (m *MockState) AcceptRequestSeq(arg0 uint64) (bool, error) {
-	ret := m.ctrl.Call(m, "AcceptRequestSeq", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// AcceptRequestSeq indicates an expected call of AcceptRequestSeq
-func (mr *MockStateMockRecorder) AcceptRequestSeq(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcceptRequestSeq", reflect.TypeOf((*MockState)(nil).AcceptRequestSeq), arg0)
-}
-
 // AddReply mocks base method
 func (m *MockState) AddReply(arg0 *messages.Reply) error {
 	ret := m.ctrl.Call(m, "AddReply", arg0)
@@ -58,17 +45,40 @@ func (mr *MockStateMockRecorder) AddReply(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReply", reflect.TypeOf((*MockState)(nil).AddReply), arg0)
 }
 
-// CheckRequestSeq mocks base method
-func (m *MockState) CheckRequestSeq(arg0 uint64) (bool, error) {
-	ret := m.ctrl.Call(m, "CheckRequestSeq", arg0)
+// CaptureRequestSeq mocks base method
+func (m *MockState) CaptureRequestSeq(arg0 uint64) bool {
+	ret := m.ctrl.Call(m, "CaptureRequestSeq", arg0)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
-// CheckRequestSeq indicates an expected call of CheckRequestSeq
-func (mr *MockStateMockRecorder) CheckRequestSeq(arg0 interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRequestSeq", reflect.TypeOf((*MockState)(nil).CheckRequestSeq), arg0)
+// CaptureRequestSeq indicates an expected call of CaptureRequestSeq
+func (mr *MockStateMockRecorder) CaptureRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CaptureRequestSeq", reflect.TypeOf((*MockState)(nil).CaptureRequestSeq), arg0)
+}
+
+// PrepareRequestSeq mocks base method
+func (m *MockState) PrepareRequestSeq(arg0 uint64) error {
+	ret := m.ctrl.Call(m, "PrepareRequestSeq", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrepareRequestSeq indicates an expected call of PrepareRequestSeq
+func (mr *MockStateMockRecorder) PrepareRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareRequestSeq", reflect.TypeOf((*MockState)(nil).PrepareRequestSeq), arg0)
+}
+
+// ReleaseRequestSeq mocks base method
+func (m *MockState) ReleaseRequestSeq(arg0 uint64) error {
+	ret := m.ctrl.Call(m, "ReleaseRequestSeq", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReleaseRequestSeq indicates an expected call of ReleaseRequestSeq
+func (mr *MockStateMockRecorder) ReleaseRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseRequestSeq", reflect.TypeOf((*MockState)(nil).ReleaseRequestSeq), arg0)
 }
 
 // ReplyChannel mocks base method
@@ -81,4 +91,16 @@ func (m *MockState) ReplyChannel(arg0 uint64) <-chan *messages.Reply {
 // ReplyChannel indicates an expected call of ReplyChannel
 func (mr *MockStateMockRecorder) ReplyChannel(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplyChannel", reflect.TypeOf((*MockState)(nil).ReplyChannel), arg0)
+}
+
+// RetireRequestSeq mocks base method
+func (m *MockState) RetireRequestSeq(arg0 uint64) error {
+	ret := m.ctrl.Call(m, "RetireRequestSeq", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RetireRequestSeq indicates an expected call of RetireRequestSeq
+func (mr *MockStateMockRecorder) RetireRequestSeq(arg0 interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetireRequestSeq", reflect.TypeOf((*MockState)(nil).RetireRequestSeq), arg0)
 }

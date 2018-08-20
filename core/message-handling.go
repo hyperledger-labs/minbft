@@ -58,6 +58,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	peerStates := peerstate.NewProvider()
 
 	view := func() uint64 { return 0 } // view change is not implemented
+	prepareRequestSeq := makeRequestSeqPreparer(clientStates)
 	verifyUI := makeUIVerifier(stack)
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
@@ -65,10 +66,11 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
 	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
-	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	replyRequest := makeRequestReplier(clientStates)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareRequestSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
 	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
-	return makeMessageHandler(handleRequest, handlePrepare, handleCommit)
+	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
 }
 
 // defaultGeneratedUIMessageHandler construct a standard
@@ -112,19 +114,19 @@ func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 
 // makeMessageHandler construct an instance of messageHandler using
 // the supplied abstract handlers.
-func makeMessageHandler(handleRequest requestHandler, handlePrepare prepareHandler, handleCommit commitHandler) messageHandler {
+func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplier, handlePrepare prepareHandler, handleCommit commitHandler) messageHandler {
 	return func(msg interface{}) (reply <-chan interface{}, new bool, err error) {
 		switch msg := msg.(type) {
 		case *messages.Request:
 			outChan := make(chan interface{})
-			replyChan, new, err := handleRequest(msg, false)
+			new, err := handleRequest(msg)
 			if err != nil {
 				err = fmt.Errorf("Failed to handle Request message: %s", err)
 				return nil, false, err
 			}
 			go func() {
 				defer close(outChan)
-				if m, more := <-replyChan; more {
+				if m, more := <-replyRequest(msg); more {
 					outChan <- m
 				}
 			}()
