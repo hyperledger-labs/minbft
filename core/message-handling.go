@@ -142,18 +142,27 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	f := config.F()
 
 	view := func() uint64 { return 0 } // view change is not implemented
+	reqTimeout := makeRequestTimeoutProvider(config)
+	handleReqTimeout := func(view uint64) {
+		logger.Panic("Request timed out, but view change not implemented")
+	}
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
 	signMessage := makeReplicaMessageSigner(stack)
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
-	clientStates := clientstate.NewProvider()
+	clientStateOpts := []clientstate.Option{
+		clientstate.WithRequestTimeout(reqTimeout),
+	}
+	clientStates := clientstate.NewProvider(clientStateOpts...)
 	peerStates := peerstate.NewProvider()
 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
+	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
+	stopReqTimer := makeRequestTimerStopper(clientStates)
 	captureUI := makeUICapturer(peerStates)
 
 	var applyReplicaMessage replicaMessageApplier
@@ -175,7 +184,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
 	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
-	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, executeRequest)
+	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
@@ -185,7 +194,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage)
 	applyReplicaMessage = makeReplicaMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, view, handleGeneratedUIMessage)
+	applyRequest := makeRequestApplier(id, n, view, handleGeneratedUIMessage, startReqTimer)
 
 	var processMessage messageProcessor
 

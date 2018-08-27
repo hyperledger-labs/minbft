@@ -95,7 +95,7 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 
 // makeCommitmentCollector constructs an instance of
 // commitmentCollector using the supplied abstractions.
-func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitmentCollector {
+func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
 	return func(replicaID uint32, prepare *messages.Prepare) error {
 		if done, err := countCommitment(replicaID, prepare); err != nil {
 			return err
@@ -109,9 +109,7 @@ func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq reques
 			return nil // request already accepted for execution
 		}
 
-		// TODO: This is probably the place to stop the
-		// request timer.
-
+		stopReqTimer(request.Msg.ClientId)
 		executeRequest(request)
 
 		return nil
