@@ -151,7 +151,7 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, applyRequest requestApp
 	}
 }
 
-func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessage generatedUIMessageHandler) requestApplier {
+func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter) requestApplier {
 	return func(request *messages.Request) error {
 		view := view()
 		primary := isPrimary(view, id, n)
@@ -169,6 +169,8 @@ func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessag
 			}
 
 			handleGeneratedUIMessage(prepare)
+		} else {
+			startReqTimer(request.Msg.ClientId, view)
 		}
 
 		return nil
