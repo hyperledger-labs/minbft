@@ -20,6 +20,9 @@ package minbft
 import (
 	"fmt"
 	"sync/atomic"
+	"time"
+
+	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
@@ -94,6 +97,32 @@ type requestSeqPreparer func(request *messages.Request) (new bool)
 // could not have been retired before. The identifier must be
 // previously prepared. It is safe to invoke concurrently.
 type requestSeqRetirer func(request *messages.Request) (new bool)
+
+// requestTimerStarter starts request timer.
+//
+// A request timeout event is triggered if the request timeout elapses
+// before corresponding requestTimerStopper is called with the same
+// clientID argument passed. The argument view specifies the current
+// view number. It is allowed to restart a timer before the previous
+// corresponding timer has stopped or expired. It is safe to invoke
+// concurrently.
+type requestTimerStarter func(clientID uint32, view uint64)
+
+// requestTimerStopper stops request timer.
+//
+// Given a client identifier clientID, the corresponding request timer
+// is stopped, if it has not already been stopped or expired. It is
+// safe to invoke concurrently.
+type requestTimerStopper func(clientID uint32)
+
+// requestTimeoutHandler handles request timeout expiration.
+//
+// The argument view is the view number in which the request timer was
+// started. It is safe to invoke concurrently.
+type requestTimeoutHandler func(view uint64)
+
+// requestTimeoutProvider returns current request timeout duration.
+type requestTimeoutProvider func() time.Duration
 
 // makeRequestValidator constructs an instance of requestValidator
 // using the supplied abstractions.
@@ -236,5 +265,38 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 		}
 
 		return true
+	}
+}
+
+// makeRequestTimerStarter constructs an instance of
+// requestTimerStarter.
+func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTimeout requestTimeoutHandler, logger *logging.Logger) requestTimerStarter {
+	return func(clientID uint32, view uint64) {
+		provideClientState(clientID).StartRequestTimer(func() {
+			logger.Warningf("Request timer expired: client=%d view=%d", clientID, view)
+			handleTimeout(view)
+		})
+	}
+}
+
+// makeRequestTimerStopper constructs an instance of
+// requestTimerStopper.
+func makeRequestTimerStopper(provideClientState clientstate.Provider) requestTimerStopper {
+	return func(clientID uint32) {
+		provideClientState(clientID).StopRequestTimer()
+	}
+}
+
+// makeRequestTimeoutProvider constructs an instance of
+// requestTimeoutProvider.
+func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
+	// The View Change operation is not yet implemented, thus it
+	// simply returns the initial request timeout duration. When
+	// the View Change is implemented, this duration might be
+	// required to increase dynamically when the View Change is
+	// triggered, to guarantee liveness in case of increased
+	// network delay.
+	return func() time.Duration {
+		return config.TimeoutRequest()
 	}
 }
