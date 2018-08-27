@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	logging "github.com/op/go-logging"
+	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -374,6 +377,55 @@ func TestMakeRequestReplier(t *testing.T) {
 	assert.Equal(t, reply, <-out)
 	_, more = <-out
 	assert.False(t, more, "Channel should be closed")
+}
+
+func TestMakeRequestTimerStarter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	clientID := rand.Uint32()
+	view := rand.Uint64()
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+	handleTimeout := func(view uint64) {
+		mock.MethodCalled("requestTimeoutHandler", view)
+	}
+
+	startTimer := makeRequestTimerStarter(provider, handleTimeout,
+		logging.MustGetLogger(module))
+
+	state.EXPECT().StartRequestTimer(gomock.Any()).Do(func(f func()) { f() })
+	mock.On("requestTimeoutHandler", view).Once()
+	startTimer(clientID, view)
+}
+
+func TestMakeRequestTimerStopper(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clientID := rand.Uint32()
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+
+	stopTimer := makeRequestTimerStopper(provider)
+
+	state.EXPECT().StopRequestTimer()
+	stopTimer(clientID)
+}
+
+func TestMakeRequestTimeoutProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	expectedTimeout := time.Duration(rand.Int())
+	config := mock_api.NewMockConfiger(ctrl)
+	config.EXPECT().TimeoutRequest().Return(expectedTimeout).AnyTimes()
+
+	requestTimeout := makeRequestTimeoutProvider(config)
+
+	timeout := requestTimeout()
+	assert.Equal(t, expectedTimeout, timeout)
 }
 
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {
