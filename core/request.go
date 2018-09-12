@@ -151,10 +151,10 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, applyRequest requestApp
 	}
 }
 
-func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter) requestApplier {
+func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter) requestApplier {
 	return func(request *messages.Request) error {
-		view := view()
-		primary := isPrimary(view, id, n)
+		view, releaseView := provideView()
+		defer releaseView()
 
 		// The primary has to start request timer, as well.
 		// Suppose, the primary is correct, but its messages
@@ -164,7 +164,7 @@ func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessag
 		// change, should the new primary be faulty.
 		startReqTimer(request.Msg.ClientId, view)
 
-		if primary {
+		if isPrimary(view, id, n) {
 			prepare := &messages.Prepare{
 				Msg: &messages.Prepare_M{
 					View:      view,

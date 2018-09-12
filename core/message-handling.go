@@ -28,6 +28,7 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
+	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -141,7 +142,6 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	n := config.N()
 	f := config.F()
 
-	view := func() uint64 { return 0 } // view change is not implemented
 	reqTimeout := makeRequestTimeoutProvider(config)
 	handleReqTimeout := func(view uint64) {
 		logger.Panic("Request timed out, but view change not implemented")
@@ -157,6 +157,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 	clientStates := clientstate.NewProvider(clientStateOpts...)
 	peerStates := peerstate.NewProvider()
+	viewState := viewstate.New()
 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
@@ -164,6 +165,8 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	captureUI := makeUICapturer(peerStates)
+	provideView := viewState.WaitAndHoldActiveView
+	waitView := viewState.WaitAndHoldView
 
 	var applyReplicaMessage replicaMessageApplier
 
@@ -194,7 +197,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage)
 	applyReplicaMessage = makeReplicaMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, view, handleGeneratedUIMessage, startReqTimer)
+	applyRequest := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer)
 
 	var processMessage messageProcessor
 
@@ -210,7 +213,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	processRequest := makeRequestProcessor(captureSeq, applyRequest)
 	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(processMessageThunk, applyReplicaMessage)
-	processViewMessage := makeViewMessageProcessor(view, processApplicableReplicaMessage)
+	processViewMessage := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processReplicaMessage := makeReplicaMessageProcessor(id, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
@@ -350,16 +353,13 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 	}
 }
 
-func makeViewMessageProcessor(view viewProvider, processApplicable applicableReplicaMessageProcessor) viewMessageProcessor {
+func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableReplicaMessageProcessor) viewMessageProcessor {
 	return func(msg messages.ViewMessage) (new bool, err error) {
-		currentView := view()
-		msgView := msg.View()
-
-		if msgView != currentView {
-			err = fmt.Errorf("Message is for view %d, current view is %d",
-				msgView, currentView)
-			return false, err
+		ok, release := waitView(msg.View())
+		if !ok {
+			return false, nil
 		}
+		defer release()
 
 		switch msg := msg.(type) {
 		case messages.ReplicaMessage:
