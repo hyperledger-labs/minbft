@@ -335,18 +335,19 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	provideView := func() uint64 {
-		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64)
+	waitView := func(view uint64) (ok bool, release func()) {
+		args := mock.MethodCalled("viewWaiter", view)
+		return args.Bool(0), func() {
+			mock.MethodCalled("viewReleaser", view)
+		}
 	}
 	processApplicableReplicaMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
 		args := mock.MethodCalled("applicableReplicaMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeViewMessageProcessor(provideView, processApplicableReplicaMessage)
+	process := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
 
 	view := randView()
-	otherView := randOtherView(view)
 
 	viewMsg := mock_messages.NewMockViewMessage(ctrl)
 	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
@@ -357,21 +358,24 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 
 	viewMsg.EXPECT().View().Return(view).AnyTimes()
 
-	mock.On("viewProvider").Return(view).Once()
+	mock.On("viewWaiter", view).Return(false).Once()
+	new, err := process(replicaViewMessage)
+	assert.NoError(t, err)
+	assert.False(t, new, "Message for former view")
+
+	mock.On("viewWaiter", view).Return(true).Once()
 	assert.Panics(t, func() { process(viewMsg) }, "Unknown message type")
 
-	mock.On("viewProvider").Return(otherView).Once()
-	_, err := process(replicaViewMessage)
-	assert.Error(t, err, "Wrong view number")
-
-	mock.On("viewProvider").Return(view).Once()
+	mock.On("viewWaiter", view).Return(true).Once()
 	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(false, nil).Once()
-	new, err := process(replicaViewMessage)
+	mock.On("viewReleaser", view).Once()
+	new, err = process(replicaViewMessage)
 	assert.NoError(t, err)
 	assert.False(t, new)
 
-	mock.On("viewProvider").Return(view).Once()
+	mock.On("viewWaiter", view).Return(true).Once()
 	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(true, nil).Once()
+	mock.On("viewReleaser", view).Once()
 	new, err = process(replicaViewMessage)
 	assert.NoError(t, err)
 	assert.True(t, new)

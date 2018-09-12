@@ -86,9 +86,11 @@ func TestMakeRequestApplier(t *testing.T) {
 	otherView := randOtherView(ownView)
 	id := primaryID(n, ownView)
 
-	provideView := func() uint64 {
+	provideView := func() (view uint64, release func()) {
 		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64)
+		return args.Get(0).(uint64), func() {
+			mock.MethodCalled("viewReleaser", view)
+		}
 	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
@@ -115,12 +117,14 @@ func TestMakeRequestApplier(t *testing.T) {
 
 	mock.On("viewProvider").Return(otherView).Once()
 	mock.On("requestTimerStarter", clientID, otherView).Once()
+	mock.On("viewReleaser", otherView).Once()
 	err := apply(request)
 	assert.NoError(t, err)
 
 	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("requestTimerStarter", clientID, ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
+	mock.On("viewReleaser", ownView).Once()
 	err = apply(request)
 	assert.NoError(t, err)
 }
