@@ -127,8 +127,8 @@ export GOPATH="$HOME/go"
 ### Intel® SGX SDK ###
 
 The Intel® SGX enclave implementation has been tested with Intel® SGX
-SDK for Linux version 2.1.1. For installation instuctions please visit
-[installation guide][sgx-install]. A conventional directory to install
+SDK for Linux version 2.3.1. For installation instuctions please visit
+[download page][sgx-downloads]. A conventional directory to install
 the SDK is `/opt/intel/`. Please do not forget to source
 `/opt/intel/sgxsdk/environment` file in your shell. Alternatively, one
 can add the following line to `~/.profile`:
@@ -152,7 +152,7 @@ environment variable, e.g. by modifying `~/.profile` file:
 export SGX_MODE=SIM
 ```
 
-[sgx-install]: https://01.org/intel-softwareguard-extensions/documentation/intel-software-guard-extensions-installation-guide
+[sgx-downloads]: https://01.org/intel-software-guard-extensions/downloads
 
 ## Getting Started ##
 
