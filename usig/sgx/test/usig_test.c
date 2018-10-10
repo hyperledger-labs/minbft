@@ -97,15 +97,11 @@ static void test_create_ui()
         assert(usig_create_ui(usig, digest, &c3, &s3) == SGX_SUCCESS);
         // Must fetch a fresh counter value
         assert(c3 == 1);
-#ifndef SGX_SIM_MODE
-        // Apparently, SGX SDK in the simulation mode uses current
-        // time in *seconds* to seed random number generation. We
-        // don't want to wait that long and skip these checks.
+
         // Check for uniqueness of the epoch and certificate produced
         // by the new instance of the enclave
         assert(e1 != e2);
         assert(!signature_is_equal(&s1, &s3));
-#endif
 
         assert(usig_destroy(usig) == SGX_SUCCESS);
         free(sealed_data);
