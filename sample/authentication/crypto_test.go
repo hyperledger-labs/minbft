@@ -23,7 +23,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,12 +83,6 @@ func testUSIGAuthenScheme(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping USIG enclave recreation in short mode.")
 	}
-	// The USIG enclave might have been built in simulation mode.
-	// Apparently, SGX SDK in the simulation mode uses current
-	// time in *seconds* to seed random number generation. We need
-	// to wait at least one second to ensure that the enclave gets
-	// a unique epoch in that case.
-	time.Sleep(time.Second)
 
 	usig2, err := sgxusig.New(usigEnclaveFile, usig1.SealedKey())
 	require.NoError(t, err)

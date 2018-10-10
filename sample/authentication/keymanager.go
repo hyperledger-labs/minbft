@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"time"
 
 	"github.com/hyperledger-labs/minbft/api"
 	sgxusig "github.com/hyperledger-labs/minbft/usig/sgx"
@@ -310,13 +309,6 @@ func (spec *sgxEcdsaKeySpec) parsePrivateKey(privKeyStr string) (interface{}, er
 // generateKeyPair creates an SGX USIG instance to generate a key
 // pair, where the private key is sealed by the enclave.
 func (spec *sgxEcdsaKeySpec) generateKeyPair(securityParam int) (string, string, error) {
-	// HACK: The USIG enclave might have been built in simulation
-	// mode. SGX SDK uses current time in *seconds* to seed random
-	// number generation in the simulation mode. We need to wait
-	// for at least one second to ensure that the enclave
-	// generates a unique key pair in that case.
-	time.Sleep(time.Second)
-
 	usig, err := sgxusig.New(spec.enclaveFile, nil)
 	if err != nil {
 		return "", "", err
