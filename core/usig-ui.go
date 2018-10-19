@@ -74,11 +74,12 @@ func makeUIReleaser(providePeerState peerstate.Provider) uiReleaser {
 // authenticator to verify USIG certificates.
 func makeUIVerifier(authen api.Authenticator) uiVerifier {
 	return func(msg messages.MessageWithUI) (*usig.UI, error) {
-		ui := new(usig.UI)
+		ui, err := parseMessageUI(msg)
+		if err != nil {
+			return nil, err
+		}
 
-		if err := ui.UnmarshalBinary(msg.UIBytes()); err != nil {
-			return nil, fmt.Errorf("Failed unmarshaling UI: %s", err)
-		} else if ui.Counter == uint64(0) {
+		if ui.Counter == uint64(0) {
 			return nil, fmt.Errorf("Invalid (zero) counter value")
 		}
 
@@ -101,4 +102,14 @@ func makeUIAssigner(authen api.Authenticator) uiAssigner {
 
 		msg.AttachUI(uiBytes)
 	}
+}
+
+func parseMessageUI(msg messages.MessageWithUI) (*usig.UI, error) {
+	ui := new(usig.UI)
+
+	if err := ui.UnmarshalBinary(msg.UIBytes()); err != nil {
+		return nil, fmt.Errorf("Failed unmarshaling UI: %s", err)
+	}
+
+	return ui, nil
 }
