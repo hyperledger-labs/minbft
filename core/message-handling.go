@@ -85,7 +85,10 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeMessage)
 
-	handleRequest := makeRequestHandler(id, n, view, verifyMessageSignature, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+	validateRequest := makeRequestValidator(verifyMessageSignature)
+	processRequest := makeRequestProcessor(id, n, view, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+
+	handleRequest := makeRequestHandler(validateRequest, processRequest)
 	replyRequest := makeRequestReplier(clientStates)
 	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareSeq, handleRequest, collectCommit, handleGeneratedUIMessage)
 	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit)
