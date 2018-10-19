@@ -38,6 +38,22 @@ type requestHandler func(request *messages.Request) (new bool, err error)
 // safe to invoke concurrently.
 type requestReplier func(request *messages.Request) <-chan *messages.Reply
 
+// requestValidator validates a Request message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type requestValidator func(request *messages.Request) error
+
+// requestProcessor processes a valid Request message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type requestProcessor func(request *messages.Request) (new bool, err error)
+
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
 // delivery to the client, and hands it over for further processing.
@@ -83,15 +99,31 @@ type requestSeqPreparer func(request *messages.Request) error
 type requestSeqRetirer func(request *messages.Request) error
 
 // makeRequestHandler constructs an instance of requestHandler using
-// id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces.
-func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
+// supplied abstract interfaces.
+func makeRequestHandler(validate requestValidator, process requestProcessor) requestHandler {
 	return func(request *messages.Request) (new bool, err error) {
-		if err = verify(request); err != nil {
-			err = fmt.Errorf("Failed to authenticate Request message: %s", err)
+		if err = validate(request); err != nil {
+			err = fmt.Errorf("Invalid message: %s", err)
 			return false, err
 		}
 
+		return process(request)
+	}
+}
+
+// makeRequestValidator constructs an instance of requestValidator
+// using the supplied abstractions.
+func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
+	return func(request *messages.Request) error {
+		return verify(request)
+	}
+}
+
+// makeRequestProcessor constructs an instance of requestProcessor
+// using id as the current replica ID, n as the total number of nodes,
+// and the supplied abstractions.
+func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestProcessor {
+	return func(request *messages.Request) (new bool, err error) {
 		view := view()
 		primary := isPrimary(view, id, n)
 
