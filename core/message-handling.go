@@ -75,7 +75,6 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
 	captureUI := makeUICapturer(peerStates)
-	releaseUI := makeUIReleaser(peerStates)
 
 	consumeMessage := makeMessageConsumer(log, clientStates, logger)
 
@@ -88,8 +87,8 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 
 	handleRequest := makeRequestHandler(id, n, view, verifyMessageSignature, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 	replyRequest := makeRequestReplier(clientStates)
-	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
-	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareSeq, handleRequest, collectCommit, handleGeneratedUIMessage)
+	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit)
 
 	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
 }

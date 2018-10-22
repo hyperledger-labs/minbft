@@ -47,9 +47,9 @@ type commitCounter func(commit *messages.Commit) (done bool, err error)
 
 // makeCommitHandler construct an instance of commitHandler using n as
 // the total number of nodes, and the supplied abstract interfaces.
-func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector, releaseUI uiReleaser) commitHandler {
+func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector) commitHandler {
 	return func(commit *messages.Commit) (new bool, err error) {
-		ui, err := verifyUI(commit)
+		_, err = verifyUI(commit)
 		if err != nil {
 			return false, fmt.Errorf("UI is not valid: %s", err)
 		}
@@ -60,10 +60,11 @@ func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, cap
 			return false, nil
 		}
 
-		if new = captureUI(replicaID, ui); !new {
+		new, releaseUI := captureUI(commit)
+		if !new {
 			return false, nil
 		}
-		defer releaseUI(replicaID, ui)
+		defer releaseUI()
 
 		if currentView := view(); commit.Msg.View != currentView {
 			return false, fmt.Errorf("Commit is for view %d, current view is %d",
