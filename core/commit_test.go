@@ -48,9 +48,11 @@ func TestMakeCommitHandler(t *testing.T) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Get(0).(*usig.UI), args.Error(1)
 	}
-	captureUI := func(replicaID uint32, ui *usig.UI) (new bool) {
-		args := mock.MethodCalled("uiCapturer", replicaID, ui)
-		return args.Bool(0)
+	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
+		args := mock.MethodCalled("uiCapturer", msg)
+		return args.Bool(0), func() {
+			mock.MethodCalled("uiReleaser", msg)
+		}
 	}
 	handlePrepare := func(prepare *messages.Prepare) (new bool, err error) {
 		args := mock.MethodCalled("prepareHandler", prepare)
@@ -60,10 +62,7 @@ func TestMakeCommitHandler(t *testing.T) {
 		args := mock.MethodCalled("collectCommit", commit)
 		return args.Error(0)
 	}
-	releaseUI := func(replicaID uint32, ui *usig.UI) {
-		mock.MethodCalled("uiReleaser", replicaID, ui)
-	}
-	handle := makeCommitHandler(id, n, provideView, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
+	handle := makeCommitHandler(id, n, provideView, verifyUI, captureUI, handlePrepare, collectCommit)
 
 	prepareUIBytes := make([]byte, 1)
 	rand.Read(prepareUIBytes)
@@ -111,7 +110,7 @@ func TestMakeCommitHandler(t *testing.T) {
 	assert.Error(t, err, "UI not valid")
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
-	mock.On("uiCapturer", otherID, ui).Return(false, nil).Once()
+	mock.On("uiCapturer", commit).Return(false, nil).Once()
 	new, err = handle(commit)
 	assert.NoError(t, err)
 	assert.False(t, new, "UI already processed")
@@ -119,33 +118,33 @@ func TestMakeCommitHandler(t *testing.T) {
 	commit = makeCommitMsg(otherID, view+1)
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
-	mock.On("uiCapturer", otherID, ui).Return(true, nil).Once()
-	mock.On("uiReleaser", otherID, ui).Once()
+	mock.On("uiCapturer", commit).Return(true, nil).Once()
+	mock.On("uiReleaser", commit).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit is for different view")
 
 	commit = makeCommitMsg(otherID, view)
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
-	mock.On("uiCapturer", otherID, ui).Return(true, nil).Once()
+	mock.On("uiCapturer", commit).Return(true, nil).Once()
 	mock.On("prepareHandler", prepare).Return(false, fmt.Errorf("Invalid Prepare")).Once()
-	mock.On("uiReleaser", otherID, ui).Once()
+	mock.On("uiReleaser", commit).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit refers to invalid Prepare")
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
-	mock.On("uiCapturer", otherID, ui).Return(true, nil).Once()
+	mock.On("uiCapturer", commit).Return(true, nil).Once()
 	mock.On("prepareHandler", prepare).Return(false, nil).Once()
 	mock.On("collectCommit", commit).Return(fmt.Errorf("Duplicated Commit")).Once()
-	mock.On("uiReleaser", otherID, ui).Once()
+	mock.On("uiReleaser", commit).Once()
 	_, err = handle(commit)
 	assert.Error(t, err, "Commit cannot be taken into account")
 
 	mock.On("uiVerifier", commit).Return(ui, nil).Once()
-	mock.On("uiCapturer", otherID, ui).Return(true, nil).Once()
+	mock.On("uiCapturer", commit).Return(true, nil).Once()
 	mock.On("prepareHandler", prepare).Return(false, nil).Once()
 	mock.On("collectCommit", commit).Return(nil).Once()
-	mock.On("uiReleaser", otherID, ui).Once()
+	mock.On("uiReleaser", commit).Once()
 	new, err = handle(commit)
 	assert.NoError(t, err)
 	assert.True(t, new)
