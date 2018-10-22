@@ -87,18 +87,6 @@ type requestSeqRetirer func(request *messages.Request) error
 // and deliver to the client. It is safe to invoke concurrently.
 type replyConsumer func(reply *messages.Reply, clientID uint32)
 
-// defaultRequestHandler constructs a standard requestHandler using id
-// as the current replica ID, n as the total number of nodes, and the
-// supplied abstract interfaces.
-func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authenticator, clientStates clientstate.Provider, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
-	verify := makeMessageSignatureVerifier(authen)
-	captureSeq := makeRequestSeqCapturer(clientStates)
-	releaseSeq := makeRequestSeqReleaser(clientStates)
-	prepareSeq := makeRequestSeqPreparer(clientStates)
-
-	return makeRequestHandler(id, n, view, verify, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
-}
-
 // defaultRequestExecutor constructs a standard requestExecutor using
 // id as the current replica ID, and the supplied abstract interfaces.
 func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack Stack) requestExecutor {

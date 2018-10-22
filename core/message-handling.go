@@ -54,20 +54,26 @@ type uiMessageConsumer func(msg messages.MessageWithUI)
 func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
 	n := config.N()
 
+	view := func() uint64 { return 0 } // view change is not implemented
+
+	verifyMessageSignature := makeMessageSignatureVerifier(stack)
+	verifyUI := makeUIVerifier(stack)
+
 	clientStates := clientstate.NewProvider()
 	peerStates := peerstate.NewProvider()
 
-	view := func() uint64 { return 0 } // view change is not implemented
-	prepareRequestSeq := makeRequestSeqPreparer(clientStates)
-	verifyUI := makeUIVerifier(stack)
+	captureSeq := makeRequestSeqCapturer(clientStates)
+	releaseSeq := makeRequestSeqReleaser(clientStates)
+	prepareSeq := makeRequestSeqPreparer(clientStates)
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
+
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
 	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
-	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
+	handleRequest := makeRequestHandler(id, n, view, verifyMessageSignature, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 	replyRequest := makeRequestReplier(clientStates)
-	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareRequestSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
+	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
 	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
