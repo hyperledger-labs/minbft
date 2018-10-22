@@ -28,20 +28,74 @@ import (
 // indicates that the valid message hasn't been processed before.
 type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 
+// prepareValidator validates a Prepare message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type prepareValidator func(prepare *messages.Prepare) error
+
+// prepareProcessor processes a valid Prepare message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type prepareProcessor func(prepare *messages.Prepare) (new bool, err error)
+
 // makePrepareHandler constructs an instance of prepareHandler using
-// id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
-func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, prepareRequestSeq requestSeqPreparer, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareHandler {
+func makePrepareHandler(validate prepareValidator, process prepareProcessor) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
-		_, err = verifyUI(prepare)
-		if err != nil {
-			return false, fmt.Errorf("UI not valid: %s", err)
+		if err = validate(prepare); err != nil {
+			err = fmt.Errorf("Invalid message: %s", err)
+			return false, err
 		}
 
-		replicaID := prepare.ReplicaID()
+		return process(prepare)
+	}
+}
+
+// makePrepareValidator constructs an instance of prepareValidator
+// using n as the total number of nodes, and the supplied abstract
+// interfaces.
+func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest requestValidator) prepareValidator {
+	return func(prepare *messages.Prepare) error {
+		replicaID := prepare.Msg.ReplicaId
+		view := prepare.Msg.View
+
+		if !isPrimary(view, replicaID, n) {
+			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
+		}
+
+		if err := validateRequest(prepare.Msg.Request); err != nil {
+			return fmt.Errorf("Request invalid: %s", err)
+		}
+
+		if _, err := verifyUI(prepare); err != nil {
+			return fmt.Errorf("UI not valid: %s", err)
+		}
+
+		return nil
+	}
+}
+
+// makePrepareProcessor constructs an instance of prepareProcessor
+// using id as the current replica ID, and the supplied abstract
+// interfaces.
+func makePrepareProcessor(id uint32, view viewProvider, captureUI uiCapturer, prepareSeq requestSeqPreparer, processRequest requestProcessor, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareProcessor {
+	return func(prepare *messages.Prepare) (new bool, err error) {
+		replicaID := prepare.Msg.ReplicaId
 
 		if replicaID == id {
 			return false, nil
+		}
+
+		request := prepare.Msg.Request
+
+		if _, err = processRequest(request); err != nil {
+			return false, fmt.Errorf("Failed to process request: %s", err)
 		}
 
 		new, releaseUI := captureUI(prepare)
@@ -55,18 +109,9 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ca
 		if prepare.Msg.View != currentView {
 			return false, fmt.Errorf("Prepare is for view %d, current view is %d",
 				prepare.Msg.View, currentView)
-		} else if !isPrimary(currentView, replicaID, n) {
-			return false, fmt.Errorf("Prepare from backup %d in view %d",
-				replicaID, currentView)
 		}
 
-		request := prepare.Msg.Request
-
-		if _, err = handleRequest(request); err != nil {
-			return false, fmt.Errorf("Failed to process request: %s", err)
-		}
-
-		if err = prepareRequestSeq(request); err != nil {
+		if err = prepareSeq(request); err != nil {
 			return false, fmt.Errorf("Failed to check request ID: %s", err)
 		}
 
