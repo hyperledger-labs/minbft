@@ -105,7 +105,7 @@ func testLoadSimpleKeyStore(t *testing.T) {
 					assert.NotNil(t, ks)
 					assert.Equal(t, example.spec, ks.KeySpec(tc.role))
 				} else {
-					assert.NotNil(t, err, fmt.Sprintf("LoadSimpleKeyStore did not fail with unknown entry %s-%d", tc.role, tc.id))
+					assert.Error(t, err, fmt.Sprintf("LoadSimpleKeyStore did not fail with unknown entry %s-%d", tc.role, tc.id))
 				}
 			})
 		}
@@ -118,10 +118,10 @@ func testGenerateSampleKeyFile(t *testing.T) {
 	for i, tc := range testnetKeygenCases {
 		t.Run(fmt.Sprintf("case=%d", i), func(t *testing.T) {
 			err := GenerateTestnetKeys(&keyConf, tc)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			_, err = LoadSimpleKeyStore(&keyConf, []api.AuthenticationRole{api.ReplicaAuthen}, 0)
-			assert.Nil(t, err, fmt.Sprintf("Generated key store file cannot be parsed correctly: %v", err))
+			assert.NoError(t, err, fmt.Sprintf("Generated key store file cannot be parsed correctly: %v", err))
 		})
 	}
 }
