@@ -32,11 +32,6 @@ func randView() uint64 {
 	return uint64(rand.Uint32())
 }
 
-// randReplicaID returns a random replica ID
-func randReplicaID(n uint32) uint32 {
-	return uint32(rand.Intn(int(n)))
-}
-
 // primaryID returns primary replica ID
 func primaryID(n uint32, view uint64) uint32 {
 	return uint32(view % uint64(n))
