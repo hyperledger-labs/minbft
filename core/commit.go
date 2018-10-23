@@ -30,6 +30,22 @@ import (
 // indicates that the valid message hasn't been processed before.
 type commitHandler func(commit *messages.Commit) (new bool, err error)
 
+// commitValidator validates a Commit message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type commitValidator func(commit *messages.Commit) error
+
+// commitProcessor processes a valid Commit message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type commitProcessor func(commit *messages.Commit) (new bool, err error)
+
 // commitCollector accepts valid Commit messages and takes further
 // actions when the threshold of the required number of matching
 // Commit messages is reached. Supplied Commit messages do not have to
@@ -45,19 +61,49 @@ type commitCollector func(commit *messages.Commit) error
 // concurrently.
 type commitCounter func(commit *messages.Commit) (done bool, err error)
 
-// makeCommitHandler construct an instance of commitHandler using n as
-// the total number of nodes, and the supplied abstract interfaces.
-func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector) commitHandler {
+// makeCommitHandler construct an instance of commitHandler using the
+// supplied abstract interfaces.
+func makeCommitHandler(validate commitValidator, process commitProcessor) commitHandler {
 	return func(commit *messages.Commit) (new bool, err error) {
-		_, err = verifyUI(commit)
-		if err != nil {
-			return false, fmt.Errorf("UI is not valid: %s", err)
+		if err = validate(commit); err != nil {
+			err = fmt.Errorf("Invalid message: %s", err)
+			return false, err
 		}
 
+		return process(commit)
+	}
+}
+
+// makeCommitValidator constructs an instance of commitValidator using
+// the supplied abstractions.
+func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) commitValidator {
+	return func(commit *messages.Commit) error {
+		if commit.Msg.ReplicaId == commit.Msg.PrimaryId {
+			return fmt.Errorf("Commit from primary")
+		}
+
+		if err := validatePrepare(commit.Prepare()); err != nil {
+			return fmt.Errorf("Invalid Prepare: %s", err)
+		}
+
+		if _, err := verifyUI(commit); err != nil {
+			return fmt.Errorf("UI is not valid: %s", err)
+		}
+
+		return nil
+	}
+}
+
+func makeCommitProcessor(id uint32, view viewProvider, captureUI uiCapturer, processPrepare prepareProcessor, collectCommit commitCollector) commitProcessor {
+	return func(commit *messages.Commit) (new bool, err error) {
 		replicaID := commit.ReplicaID()
 
 		if replicaID == id {
 			return false, nil
+		}
+
+		if _, err := processPrepare(commit.Prepare()); err != nil {
+			return false, fmt.Errorf("Failed to process Prepare: %s", err)
 		}
 
 		new, releaseUI := captureUI(commit)
@@ -69,10 +115,6 @@ func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, cap
 		if currentView := view(); commit.Msg.View != currentView {
 			return false, fmt.Errorf("Commit is for view %d, current view is %d",
 				commit.Msg.View, currentView)
-		}
-
-		if _, err := handlePrepare(commit.Prepare()); err != nil {
-			return false, fmt.Errorf("Failed to process Prepare: %s", err)
 		}
 
 		if err := collectCommit(commit); err != nil {
