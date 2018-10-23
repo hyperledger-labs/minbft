@@ -59,11 +59,11 @@ func testSimpleBlockMarshaler(t *testing.T) {
 	copy(block.PrevBlockHash[:], testHash)
 
 	blockBytes, err := block.MarshalBinary()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	unmarshaledBlock := &SimpleBlock{}
 	err = unmarshaledBlock.UnmarshalBinary(blockBytes)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, block, unmarshaledBlock)
 }
 

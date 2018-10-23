@@ -42,7 +42,7 @@ func initTestCredentials(t *testing.T) {
 
 	curve := elliptic.P256()
 	ecdsaPrivKey, err = ecdsa.GenerateKey(curve, rand.Reader)
-	assert.Nil(t, err)
+	assert.NoError(t, err, "Failed to generate ECDSA key pair.")
 	ecdsaPubKey = &ecdsaPrivKey.PublicKey
 }
 
@@ -51,7 +51,7 @@ func testEcdsaSigCipher(t *testing.T) {
 
 	md := crypto.SHA256.New().Sum(testMessage)
 	sig, err := ecdsaSigCipher.Sign(md, ecdsaPrivKey)
-	assert.Nil(t, err, "Failed to generate ECDSA signature.")
+	assert.NoError(t, err, "Failed to generate ECDSA signature.")
 
 	ok := ecdsaSigCipher.Verify(md, sig, ecdsaPubKey)
 	assert.True(t, ok, "Failed to verify ECDSA signature.")
@@ -61,7 +61,7 @@ func testEcdsaAuthenScheme(t *testing.T) {
 	ecdsaAuthScheme := &PublicAuthenScheme{crypto.SHA256, &EcdsaSigCipher{}}
 
 	tag, err := ecdsaAuthScheme.GenerateAuthenticationTag(testMessage, ecdsaPrivKey)
-	assert.Nil(t, err, "Failed to generate ECDSA authentication tag.")
+	assert.NoError(t, err, "Failed to generate ECDSA authentication tag.")
 
 	err = ecdsaAuthScheme.VerifyAuthenticationTag(testMessage, tag, ecdsaPubKey)
 	assert.NoError(t, err, "Failed to verify ECDSA authentication tag.")

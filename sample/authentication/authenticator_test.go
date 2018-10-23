@@ -62,7 +62,7 @@ func testClientAuthenticator(t *testing.T, ks []byte) {
 	}
 
 	tag0, err := a0.GenerateMessageAuthenTag(api.ClientAuthen, testMessage)
-	assert.Nil(t, err)
+	assert.NoError(t, err, "failed to generate authentication tag")
 
 	err = a1.VerifyMessageAuthenTag(api.ClientAuthen, 0, testMessage, tag0)
 	assert.NoError(t, err, "verification failed")

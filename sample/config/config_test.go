@@ -54,11 +54,11 @@ protocol:
 // returns the path to the temporary configuration file and the cleanup function.
 func initExampleFile(t *testing.T, fileExt string, cfgExample []byte) (string, func()) {
 	dir, err := ioutil.TempDir("", "minbft_config_test")
-	assert.Nil(t, err)
+	assert.NoError(t, err, "Failed to create temporary directory.")
 
 	testfn := filepath.Join(dir, "test-config."+fileExt)
 	err = ioutil.WriteFile(testfn, cfgExample, 0666)
-	assert.Nil(t, err)
+	assert.NoError(t, err, "Failed to write to test config file.")
 
 	return testfn, func() {
 		defer os.RemoveAll(dir)
