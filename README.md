@@ -106,7 +106,7 @@ Byzantine Fault-Tolerance paper][minbft-paper].
 
 ### Operating System ###
 
-The project has been tested on Ubuntu 16.04.4 LTS (Xenial Xerus).
+The project has been tested on Ubuntu 18.04 LTS (Bionic Beaver).
 Additional required packages can be installed as follows:
 
 ```sh
