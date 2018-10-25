@@ -30,9 +30,9 @@ import (
 // starts message exchange with them given a total number of replicas,
 // request buffer to add/fetch messages to/from and a stack of
 // interfaces to external modules.
-func startReplicaConnections(n uint32, buf *requestbuffer.T, stack Stack) error {
+func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack) error {
 	outHandler := makeOutgoingMessageHandler(buf)
-	authenticator := makeReplyAuthenticator(stack)
+	authenticator := makeReplyAuthenticator(clientID, stack)
 	consumer := makeReplyConsumer(buf)
 	handleReply := makeReplyMessageHandler(consumer, authenticator)
 
@@ -163,13 +163,17 @@ func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenti
 
 // makeReplyAuthenticator constructs a replyAuthenticator using the
 // supplied authenticator to perform replica signature verification.
-func makeReplyAuthenticator(authenticator api.Authenticator) replyAuthenticator {
+func makeReplyAuthenticator(clientID uint32, authenticator api.Authenticator) replyAuthenticator {
 	return func(reply *messages.Reply) error {
 		replyMsg := reply.Msg
 
 		msgBytes, err := proto.Marshal(replyMsg)
 		if err != nil {
 			panic(err)
+		}
+
+		if replyMsg.ClientId != clientID {
+			return fmt.Errorf("Client ID mismatch")
 		}
 
 		return authenticator.VerifyMessageAuthenTag(api.ReplicaAuthen, replyMsg.ReplicaId,
