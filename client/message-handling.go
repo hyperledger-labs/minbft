@@ -32,9 +32,13 @@ import (
 // interfaces to external modules.
 func startReplicaConnections(n uint32, buf *requestbuffer.T, stack Stack) error {
 	outHandler := makeOutgoingMessageHandler(buf)
+	authenticator := makeReplyAuthenticator(stack)
+	consumer := makeReplyConsumer(buf)
+	handleReply := makeReplyMessageHandler(consumer, authenticator)
+
 	for i := uint32(0); i < n; i++ {
 		connector := makeReplicaConnector(i, stack)
-		inHandler := makeIncomingMessageHandler(i, buf, stack)
+		inHandler := makeIncomingMessageHandler(i, handleReply)
 		if err := startReplicaConnection(outHandler, inHandler, connector); err != nil {
 			return fmt.Errorf("Error connecting to replica %d: %s", i, err)
 		}
@@ -74,17 +78,36 @@ func startReplicaConnection(outHandler outgoingMessageHandler, inHandler incomin
 // using the supplied request buffer as a source of outgoing messages.
 func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
 	return func(out chan<- []byte) {
-		handleOutgoingMessages(buf.RequestStream(nil), out)
+		for req := range buf.RequestStream(nil) {
+			msg := messages.WrapMessage(req)
+			mBytes, err := proto.Marshal(msg)
+			if err != nil {
+				panic(err)
+			}
+			out <- mBytes
+		}
 	}
 }
 
 // makeIncomingMessageHandler constructs an incomingMessageHandler
-// using the supplied request buffer as the destination and the
-// supplied authenticator for message authentication.
-func makeIncomingMessageHandler(replicaID uint32, buf *requestbuffer.T, authen api.Authenticator) incomingMessageHandler {
-	replyHandler := makeReplyMessageHandler(buf, authen)
+// using replicaID as the ID of replica which supplies incoming
+// messages, and the passed abstraction to handle Reply messages.
+func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler) incomingMessageHandler {
 	return func(in <-chan []byte) {
-		handleIncomingMessages(replicaID, in, replyHandler)
+		for msgBytes := range in {
+			msg := &messages.Message{}
+			if err := proto.Unmarshal(msgBytes, msg); err != nil {
+				logger.Warningf("Error unmarshaling message from replica %d: %v", replicaID, err)
+				continue
+			}
+
+			switch t := msg.Type.(type) {
+			case *messages.Message_Reply:
+				handleReply(t.Reply)
+			default:
+				logger.Warningf("Received unknown message from replica %d", replicaID)
+			}
+		}
 	}
 }
 
@@ -104,42 +127,9 @@ func makeReplicaConnector(replicaID uint32, connector api.ReplicaConnector) repl
 	}
 }
 
-// handleOutgoingMessages receives Request messages from in channel,
-// serializes them, and sends them to out channel.
-func handleOutgoingMessages(in <-chan *messages.Request, out chan<- []byte) {
-	for req := range in {
-		msg := messages.WrapMessage(req)
-		mBytes, err := proto.Marshal(msg)
-		if err != nil {
-			panic(err)
-		}
-		out <- mBytes
-	}
-}
-
 // replyMessageHandler performs processing of the Reply message
 // received from a replica
 type replyMessageHandler func(reply *messages.Reply)
-
-// handleIncomingMessages receives incoming messages from the supplied
-// channel, deserializes then and handles Reply messages using the
-// supplied reply handler.
-func handleIncomingMessages(replicaID uint32, in <-chan []byte, replyHandler replyMessageHandler) {
-	for msgBytes := range in {
-		msg := &messages.Message{}
-		if err := proto.Unmarshal(msgBytes, msg); err != nil {
-			logger.Warningf("Error unmarshaling message from replica %d: %v", replicaID, err)
-			continue
-		}
-
-		switch t := msg.Type.(type) {
-		case *messages.Message_Reply:
-			replyHandler(t.Reply)
-		default:
-			logger.Warningf("Received unknown message from replica %d", replicaID)
-		}
-	}
-}
 
 // replyAuthenticator verifies a Reply message for integrity and
 // authenticity
@@ -151,33 +141,23 @@ type replyAuthenticator func(reply *messages.Reply) error
 type replyConsumer func(reply *messages.Reply) bool
 
 // makeReplyMessageHandler construct a replyMessageHandler using the
-// supplied request buffer as the destination and the supplied
-// authenticator for message authentication.
-func makeReplyMessageHandler(buf *requestbuffer.T, authen api.Authenticator) replyMessageHandler {
-	authenticator := makeReplyAuthenticator(authen)
-	consumer := makeReplyConsumer(buf)
+// supplied abstractions.
+func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenticator) replyMessageHandler {
 	return func(reply *messages.Reply) {
-		handleReplyMessage(reply, consumer, authenticator)
-	}
-}
+		replyMsg := reply.Msg
 
-// handleReplyMessage performs processing of the Reply message
-// received from a replica using the supplied Reply authenticator and
-// consumer.
-func handleReplyMessage(reply *messages.Reply, consumer replyConsumer, authenticator replyAuthenticator) {
-	replyMsg := reply.Msg
+		err := authenticator(reply)
+		if err != nil {
+			logger.Warningf("Failed to authenticate Reply message from replica %d: %v",
+				replyMsg.ReplicaId, err)
+			return
+		}
 
-	err := authenticator(reply)
-	if err != nil {
-		logger.Warningf("Failed to authenticate Reply message from replica %d: %v",
-			replyMsg.ReplicaId, err)
-		return
-	}
+		logger.Debugf("Received Reply message from replica %d", replyMsg.ReplicaId)
 
-	logger.Debugf("Received Reply message from replica %d", replyMsg.ReplicaId)
-
-	if ok := consumer(reply); !ok {
-		logger.Infof("Dropped Reply message from replica %d", replyMsg.ReplicaId)
+		if ok := consumer(reply); !ok {
+			logger.Infof("Dropped Reply message from replica %d", replyMsg.ReplicaId)
+		}
 	}
 }
 
