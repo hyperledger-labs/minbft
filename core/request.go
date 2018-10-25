@@ -85,7 +85,7 @@ type requestSeqRetirer func(request *messages.Request) error
 // replyConsumer performs further processing of the supplied Reply
 // message produced locally. The message should be ready to serialize
 // and deliver to the client. It is safe to invoke concurrently.
-type replyConsumer func(reply *messages.Reply, clientID uint32)
+type replyConsumer func(reply *messages.Reply)
 
 // makeRequestHandler constructs an instance of requestHandler using
 // id as the current replica ID, n as the total number of nodes, and
@@ -160,6 +160,7 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 			reply := &messages.Reply{
 				Msg: &messages.Reply_M{
 					ReplicaId: replicaID,
+					ClientId:  request.Msg.ClientId,
 					Seq:       request.Msg.Seq,
 					Result:    result,
 				},
@@ -167,7 +168,7 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 			signer(reply)
 			logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
 				replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
-			consumer(reply, request.Msg.ClientId)
+			consumer(reply)
 		}()
 	}
 }
@@ -238,7 +239,9 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 // makeReplyConsumer constructs an instance of replyConsumer using the
 // supplied client state provider.
 func makeReplyConsumer(provider clientstate.Provider) replyConsumer {
-	return func(reply *messages.Reply, clientID uint32) {
+	return func(reply *messages.Reply) {
+		clientID := reply.Msg.ClientId
+
 		if err := provider(clientID).AddReply(reply); err != nil {
 			panic(err) // Erroneous Reply must never be supplied
 		}

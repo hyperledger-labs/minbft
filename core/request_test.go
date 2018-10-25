@@ -175,6 +175,7 @@ func TestMakeRequestExecutor(t *testing.T) {
 	expectedUnsignedReply := &messages.Reply{
 		Msg: &messages.Reply_M{
 			ReplicaId: replicaID,
+			ClientId:  clientID,
 			Seq:       seq,
 			Result:    expectedResult,
 		},
@@ -192,8 +193,8 @@ func TestMakeRequestExecutor(t *testing.T) {
 		mock.MethodCalled("replicaMessageSigner", msg)
 		msg.AttachSignature(expectedSignature)
 	}
-	mockReplyConsumer := func(reply *messages.Reply, clientID uint32) {
-		mock.MethodCalled("replyConsumer", reply, clientID)
+	mockReplyConsumer := func(reply *messages.Reply) {
+		mock.MethodCalled("replyConsumer", reply)
 	}
 
 	requestExecutor := makeRequestExecutor(replicaID,
@@ -204,7 +205,7 @@ func TestMakeRequestExecutor(t *testing.T) {
 	done := make(chan struct{})
 	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
 	mock.On("replicaMessageSigner", expectedUnsignedReply).Once()
-	mock.On("replyConsumer", expectedSignedReply, clientID).Run(
+	mock.On("replyConsumer", expectedSignedReply).Run(
 		func(testifymock.Arguments) { close(done) },
 	).Once()
 	requestExecutor(request)
@@ -402,8 +403,8 @@ func TestMakeReplyConsumer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	expectedClientID := rand.Uint32()
-	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
+	clientID := rand.Uint32()
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
 	consumer := makeReplyConsumer(provider)
 
@@ -411,15 +412,16 @@ func TestMakeReplyConsumer(t *testing.T) {
 	reply := &messages.Reply{
 		Msg: &messages.Reply_M{
 			ReplicaId: rand.Uint32(),
+			ClientId:  clientID,
 			Seq:       seq,
 		},
 	}
 
 	state.EXPECT().AddReply(reply).Return(nil)
-	assert.NotPanics(t, func() { consumer(reply, expectedClientID) })
+	assert.NotPanics(t, func() { consumer(reply) })
 
 	state.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
-	assert.Panics(t, func() { consumer(reply, expectedClientID) })
+	assert.Panics(t, func() { consumer(reply) })
 }
 
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {
