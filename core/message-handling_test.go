@@ -42,24 +42,94 @@ func TestMakeMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	handleRequest := func(request *messages.Request) (new bool, err error) {
-		args := mock.MethodCalled("requestHandler", request)
+	validateMessage := func(msg interface{}) error {
+		args := mock.MethodCalled("messageValidator", msg)
+		return args.Error(0)
+	}
+	processMessage := func(msg interface{}) (new bool, err error) {
+		args := mock.MethodCalled("messageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	handlePrepare := func(prepare *messages.Prepare) (new bool, err error) {
-		args := mock.MethodCalled("prepareHandler", prepare)
-		return args.Bool(0), args.Error(1)
+	replyMessage := func(msg interface{}) (reply <-chan interface{}, err error) {
+		args := mock.MethodCalled("messageReplier", msg)
+		return args.Get(0).(chan interface{}), args.Error(1)
 	}
-	handleCommit := func(commit *messages.Commit) (new bool, err error) {
-		args := mock.MethodCalled("commitHandler", commit)
-		return args.Bool(0), args.Error(1)
-	}
-	replyRequest := func(request *messages.Request) <-chan *messages.Reply {
-		args := mock.MethodCalled("requestReplier", request)
-		return args.Get(0).(chan *messages.Reply)
-	}
+	handleMessage := makeMessageHandler(validateMessage, processMessage, replyMessage)
 
-	handle := makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
+	msg := fmt.Sprint("message ", rand.Int())
+	reply := fmt.Sprint("reply ", rand.Int())
+
+	mock.On("messageValidator", msg).Return(fmt.Errorf("Error")).Once()
+	_, _, err := handleMessage(msg)
+	assert.Error(t, err)
+
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+	_, _, err = handleMessage(msg)
+	assert.Error(t, err)
+
+	nilRelyChan := (chan interface{})(nil)
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	mock.On("messageReplier", msg).Return(nilRelyChan, fmt.Errorf("Error")).Once()
+	_, new, err := handleMessage(msg)
+	assert.Error(t, err)
+	assert.False(t, new)
+
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
+	ch, new, err := handleMessage(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+	assert.Nil(t, ch)
+
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(true, nil).Once()
+	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
+	ch, new, err = handleMessage(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+	assert.Nil(t, ch)
+
+	replyChan := make(chan interface{}, 1)
+	replyChan <- reply
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
+	ch, new, err = handleMessage(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+	assert.Equal(t, reply, <-ch)
+
+	replyChan = make(chan interface{}, 1)
+	replyChan <- reply
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(true, nil).Once()
+	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
+	ch, new, err = handleMessage(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+	assert.Equal(t, reply, <-ch)
+}
+
+func TestMakeMessageValidator(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	validateRequest := func(msg *messages.Request) error {
+		args := mock.MethodCalled("requestValidator", msg)
+		return args.Error(0)
+	}
+	validatePrepare := func(msg *messages.Prepare) error {
+		args := mock.MethodCalled("prepareValidator", msg)
+		return args.Error(0)
+	}
+	validateCommit := func(msg *messages.Commit) error {
+		args := mock.MethodCalled("commitValidator", msg)
+		return args.Error(0)
+	}
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -76,68 +146,164 @@ func TestMakeMessageHandler(t *testing.T) {
 			Request: request,
 		},
 	}
+
+	err := validateMessage(struct{}{})
+	assert.Error(t, err, "Unknown message type")
+
+	mock.On("requestValidator", request).Return(fmt.Errorf("Error")).Once()
+	err = validateMessage(request)
+	assert.Error(t, err, "Invalid Request")
+
+	mock.On("requestValidator", request).Return(nil).Once()
+	err = validateMessage(request)
+	assert.NoError(t, err)
+
+	mock.On("prepareValidator", prepare).Return(fmt.Errorf("Error")).Once()
+	err = validateMessage(prepare)
+	assert.Error(t, err, "Invalid Prepare")
+
+	mock.On("prepareValidator", prepare).Return(nil).Once()
+	err = validateMessage(prepare)
+	assert.NoError(t, err)
+
+	mock.On("commitValidator", commit).Return(fmt.Errorf("Error")).Once()
+	err = validateMessage(commit)
+	assert.Error(t, err, "Invalid Commit")
+
+	mock.On("commitValidator", commit).Return(nil).Once()
+	err = validateMessage(commit)
+	assert.NoError(t, err)
+}
+
+func TestMakeMessageProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	processRequest := func(msg *messages.Request) (new bool, err error) {
+		args := mock.MethodCalled("requestProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	processPrepare := func(msg *messages.Prepare) (new bool, err error) {
+		args := mock.MethodCalled("prepareProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	processCommit := func(msg *messages.Commit) (new bool, err error) {
+		args := mock.MethodCalled("commitProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			Request: request,
+		},
+	}
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			Request: request,
+		},
+	}
+
+	_, err := processMessage(struct{}{})
+	assert.Error(t, err, "Unknown message type")
+
+	mock.On("requestProcessor", request).Return(false, fmt.Errorf("Error")).Once()
+	_, err = processMessage(request)
+	assert.Error(t, err, "Invalid Request")
+
+	mock.On("requestProcessor", request).Return(false, nil).Once()
+	new, err := processMessage(request)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("requestProcessor", request).Return(true, nil).Once()
+	new, err = processMessage(request)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	mock.On("prepareProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
+	_, err = processMessage(prepare)
+	assert.Error(t, err, "Invalid Prepare")
+
+	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
+	new, err = processMessage(prepare)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("prepareProcessor", prepare).Return(true, nil).Once()
+	new, err = processMessage(prepare)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	mock.On("commitProcessor", commit).Return(false, fmt.Errorf("Error")).Once()
+	_, err = processMessage(commit)
+	assert.Error(t, err, "Invalid Commit")
+
+	mock.On("commitProcessor", commit).Return(false, nil).Once()
+	new, err = processMessage(commit)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("commitProcessor", commit).Return(true, nil).Once()
+	new, err = processMessage(commit)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeMessageReplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	replyRequest := func(request *messages.Request) <-chan *messages.Reply {
+		args := mock.MethodCalled("requestReplier", request)
+		return args.Get(0).(chan *messages.Reply)
+	}
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
 	reply := &messages.Reply{
 		Msg: &messages.Reply_M{
 			Seq: request.Msg.Seq,
 		},
 	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			Request: request,
+		},
+	}
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			Request: request,
+		},
+	}
 
-	assert.Panics(t, func() {
-		_, _, _ = handle(struct{}{})
-	})
+	replyMessage := makeMessageReplier(replyRequest)
 
-	err := fmt.Errorf("Failed to handle Request")
-	mock.On("requestHandler", request).Return(false, err).Once()
-	_, _, err = handle(request)
+	_, err := replyMessage(struct{}{})
 	assert.Error(t, err)
 
 	replyChan := make(chan *messages.Reply, 1)
 	replyChan <- reply
-	mock.On("requestHandler", request).Return(false, nil).Once()
 	mock.On("requestReplier", request).Return(replyChan).Once()
-	ch, new, err := handle(request)
+	ch, err := replyMessage(request)
 	assert.NoError(t, err)
-	assert.False(t, new)
 	assert.Equal(t, reply, <-ch)
 
-	replyChan = make(chan *messages.Reply, 1)
-	replyChan <- reply
-	mock.On("requestHandler", request).Return(true, nil).Once()
-	mock.On("requestReplier", request).Return(replyChan).Once()
-	ch, new, err = handle(request)
+	ch, err = replyMessage(prepare)
 	assert.NoError(t, err)
-	assert.True(t, new)
-	assert.Equal(t, reply, <-ch)
+	assert.Nil(t, ch)
 
-	err = fmt.Errorf("Failed to handle Prepare")
-	mock.On("prepareHandler", prepare).Return(false, err).Once()
-	_, _, err = handle(prepare)
-	assert.Error(t, err)
-
-	mock.On("prepareHandler", prepare).Return(false, nil).Once()
-	_, new, err = handle(prepare)
+	ch, err = replyMessage(commit)
 	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("prepareHandler", prepare).Return(true, nil).Once()
-	_, new, err = handle(prepare)
-	assert.NoError(t, err)
-	assert.True(t, new)
-
-	err = fmt.Errorf("Failed to handle Commit")
-	mock.On("commitHandler", commit).Return(false, err).Once()
-	_, _, err = handle(commit)
-	assert.Error(t, err)
-
-	mock.On("commitHandler", commit).Return(false, nil).Once()
-	_, new, err = handle(commit)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("commitHandler", commit).Return(true, nil).Once()
-	_, new, err = handle(commit)
-	assert.NoError(t, err)
-	assert.True(t, new)
+	assert.Nil(t, ch)
 }
 
 func TestMakeGeneratedUIMessageHandler(t *testing.T) {

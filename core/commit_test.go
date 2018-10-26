@@ -30,48 +30,6 @@ import (
 	"github.com/hyperledger-labs/minbft/usig"
 )
 
-func TestMakeCommitHandler(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: rand.Uint32(),
-		},
-	}
-	commit := &messages.Commit{
-		Msg: &messages.Commit_M{
-			Request: request,
-		},
-	}
-
-	validate := func(msg *messages.Commit) error {
-		args := mock.MethodCalled("commitValidator", msg)
-		return args.Error(0)
-	}
-	process := func(msg *messages.Commit) (new bool, err error) {
-		args := mock.MethodCalled("commitProcessor", msg)
-		return args.Bool(0), args.Error(1)
-	}
-	handle := makeCommitHandler(validate, process)
-
-	mock.On("commitValidator", commit).Return(fmt.Errorf("invalid signature")).Once()
-	_, err := handle(commit)
-	assert.Error(t, err)
-
-	mock.On("commitValidator", commit).Return(nil).Once()
-	mock.On("commitProcessor", commit).Return(false, nil).Once()
-	new, err := handle(commit)
-	assert.False(t, new)
-	assert.NoError(t, err)
-
-	mock.On("commitValidator", commit).Return(nil).Once()
-	mock.On("commitProcessor", commit).Return(true, nil).Once()
-	new, err = handle(commit)
-	assert.True(t, new)
-	assert.NoError(t, err)
-}
-
 func TestMakeCommitValidator(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)

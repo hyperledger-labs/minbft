@@ -25,11 +25,6 @@ import (
 	"github.com/hyperledger-labs/minbft/usig"
 )
 
-// commitHandler fully handles a Commit message. The Commit message
-// will be fully verified and processed. The return value new
-// indicates that the valid message hasn't been processed before.
-type commitHandler func(commit *messages.Commit) (new bool, err error)
-
 // commitValidator validates a Commit message.
 //
 // It authenticates and checks the supplied message for internal
@@ -60,19 +55,6 @@ type commitCollector func(commit *messages.Commit) error
 // is returned if any inconsistency detected. It is safe to invoke
 // concurrently.
 type commitCounter func(commit *messages.Commit) (done bool, err error)
-
-// makeCommitHandler construct an instance of commitHandler using the
-// supplied abstract interfaces.
-func makeCommitHandler(validate commitValidator, process commitProcessor) commitHandler {
-	return func(commit *messages.Commit) (new bool, err error) {
-		if err = validate(commit); err != nil {
-			err = fmt.Errorf("Invalid message: %s", err)
-			return false, err
-		}
-
-		return process(commit)
-	}
-}
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.

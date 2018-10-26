@@ -17,6 +17,7 @@
 package minbft
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -35,11 +36,37 @@ import (
 // message, if any, to reply channel.
 type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 
-// messageHandler fully handles a message. If there is any message
-// produced in reply, it will be send to reply channel, otherwise nil
-// channel is returned. The return value new indicates that the
-// message hasn't been processed before.
+// messageHandler fully handles a message.
+//
+// If there is any message produced in reply, it will be send to reply
+// channel, otherwise nil channel is returned. The return value new
+// indicates that the message has not been processed before.
 type messageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
+
+// messageValidator validates a message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type messageValidator func(msg interface{}) error
+
+// messageProcessor processes a valid message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type messageProcessor func(msg interface{}) (new bool, err error)
+
+// messageReplier provides reply to a valid message.
+//
+// If there is any message to be produced in reply to the supplied
+// one, it will be send to the returned reply channel, otherwise nil
+// channel is returned. The supplied message is assumed to be
+// authentic and internally consistent. It is safe to invoke
+// concurrently.
+type messageReplier func(msg interface{}) (reply <-chan interface{}, err error)
 
 // messageConsumer receives a generated message.
 //
@@ -93,12 +120,13 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	processPrepare := makePrepareProcessor(id, view, captureUI, prepareSeq, processRequest, collectCommit, handleGeneratedUIMessage)
 	processCommit := makeCommitProcessor(id, view, captureUI, processPrepare, collectCommit)
 
-	handleRequest := makeRequestHandler(validateRequest, processRequest)
 	replyRequest := makeRequestReplier(clientStates)
-	handlePrepare := makePrepareHandler(validatePrepare, processPrepare)
-	handleCommit := makeCommitHandler(validateCommit, processCommit)
 
-	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
+	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)
+	replyMessage := makeMessageReplier(replyRequest)
+
+	return makeMessageHandler(validateMessage, processMessage, replyMessage)
 }
 
 // makeMessageStreamHandler construct an instance of
@@ -139,39 +167,87 @@ func makeMessageStreamHandler(handle messageHandler, logger *logging.Logger) mes
 	}
 }
 
-// makeMessageHandler construct an instance of messageHandler using
-// the supplied abstract handlers.
-func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplier, handlePrepare prepareHandler, handleCommit commitHandler) messageHandler {
-	return func(msg interface{}) (reply <-chan interface{}, new bool, err error) {
+// makeMessageHandler constructs an instance of messageHandler using
+// id as the current replica ID, and the supplied abstractions.
+func makeMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) messageHandler {
+	return func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+		err = validate(msg)
+		if err != nil {
+			err = fmt.Errorf("Validation failed: %s", err)
+			return nil, false, err
+		}
+
+		new, err = process(msg)
+		if err != nil {
+			err = fmt.Errorf("Error processing message: %s", err)
+			return nil, false, err
+		}
+
+		replyChan, err = reply(msg)
+		if err != nil {
+			err = fmt.Errorf("Error replying message: %s", err)
+			return nil, false, err
+		}
+
+		return replyChan, new, nil
+	}
+}
+
+// makeMessageValidator constructs an instance of messageValidator
+// using the supplied abstractions.
+func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator) messageValidator {
+	return func(msg interface{}) error {
 		switch msg := msg.(type) {
 		case *messages.Request:
-			outChan := make(chan interface{})
-			new, err := handleRequest(msg)
-			if err != nil {
-				return nil, false, err
-			}
+			return validateRequest(msg)
+		case *messages.Prepare:
+			return validatePrepare(msg)
+		case *messages.Commit:
+			return validateCommit(msg)
+		default:
+			return fmt.Errorf("Unknown message type")
+		}
+	}
+}
+
+// makeMessageProcessor constructs an instance of messageProcessor
+// using the supplied abstractions.
+func makeMessageProcessor(processRequest requestProcessor, processPrepare prepareProcessor, processCommit commitProcessor) messageProcessor {
+	return func(msg interface{}) (new bool, err error) {
+		switch msg := msg.(type) {
+		case *messages.Request:
+			return processRequest(msg)
+		case *messages.Prepare:
+			return processPrepare(msg)
+		case *messages.Commit:
+			return processCommit(msg)
+		default:
+			return false, fmt.Errorf("Unknown message type")
+		}
+	}
+}
+
+// makeMessageReplier constructs an instance of messageReplier using
+// the supplied abstractions.
+func makeMessageReplier(replyRequest requestReplier) messageReplier {
+	return func(msg interface{}) (reply <-chan interface{}, err error) {
+		outChan := make(chan interface{})
+
+		switch msg := msg.(type) {
+		case *messages.Request:
 			go func() {
 				defer close(outChan)
 				if m, more := <-replyRequest(msg); more {
 					outChan <- m
 				}
 			}()
-			return outChan, new, nil
-		case *messages.Prepare:
-			new, err := handlePrepare(msg)
-			if err != nil {
-				return nil, false, err
-			}
-			return nil, new, nil
-		case *messages.Commit:
-			new, err := handleCommit(msg)
-			if err != nil {
-				return nil, false, err
-			}
-			return nil, new, nil
+			return outChan, nil
+		case *messages.Prepare, *messages.Commit:
 		default:
-			panic("Unknown message type")
+			return nil, fmt.Errorf("Unknown message type")
 		}
+
+		return nil, nil
 	}
 }
 
