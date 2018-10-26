@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 )
@@ -46,15 +44,6 @@ type commitCollector func(commit *messages.Commit) error
 // is returned if any inconsistency detected. It is safe to invoke
 // concurrently.
 type commitCounter func(commit *messages.Commit) (done bool, err error)
-
-// defaultCommitCollector construct a standard commitCollector using
-// id as the current replica ID, and the supplied abstract interfaces.
-func defaultCommitCollector(id uint32, clientStates clientstate.Provider, config api.Configer, stack Stack) commitCollector {
-	countCommits := makeCommitCounter(config.F())
-	executeRequest := defaultRequestExecutor(id, clientStates, stack)
-	retireSeq := makeRequestSeqRetirer(clientStates)
-	return makeCommitCollector(countCommits, retireSeq, executeRequest)
-}
 
 // makeCommitHandler construct an instance of commitHandler using n as
 // the total number of nodes, and the supplied abstract interfaces.

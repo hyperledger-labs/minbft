@@ -53,6 +53,7 @@ type uiMessageConsumer func(msg messages.MessageWithUI)
 // as the current replica ID and the supplied interfaces.
 func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
 	n := config.N()
+	f := config.F()
 
 	view := func() uint64 { return 0 } // view change is not implemented
 
@@ -66,10 +67,14 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	releaseSeq := makeRequestSeqReleaser(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
+	retireSeq := makeRequestSeqRetirer(clientStates)
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
 
-	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
+	countCommits := makeCommitCounter(f)
+	executeRequest := defaultRequestExecutor(id, clientStates, stack)
+	collectCommit := makeCommitCollector(countCommits, retireSeq, executeRequest)
+
 	consumeUIMessage := makeUIMessageConsumer(log)
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeUIMessage)
 
