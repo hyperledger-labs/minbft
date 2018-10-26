@@ -33,43 +33,6 @@ import (
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 )
 
-func TestMakeRequestHandler(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: rand.Uint32(),
-		},
-	}
-
-	validate := func(msg *messages.Request) error {
-		args := mock.MethodCalled("requestValidator", msg)
-		return args.Error(0)
-	}
-	process := func(msg *messages.Request) (new bool, err error) {
-		args := mock.MethodCalled("requestProcessor", msg)
-		return args.Bool(0), args.Error(1)
-	}
-	handle := makeRequestHandler(validate, process)
-
-	mock.On("requestValidator", request).Return(fmt.Errorf("invalid signature")).Once()
-	_, err := handle(request)
-	assert.Error(t, err)
-
-	mock.On("requestValidator", request).Return(nil).Once()
-	mock.On("requestProcessor", request).Return(false, nil).Once()
-	new, err := handle(request)
-	assert.False(t, new)
-	assert.NoError(t, err)
-
-	mock.On("requestValidator", request).Return(nil).Once()
-	mock.On("requestProcessor", request).Return(true, nil).Once()
-	new, err = handle(request)
-	assert.True(t, new)
-	assert.NoError(t, err)
-}
-
 func TestMakeRequestProcessor(t *testing.T) {
 	t.Run("Primary", testMakeRequestProcessorPrimary)
 	t.Run("Backup", testMakeRequestProcessorBackup)

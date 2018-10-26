@@ -18,7 +18,6 @@
 package minbft
 
 import (
-	"fmt"
 	"sync/atomic"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -26,16 +25,11 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// requestHandler fully handles a Request message.
+// requestReplier provides Reply message given Request message.
 //
-// The Request message will be fully verified and processed. The
-// return value new indicates if the Request has not been processed by
-// this replica before.
-type requestHandler func(request *messages.Request) (new bool, err error)
-
-// requestReplier returns a channel that can be used to receive a
-// Reply message corresponding to the supplied Request message. It is
-// safe to invoke concurrently.
+// It returns a channel that can be used to receive a Reply message
+// corresponding to the supplied Request message. It is safe to invoke
+// concurrently.
 type requestReplier func(request *messages.Request) <-chan *messages.Reply
 
 // requestValidator validates a Request message.
@@ -97,19 +91,6 @@ type requestSeqPreparer func(request *messages.Request) error
 // identifier from the same client could not have been retired before.
 // It is safe to invoke concurrently.
 type requestSeqRetirer func(request *messages.Request) error
-
-// makeRequestHandler constructs an instance of requestHandler using
-// supplied abstract interfaces.
-func makeRequestHandler(validate requestValidator, process requestProcessor) requestHandler {
-	return func(request *messages.Request) (new bool, err error) {
-		if err = validate(request); err != nil {
-			err = fmt.Errorf("Invalid message: %s", err)
-			return false, err
-		}
-
-		return process(request)
-	}
-}
 
 // makeRequestValidator constructs an instance of requestValidator
 // using the supplied abstractions.
