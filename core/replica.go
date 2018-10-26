@@ -70,7 +70,7 @@ func New(id uint32, configer api.Configer, stack Stack) (*Replica, error) {
 	}
 
 	logger := makeLogger(id)
-	handle := defaultMessageHandler(id, replica.log, configer, stack, logger)
+	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
 	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
 	return replica, nil

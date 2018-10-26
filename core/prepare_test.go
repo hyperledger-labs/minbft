@@ -28,50 +28,6 @@ import (
 	"github.com/hyperledger-labs/minbft/usig"
 )
 
-func TestMakePrepareHandler(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	id := rand.Uint32()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: rand.Uint32(),
-		},
-	}
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: id,
-			Request:   request,
-		},
-	}
-
-	validate := func(msg *messages.Prepare) error {
-		args := mock.MethodCalled("prepareValidator", msg)
-		return args.Error(0)
-	}
-	process := func(msg *messages.Prepare) (new bool, err error) {
-		args := mock.MethodCalled("prepareProcessor", msg)
-		return args.Bool(0), args.Error(1)
-	}
-	handle := makePrepareHandler(validate, process)
-
-	mock.On("prepareValidator", prepare).Return(fmt.Errorf("invalid signature")).Once()
-	_, err := handle(prepare)
-	assert.Error(t, err)
-
-	mock.On("prepareValidator", prepare).Return(nil).Once()
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	new, err := handle(prepare)
-	assert.False(t, new)
-	assert.NoError(t, err)
-
-	mock.On("prepareValidator", prepare).Return(nil).Once()
-	mock.On("prepareProcessor", prepare).Return(true, nil).Once()
-	new, err = handle(prepare)
-	assert.True(t, new)
-	assert.NoError(t, err)
-}
-
 func TestMakePrepareValidator(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)

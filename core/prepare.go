@@ -23,11 +23,6 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// prepareHandler fully handles a Prepare message. The Prepare message
-// will be fully verified and processed. The return value new
-// indicates that the valid message hasn't been processed before.
-type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
-
 // prepareValidator validates a Prepare message.
 //
 // It authenticates and checks the supplied message for internal
@@ -43,19 +38,6 @@ type prepareValidator func(prepare *messages.Prepare) error
 // if the message has not been processed by this replica before. It is
 // safe to invoke concurrently.
 type prepareProcessor func(prepare *messages.Prepare) (new bool, err error)
-
-// makePrepareHandler constructs an instance of prepareHandler using
-// the supplied abstract interfaces.
-func makePrepareHandler(validate prepareValidator, process prepareProcessor) prepareHandler {
-	return func(prepare *messages.Prepare) (new bool, err error) {
-		if err = validate(prepare); err != nil {
-			err = fmt.Errorf("Invalid message: %s", err)
-			return false, err
-		}
-
-		return process(prepare)
-	}
-}
 
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
