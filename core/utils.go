@@ -19,6 +19,9 @@ package minbft
 
 import (
 	"fmt"
+	"os"
+
+	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -100,4 +103,19 @@ func messageString(msg interface{}) string {
 			req.GetClientId(), req.GetSeq())
 	}
 	return "(unknown message)"
+}
+
+func makeLogger(id uint32) *logging.Logger {
+	logger := logging.MustGetLogger(module)
+	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
+	stringFormatter := logging.MustStringFormatter(logFormatString)
+	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
+	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
+
+	logger.SetBackend(formattedLoggerBackend)
+
+	formattedLoggerBackend.SetLevel(logging.DEBUG, module)
+
+	return logger
 }

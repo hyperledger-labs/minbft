@@ -21,6 +21,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	logging "github.com/op/go-logging"
+
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
@@ -53,7 +55,7 @@ type generatedUIMessageHandler func(msg messages.MessageWithUI)
 
 // defaultMessageHandler construct a standard messageHandler using id
 // as the current replica ID and the supplied interfaces.
-func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
+func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) messageHandler {
 	n := config.N()
 	f := config.F()
 
@@ -74,7 +76,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
 
-	handleGeneratedMessage := makeGeneratedMessageHandler(log, clientStates)
+	handleGeneratedMessage := makeGeneratedMessageHandler(log, clientStates, logger)
 
 	countCommits := makeCommitCounter(f)
 	executeOperation := makeOperationExecutor(stack)
@@ -93,7 +95,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 
 // makeMessageStreamHandler construct an instance of
 // messageStreamHandler using the supplied abstract handler.
-func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
+func makeMessageStreamHandler(handle messageHandler, logger *logging.Logger) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
 			wrappedMsg := &messages.Message{}
@@ -104,6 +106,8 @@ func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 
 			msg := messages.UnwrapMessage(wrappedMsg)
 			msgStr := messageString(msg)
+
+			logger.Debugf("Received %s", msgStr)
 
 			if replyChan, new, err := handle(msg); err != nil {
 				logger.Warningf("Failed to handle %s: %s", msgStr, err)
@@ -120,6 +124,8 @@ func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 				reply <- replyBytes
 			} else if !new {
 				logger.Infof("Dropped %s", msgStr)
+			} else {
+				logger.Debugf("Handled %s", msgStr)
 			}
 		}
 	}
@@ -163,8 +169,10 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 
 // makeGeneratedMessageHandler constructs an instance of
 // generatedMessageHandler using the supplied abstractions.
-func makeGeneratedMessageHandler(log messagelog.MessageLog, provider clientstate.Provider) generatedMessageHandler {
+func makeGeneratedMessageHandler(log messagelog.MessageLog, provider clientstate.Provider, logger *logging.Logger) generatedMessageHandler {
 	return func(msg interface{}) {
+		logger.Debugf("Generated %s", messageString(msg))
+
 		switch msg := msg.(type) {
 		case *messages.Reply:
 			clientID := msg.Msg.ClientId
