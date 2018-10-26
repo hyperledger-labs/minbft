@@ -87,8 +87,6 @@ type requestSeqRetirer func(request *messages.Request) error
 // the supplied abstract interfaces.
 func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	return func(request *messages.Request) (new bool, err error) {
-		logger.Debugf("Replica %d handling %s", id, messageString(request))
-
 		if err = verify(request); err != nil {
 			err = fmt.Errorf("Failed to authenticate Request message: %s", err)
 			return false, err
@@ -113,8 +111,6 @@ func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignature
 					Request:   request,
 				},
 			}
-
-			logger.Debugf("Replica %d generated %s", id, messageString(prepare))
 
 			handleGeneratedUIMessage(prepare)
 		}
@@ -158,7 +154,6 @@ func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMe
 				},
 			}
 			signer(reply)
-			logger.Debugf("Replica %d generated %s", id, messageString(reply))
 			consumeMessage(reply)
 		}()
 	}

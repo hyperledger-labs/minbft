@@ -24,8 +24,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	logging "github.com/op/go-logging"
+	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
@@ -229,7 +231,7 @@ func TestMakeMessageConsumer(t *testing.T) {
 		return clientState
 	}
 
-	consume := makeMessageConsumer(log, clientStates)
+	consume := makeMessageConsumer(log, clientStates, logging.MustGetLogger(module))
 
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{

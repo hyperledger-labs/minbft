@@ -33,8 +33,6 @@ type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 // the supplied abstract interfaces.
 func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, prepareRequestSeq requestSeqPreparer, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler, releaseUI uiReleaser) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
-		logger.Debugf("Replica %d handling %s", id, messageString(prepare))
-
 		ui, err := verifyUI(prepare)
 		if err != nil {
 			return false, fmt.Errorf("UI not valid: %s", err)
@@ -83,8 +81,6 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ca
 		if err := collectCommit(commit); err != nil {
 			panic("Failed to collect own Commit")
 		}
-
-		logger.Debugf("Replica %d generated %s", id, messageString(commit))
 
 		handleGeneratedUIMessage(commit)
 
