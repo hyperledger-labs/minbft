@@ -33,16 +33,14 @@ type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
 // the supplied abstract interfaces.
 func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, prepareRequestSeq requestSeqPreparer, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler, releaseUI uiReleaser) prepareHandler {
 	return func(prepare *messages.Prepare) (new bool, err error) {
-		replicaID := prepare.ReplicaID()
-		logger.Debugf(
-			"Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
-			id, replicaID, prepare.Msg.View,
-			prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
+		logger.Debugf("Replica %d handling %s", id, messageString(prepare))
 
 		ui, err := verifyUI(prepare)
 		if err != nil {
 			return false, fmt.Errorf("UI not valid: %s", err)
 		}
+
+		replicaID := prepare.ReplicaID()
 
 		if replicaID == id {
 			return false, nil
@@ -86,9 +84,7 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ca
 			panic("Failed to collect own Commit")
 		}
 
-		logger.Debugf("Replica %d generated Commit: view=%d primary=%d client=%d seq=%d",
-			id, commit.Msg.View, commit.Msg.PrimaryId,
-			commit.Msg.Request.Msg.ClientId, commit.Msg.Request.Msg.Seq)
+		logger.Debugf("Replica %d generated %s", id, messageString(commit))
 
 		handleGeneratedUIMessage(commit)
 

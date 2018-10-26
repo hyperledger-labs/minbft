@@ -87,8 +87,7 @@ type requestSeqRetirer func(request *messages.Request) error
 // the supplied abstract interfaces.
 func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
 	return func(request *messages.Request) (new bool, err error) {
-		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
-			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
+		logger.Debugf("Replica %d handling %s", id, messageString(request))
 
 		if err = verify(request); err != nil {
 			err = fmt.Errorf("Failed to authenticate Request message: %s", err)
@@ -115,9 +114,7 @@ func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignature
 				},
 			}
 
-			logger.Debugf("Replica %d generated Prepare: view=%d client=%d seq=%d",
-				prepare.Msg.ReplicaId, prepare.Msg.View,
-				prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
+			logger.Debugf("Replica %d generated %s", id, messageString(prepare))
 
 			handleGeneratedUIMessage(prepare)
 		}
@@ -146,7 +143,7 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID, operation executor, message signer, and
 // reply consumer.
-func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer replicaMessageSigner, handleGeneratedMessage generatedMessageHandler) requestExecutor {
+func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMessageSigner, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request *messages.Request) {
 		resultChan := executor(request.Msg.Payload)
 		go func() {
@@ -154,15 +151,14 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 
 			reply := &messages.Reply{
 				Msg: &messages.Reply_M{
-					ReplicaId: replicaID,
+					ReplicaId: id,
 					ClientId:  request.Msg.ClientId,
 					Seq:       request.Msg.Seq,
 					Result:    result,
 				},
 			}
 			signer(reply)
-			logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
-				replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
+			logger.Debugf("Replica %d generated %s", id, messageString(reply))
 			handleGeneratedMessage(reply)
 		}()
 	}

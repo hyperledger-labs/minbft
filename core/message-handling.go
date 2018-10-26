@@ -17,7 +17,6 @@
 package minbft
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -97,14 +96,17 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
-			msg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, msg); err != nil {
+			wrappedMsg := &messages.Message{}
+			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
 				logger.Warningf("Failed to unmarshal message: %s", err)
 				continue
 			}
 
-			if replyChan, new, err := handle(messages.UnwrapMessage(msg)); err != nil {
-				logger.Warning(err)
+			msg := messages.UnwrapMessage(wrappedMsg)
+			msgStr := messageString(msg)
+
+			if replyChan, new, err := handle(msg); err != nil {
+				logger.Warningf("Failed to handle %s: %s", msgStr, err)
 			} else if replyChan != nil {
 				m, more := <-replyChan
 				if !more {
@@ -117,7 +119,7 @@ func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 				}
 				reply <- replyBytes
 			} else if !new {
-				logger.Infof("Dropped message: %v", msg)
+				logger.Infof("Dropped %s", msgStr)
 			}
 		}
 	}
@@ -132,7 +134,6 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 			outChan := make(chan interface{})
 			new, err := handleRequest(msg)
 			if err != nil {
-				err = fmt.Errorf("Failed to handle Request message: %s", err)
 				return nil, false, err
 			}
 			go func() {
@@ -145,14 +146,12 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 		case *messages.Prepare:
 			new, err := handlePrepare(msg)
 			if err != nil {
-				err = fmt.Errorf("Failed to handle Prepare message: %s", err)
 				return nil, false, err
 			}
 			return nil, new, nil
 		case *messages.Commit:
 			new, err := handleCommit(msg)
 			if err != nil {
-				err = fmt.Errorf("Failed to handle Commit message: %s", err)
 				return nil, false, err
 			}
 			return nil, new, nil
