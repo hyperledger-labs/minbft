@@ -58,6 +58,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	view := func() uint64 { return 0 } // view change is not implemented
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
+	signMessage := makeReplicaMessageSigner(stack)
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
@@ -72,7 +73,9 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	releaseUI := makeUIReleaser(peerStates)
 
 	countCommits := makeCommitCounter(f)
-	executeRequest := defaultRequestExecutor(id, clientStates, stack)
+	executeOperation := makeOperationExecutor(stack)
+	consumeReply := makeReplyConsumer(clientStates)
+	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, consumeReply)
 	collectCommit := makeCommitCollector(countCommits, retireSeq, executeRequest)
 
 	consumeUIMessage := makeUIMessageConsumer(log)
