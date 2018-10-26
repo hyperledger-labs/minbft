@@ -58,6 +58,7 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
 	verifyUI := makeUIVerifier(stack)
+	assignUI := makeUIAssigner(stack)
 
 	clientStates := clientstate.NewProvider()
 	peerStates := peerstate.NewProvider()
@@ -69,7 +70,8 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	releaseUI := makeUIReleaser(peerStates)
 
 	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
-	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
+	consumeUIMessage := makeUIMessageConsumer(log)
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeUIMessage)
 
 	handleRequest := makeRequestHandler(id, n, view, verifyMessageSignature, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 	replyRequest := makeRequestReplier(clientStates)
@@ -77,14 +79,6 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
 
 	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
-}
-
-// defaultGeneratedUIMessageHandler construct a standard
-// generatedUIMessageHandler using the supplied interfaces.
-func defaultGeneratedUIMessageHandler(auth api.Authenticator, log messagelog.MessageLog) generatedUIMessageHandler {
-	assignUI := makeUIAssigner(auth)
-	consume := makeUIMessageConsumer(log)
-	return makeGeneratedUIMessageHandler(assignUI, consume)
 }
 
 // makeMessageStreamHandler construct an instance of
