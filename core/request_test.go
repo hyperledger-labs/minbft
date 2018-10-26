@@ -185,27 +185,26 @@ func TestMakeRequestExecutor(t *testing.T) {
 		Signature: expectedSignature,
 	}
 
-	mockOperationExecutor := func(operation []byte) <-chan []byte {
+	execute := func(operation []byte) <-chan []byte {
 		args := mock.MethodCalled("operationExecutor", operation)
 		return args.Get(0).(chan []byte)
 	}
-	mockReplicaMessageSigner := func(msg messages.MessageWithSignature) {
+	sign := func(msg messages.MessageWithSignature) {
 		mock.MethodCalled("replicaMessageSigner", msg)
 		msg.AttachSignature(expectedSignature)
 	}
-	mockReplyConsumer := func(reply *messages.Reply) {
-		mock.MethodCalled("replyConsumer", reply)
+	handleGeneratedMessage := func(msg interface{}) {
+		mock.MethodCalled("generatedMessageHandler", msg)
 	}
 
-	requestExecutor := makeRequestExecutor(replicaID,
-		mockOperationExecutor, mockReplicaMessageSigner, mockReplyConsumer)
+	requestExecutor := makeRequestExecutor(replicaID, execute, sign, handleGeneratedMessage)
 
 	resultChan := make(chan []byte, 1)
 	resultChan <- expectedResult
 	done := make(chan struct{})
 	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
 	mock.On("replicaMessageSigner", expectedUnsignedReply).Once()
-	mock.On("replyConsumer", expectedSignedReply).Run(
+	mock.On("generatedMessageHandler", expectedSignedReply).Run(
 		func(testifymock.Arguments) { close(done) },
 	).Once()
 	requestExecutor(request)
@@ -397,31 +396,6 @@ func TestMakeRequestReplier(t *testing.T) {
 	assert.Equal(t, reply, <-out)
 	_, more = <-out
 	assert.False(t, more, "Channel should be closed")
-}
-
-func TestMakeReplyConsumer(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	clientID := rand.Uint32()
-	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
-
-	consumer := makeReplyConsumer(provider)
-
-	seq := rand.Uint64()
-	reply := &messages.Reply{
-		Msg: &messages.Reply_M{
-			ReplicaId: rand.Uint32(),
-			ClientId:  clientID,
-			Seq:       seq,
-		},
-	}
-
-	state.EXPECT().AddReply(reply).Return(nil)
-	assert.NotPanics(t, func() { consumer(reply) })
-
-	state.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
-	assert.Panics(t, func() { consumer(reply) })
 }
 
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {

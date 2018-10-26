@@ -82,11 +82,6 @@ type requestSeqPreparer func(request *messages.Request) error
 // It is safe to invoke concurrently.
 type requestSeqRetirer func(request *messages.Request) error
 
-// replyConsumer performs further processing of the supplied Reply
-// message produced locally. The message should be ready to serialize
-// and deliver to the client. It is safe to invoke concurrently.
-type replyConsumer func(reply *messages.Reply)
-
 // makeRequestHandler constructs an instance of requestHandler using
 // id as the current replica ID, n as the total number of nodes, and
 // the supplied abstract interfaces.
@@ -151,7 +146,7 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID, operation executor, message signer, and
 // reply consumer.
-func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer replicaMessageSigner, consumer replyConsumer) requestExecutor {
+func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer replicaMessageSigner, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request *messages.Request) {
 		resultChan := executor(request.Msg.Payload)
 		go func() {
@@ -168,7 +163,7 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 			signer(reply)
 			logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
 				replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
-			consumer(reply)
+			handleGeneratedMessage(reply)
 		}()
 	}
 }
@@ -233,17 +228,5 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 		seq := request.Msg.Seq
 
 		return provideClientState(clientID).RetireRequestSeq(seq)
-	}
-}
-
-// makeReplyConsumer constructs an instance of replyConsumer using the
-// supplied client state provider.
-func makeReplyConsumer(provider clientstate.Provider) replyConsumer {
-	return func(reply *messages.Reply) {
-		clientID := reply.Msg.ClientId
-
-		if err := provider(clientID).AddReply(reply); err != nil {
-			panic(err) // Erroneous Reply must never be supplied
-		}
 	}
 }

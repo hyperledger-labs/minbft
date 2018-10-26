@@ -25,10 +25,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	testifymock "github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 
+	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 	mock_messagelog "github.com/hyperledger-labs/minbft/core/internal/messagelog/mocks"
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
@@ -142,11 +145,11 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 	assignUI := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("uiAssigner", msg)
 	}
-	consume := func(msg messages.MessageWithUI) {
-		mock.MethodCalled("uiMessageConsumer", msg)
+	handleGeneratedMessage := func(msg interface{}) {
+		mock.MethodCalled("generatedMessageHandler", msg)
 	}
 
-	handle := makeGeneratedUIMessageHandler(assignUI, consume)
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
 	msg := &messages.Prepare{
 		Msg: &messages.Prepare_M{
@@ -165,8 +168,8 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 		m := args.Get(0).(messages.MessageWithUI)
 		m.AttachUI(uiBytes)
 	}).Once()
-	mock.On("uiMessageConsumer", msgWithUI).Once()
-	handle(msg)
+	mock.On("generatedMessageHandler", msgWithUI).Once()
+	handleGeneratedUIMessage(msg)
 }
 
 func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
@@ -186,10 +189,10 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		mockMsg := msg.(*mock_messages.MockMessageWithUI)
 		mockMsg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 	}
-	consume := func(msg messages.MessageWithUI) {
-		log = append(log, msg)
+	handleGeneratedMessage := func(msg interface{}) {
+		log = append(log, msg.(messages.MessageWithUI))
 	}
-	handle := makeGeneratedUIMessageHandler(assignUI, consume)
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(nrConcurrent)
@@ -197,7 +200,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < nrMessages; i++ {
-				handle(mock_messages.NewMockMessageWithUI(ctrl))
+				handleGeneratedUIMessage(mock_messages.NewMockMessageWithUI(ctrl))
 			}
 		}()
 	}
@@ -213,12 +216,20 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 	}
 }
 
-func TestMakeUIMessageConsumer(t *testing.T) {
+func TestMakeGeneratedMessageHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	clientID := rand.Uint32()
+
 	log := mock_messagelog.NewMockMessageLog(ctrl)
-	consumeUIMessage := makeUIMessageConsumer(log)
+	clientState := mock_clientstate.NewMockState(ctrl)
+	clientStates := func(id uint32) clientstate.State {
+		require.Equal(t, clientID, id)
+		return clientState
+	}
+
+	handle := makeGeneratedMessageHandler(log, clientStates)
 
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{
@@ -230,7 +241,20 @@ func TestMakeUIMessageConsumer(t *testing.T) {
 			Prepare: prepare,
 		},
 	}
+	reply := &messages.Reply{
+		Msg: &messages.Reply_M{
+			ReplicaId: rand.Uint32(),
+			ClientId:  clientID,
+			Seq:       rand.Uint64(),
+		},
+	}
+
+	clientState.EXPECT().AddReply(reply).Return(nil)
+	handle(reply)
+
+	clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
+	assert.Panics(t, func() { handle(reply) })
 
 	log.EXPECT().Append(msg)
-	consumeUIMessage(prepare)
+	handle(prepare)
 }

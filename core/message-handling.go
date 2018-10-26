@@ -40,14 +40,17 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // message hasn't been processed before.
 type messageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
 
+// generatedMessageHandler handles generated message.
+//
+// It arranges the supplied message to be delivered to peer replicas,
+// or the corresponding client, depending on the message type. The
+// message should be ready to serialize and deliver to the recipients.
+type generatedMessageHandler func(msg interface{})
+
 // generatedUIMessageHandler assigns and attaches a UI to a generated
 // message and arranges it to be delivered to peer replicas. It is
 // safe to invoke concurrently.
 type generatedUIMessageHandler func(msg messages.MessageWithUI)
-
-// uiMessageConsumer receives a generated message with UI attached and
-// arranges it to be delivered to peer replicas.
-type uiMessageConsumer func(msg messages.MessageWithUI)
 
 // defaultMessageHandler construct a standard messageHandler using id
 // as the current replica ID and the supplied interfaces.
@@ -72,14 +75,14 @@ func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Conf
 	captureUI := makeUICapturer(peerStates)
 	releaseUI := makeUIReleaser(peerStates)
 
+	handleGeneratedMessage := makeGeneratedMessageHandler(log, clientStates)
+
 	countCommits := makeCommitCounter(f)
 	executeOperation := makeOperationExecutor(stack)
-	consumeReply := makeReplyConsumer(clientStates)
-	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, consumeReply)
+	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
 	collectCommit := makeCommitCollector(countCommits, retireSeq, executeRequest)
 
-	consumeUIMessage := makeUIMessageConsumer(log)
-	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeUIMessage)
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
 	handleRequest := makeRequestHandler(id, n, view, verifyMessageSignature, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 	replyRequest := makeRequestReplier(clientStates)
@@ -159,9 +162,27 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 	}
 }
 
+// makeGeneratedMessageHandler constructs an instance of
+// generatedMessageHandler using the supplied abstractions.
+func makeGeneratedMessageHandler(log messagelog.MessageLog, provider clientstate.Provider) generatedMessageHandler {
+	return func(msg interface{}) {
+		switch msg := msg.(type) {
+		case *messages.Reply:
+			clientID := msg.Msg.ClientId
+			if err := provider(clientID).AddReply(msg); err != nil {
+				panic(err) // Erroneous Reply must never be supplied
+			}
+		case *messages.Prepare, *messages.Commit:
+			log.Append(messages.WrapMessage(msg))
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
 // makeGeneratedUIMessageHandler constructs generatedUIMessageHandler
 // using the supplied abstractions.
-func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume uiMessageConsumer) generatedUIMessageHandler {
+func makeGeneratedUIMessageHandler(assignUI uiAssigner, handle generatedMessageHandler) generatedUIMessageHandler {
 	var lock sync.Mutex
 
 	return func(msg messages.MessageWithUI) {
@@ -169,15 +190,6 @@ func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume uiMessageConsume
 		defer lock.Unlock()
 
 		assignUI(msg)
-		consume(msg)
-	}
-}
-
-// makeUIMessageConsumer construct uiMessageConsumer using the
-// supplied message log as the destination.
-func makeUIMessageConsumer(log messagelog.MessageLog) uiMessageConsumer {
-	return func(uiMsg messages.MessageWithUI) {
-		msg := messages.WrapMessage(uiMsg)
-		log.Append(msg)
+		handle(msg)
 	}
 }
