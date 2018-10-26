@@ -49,16 +49,14 @@ type commitCounter func(commit *messages.Commit) (done bool, err error)
 // the total number of nodes, and the supplied abstract interfaces.
 func makeCommitHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, handlePrepare prepareHandler, collectCommit commitCollector, releaseUI uiReleaser) commitHandler {
 	return func(commit *messages.Commit) (new bool, err error) {
-		replicaID := commit.ReplicaID()
-		logger.Debugf(
-			"Replica %d handling Commit from replica %d: view=%d primary=%d seq=%d",
-			id, replicaID, commit.Msg.View, commit.Msg.PrimaryId,
-			commit.Msg.Request.Msg.Seq)
+		logger.Debugf("Replica %d handling %s", id, messageString(commit))
 
 		ui, err := verifyUI(commit)
 		if err != nil {
 			return false, fmt.Errorf("UI is not valid: %s", err)
 		}
+
+		replicaID := commit.ReplicaID()
 
 		if replicaID == id {
 			return false, nil
