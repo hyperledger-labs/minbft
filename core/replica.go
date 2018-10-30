@@ -19,33 +19,17 @@ package minbft
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/golang/protobuf/proto"
-	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 )
 
 const (
-	module          = "minbft"
-	logFormatString = `%{color}[%{module}] %{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`
+	module           = "minbft"
+	defaultLogPrefix = `%{color}[%{module}] %{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset}`
 )
-
-var logger *logging.Logger
-
-func init() {
-	logger = logging.MustGetLogger(module)
-	stringFormatter := logging.MustStringFormatter(logFormatString)
-	backend := logging.NewLogBackend(os.Stdout, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
-	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
-
-	logging.SetBackend(formattedLoggerBackend)
-
-	formattedLoggerBackend.SetLevel(logging.DEBUG, module)
-}
 
 // Stack combines interfaces of external modules
 type Stack interface {
@@ -85,8 +69,9 @@ func New(id uint32, configer api.Configer, stack Stack) (*Replica, error) {
 		log: messagelog.New(),
 	}
 
-	handle := defaultMessageHandler(id, replica.log, configer, stack)
-	replica.handleStream = makeMessageStreamHandler(handle)
+	logger := makeLogger(id)
+	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
+	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
 	return replica, nil
 }

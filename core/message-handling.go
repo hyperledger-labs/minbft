@@ -22,6 +22,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	logging "github.com/op/go-logging"
+
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
@@ -34,66 +36,116 @@ import (
 // message, if any, to reply channel.
 type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 
-// messageHandler fully handles a message. If there is any message
-// produced in reply, it will be send to reply channel, otherwise nil
-// channel is returned. The return value new indicates that the
-// message hasn't been processed before.
-type messageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
+// incomingMessageHandler fully handles incoming message.
+//
+// If there is any message produced in reply, it will be send to reply
+// channel, otherwise nil channel is returned. The return value new
+// indicates that the message has not been processed before.
+type incomingMessageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
+
+// messageValidator validates a message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type messageValidator func(msg interface{}) error
+
+// messageProcessor processes a valid message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type messageProcessor func(msg interface{}) (new bool, err error)
+
+// messageReplier provides reply to a valid message.
+//
+// If there is any message to be produced in reply to the supplied
+// one, it will be send to the returned reply channel, otherwise nil
+// channel is returned. The supplied message is assumed to be
+// authentic and internally consistent. It is safe to invoke
+// concurrently.
+type messageReplier func(msg interface{}) (reply <-chan interface{}, err error)
+
+// generatedMessageHandler handles generated message.
+//
+// It arranges the supplied message to be delivered to peer replicas,
+// or the corresponding client, depending on the message type. The
+// message should be ready to serialize and deliver to the recipients.
+type generatedMessageHandler func(msg interface{})
 
 // generatedUIMessageHandler assigns and attaches a UI to a generated
 // message and arranges it to be delivered to peer replicas. It is
 // safe to invoke concurrently.
 type generatedUIMessageHandler func(msg messages.MessageWithUI)
 
-// uiMessageConsumer receives a generated message with UI attached and
-// arranges it to be delivered to peer replicas.
-type uiMessageConsumer func(msg messages.MessageWithUI)
-
-// defaultMessageHandler construct a standard messageHandler using id
-// as the current replica ID and the supplied interfaces.
-func defaultMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack) messageHandler {
+// defaultIncomingMessageHandler construct a standard
+// incomingMessageHandler using id as the current replica ID and the
+// supplied interfaces.
+func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) incomingMessageHandler {
 	n := config.N()
+	f := config.F()
+
+	view := func() uint64 { return 0 } // view change is not implemented
+
+	verifyMessageSignature := makeMessageSignatureVerifier(stack)
+	signMessage := makeReplicaMessageSigner(stack)
+	verifyUI := makeUIVerifier(stack)
+	assignUI := makeUIAssigner(stack)
 
 	clientStates := clientstate.NewProvider()
 	peerStates := peerstate.NewProvider()
 
-	view := func() uint64 { return 0 } // view change is not implemented
-	prepareRequestSeq := makeRequestSeqPreparer(clientStates)
-	verifyUI := makeUIVerifier(stack)
+	captureSeq := makeRequestSeqCapturer(clientStates)
+	releaseSeq := makeRequestSeqReleaser(clientStates)
+	prepareSeq := makeRequestSeqPreparer(clientStates)
+	retireSeq := makeRequestSeqRetirer(clientStates)
 	captureUI := makeUICapturer(peerStates)
-	releaseUI := makeUIReleaser(peerStates)
-	collectCommit := defaultCommitCollector(id, clientStates, config, stack)
-	handleGeneratedUIMessage := defaultGeneratedUIMessageHandler(stack, log)
 
-	handleRequest := defaultRequestHandler(id, n, view, stack, clientStates, handleGeneratedUIMessage)
+	handleGeneratedMessage := makeGeneratedMessageHandler(log, clientStates, logger)
+
+	countCommits := makeCommitCounter(f)
+	executeOperation := makeOperationExecutor(stack)
+	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
+	collectCommit := makeCommitCollector(countCommits, retireSeq, executeRequest)
+
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
+
+	validateRequest := makeRequestValidator(verifyMessageSignature)
+	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
+	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
+
+	processRequest := makeRequestProcessor(id, n, view, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+	processPrepare := makePrepareProcessor(id, view, captureUI, prepareSeq, processRequest, collectCommit, handleGeneratedUIMessage)
+	processCommit := makeCommitProcessor(id, view, captureUI, processPrepare, collectCommit)
+	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)
+
 	replyRequest := makeRequestReplier(clientStates)
-	handlePrepare := makePrepareHandler(id, n, view, verifyUI, captureUI, prepareRequestSeq, handleRequest, collectCommit, handleGeneratedUIMessage, releaseUI)
-	handleCommit := makeCommitHandler(id, n, view, verifyUI, captureUI, handlePrepare, collectCommit, releaseUI)
+	replyMessage := makeMessageReplier(replyRequest)
 
-	return makeMessageHandler(handleRequest, replyRequest, handlePrepare, handleCommit)
-}
-
-// defaultGeneratedUIMessageHandler construct a standard
-// generatedUIMessageHandler using the supplied interfaces.
-func defaultGeneratedUIMessageHandler(auth api.Authenticator, log messagelog.MessageLog) generatedUIMessageHandler {
-	assignUI := makeUIAssigner(auth)
-	consume := makeUIMessageConsumer(log)
-	return makeGeneratedUIMessageHandler(assignUI, consume)
+	return makeIncomingMessageHandler(validateMessage, processMessage, replyMessage)
 }
 
 // makeMessageStreamHandler construct an instance of
 // messageStreamHandler using the supplied abstract handler.
-func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
+func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Logger) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
-			msg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, msg); err != nil {
+			wrappedMsg := &messages.Message{}
+			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
 				logger.Warningf("Failed to unmarshal message: %s", err)
 				continue
 			}
 
-			if replyChan, new, err := handle(messages.UnwrapMessage(msg)); err != nil {
-				logger.Warning(err)
+			msg := messages.UnwrapMessage(wrappedMsg)
+			msgStr := messageString(msg)
+
+			logger.Debugf("Received %s", msgStr)
+
+			if replyChan, new, err := handle(msg); err != nil {
+				logger.Warningf("Failed to handle %s: %s", msgStr, err)
 			} else if replyChan != nil {
 				m, more := <-replyChan
 				if !more {
@@ -106,45 +158,113 @@ func makeMessageStreamHandler(handle messageHandler) messageStreamHandler {
 				}
 				reply <- replyBytes
 			} else if !new {
-				logger.Infof("Dropped message: %v", msg)
+				logger.Infof("Dropped %s", msgStr)
+			} else {
+				logger.Debugf("Handled %s", msgStr)
 			}
 		}
 	}
 }
 
-// makeMessageHandler construct an instance of messageHandler using
-// the supplied abstract handlers.
-func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplier, handlePrepare prepareHandler, handleCommit commitHandler) messageHandler {
-	return func(msg interface{}) (reply <-chan interface{}, new bool, err error) {
+// makeIncomingMessageHandler constructs an instance of
+// incomingMessageHandler using id as the current replica ID, and the
+// supplied abstractions.
+func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) incomingMessageHandler {
+	return func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+		err = validate(msg)
+		if err != nil {
+			err = fmt.Errorf("Validation failed: %s", err)
+			return nil, false, err
+		}
+
+		new, err = process(msg)
+		if err != nil {
+			err = fmt.Errorf("Error processing message: %s", err)
+			return nil, false, err
+		}
+
+		replyChan, err = reply(msg)
+		if err != nil {
+			err = fmt.Errorf("Error replying message: %s", err)
+			return nil, false, err
+		}
+
+		return replyChan, new, nil
+	}
+}
+
+// makeMessageValidator constructs an instance of messageValidator
+// using the supplied abstractions.
+func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator) messageValidator {
+	return func(msg interface{}) error {
 		switch msg := msg.(type) {
 		case *messages.Request:
-			outChan := make(chan interface{})
-			new, err := handleRequest(msg)
-			if err != nil {
-				err = fmt.Errorf("Failed to handle Request message: %s", err)
-				return nil, false, err
-			}
+			return validateRequest(msg)
+		case *messages.Prepare:
+			return validatePrepare(msg)
+		case *messages.Commit:
+			return validateCommit(msg)
+		default:
+			return fmt.Errorf("Unknown message type")
+		}
+	}
+}
+
+// makeMessageProcessor constructs an instance of messageProcessor
+// using the supplied abstractions.
+func makeMessageProcessor(processRequest requestProcessor, processPrepare prepareProcessor, processCommit commitProcessor) messageProcessor {
+	return func(msg interface{}) (new bool, err error) {
+		switch msg := msg.(type) {
+		case *messages.Request:
+			return processRequest(msg)
+		case *messages.Prepare:
+			return processPrepare(msg)
+		case *messages.Commit:
+			return processCommit(msg)
+		default:
+			return false, fmt.Errorf("Unknown message type")
+		}
+	}
+}
+
+// makeMessageReplier constructs an instance of messageReplier using
+// the supplied abstractions.
+func makeMessageReplier(replyRequest requestReplier) messageReplier {
+	return func(msg interface{}) (reply <-chan interface{}, err error) {
+		outChan := make(chan interface{})
+
+		switch msg := msg.(type) {
+		case *messages.Request:
 			go func() {
 				defer close(outChan)
 				if m, more := <-replyRequest(msg); more {
 					outChan <- m
 				}
 			}()
-			return outChan, new, nil
-		case *messages.Prepare:
-			new, err := handlePrepare(msg)
-			if err != nil {
-				err = fmt.Errorf("Failed to handle Prepare message: %s", err)
-				return nil, false, err
+			return outChan, nil
+		case *messages.Prepare, *messages.Commit:
+		default:
+			return nil, fmt.Errorf("Unknown message type")
+		}
+
+		return nil, nil
+	}
+}
+
+// makeGeneratedMessageHandler constructs an instance of
+// generatedMessageHandler using the supplied abstractions.
+func makeGeneratedMessageHandler(log messagelog.MessageLog, provider clientstate.Provider, logger *logging.Logger) generatedMessageHandler {
+	return func(msg interface{}) {
+		logger.Debugf("Generated %s", messageString(msg))
+
+		switch msg := msg.(type) {
+		case *messages.Reply:
+			clientID := msg.Msg.ClientId
+			if err := provider(clientID).AddReply(msg); err != nil {
+				panic(err) // Erroneous Reply must never be supplied
 			}
-			return nil, new, nil
-		case *messages.Commit:
-			new, err := handleCommit(msg)
-			if err != nil {
-				err = fmt.Errorf("Failed to handle Commit message: %s", err)
-				return nil, false, err
-			}
-			return nil, new, nil
+		case *messages.Prepare, *messages.Commit:
+			log.Append(messages.WrapMessage(msg))
 		default:
 			panic("Unknown message type")
 		}
@@ -153,7 +273,7 @@ func makeMessageHandler(handleRequest requestHandler, replyRequest requestReplie
 
 // makeGeneratedUIMessageHandler constructs generatedUIMessageHandler
 // using the supplied abstractions.
-func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume uiMessageConsumer) generatedUIMessageHandler {
+func makeGeneratedUIMessageHandler(assignUI uiAssigner, handle generatedMessageHandler) generatedUIMessageHandler {
 	var lock sync.Mutex
 
 	return func(msg messages.MessageWithUI) {
@@ -161,15 +281,6 @@ func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume uiMessageConsume
 		defer lock.Unlock()
 
 		assignUI(msg)
-		consume(msg)
-	}
-}
-
-// makeUIMessageConsumer construct uiMessageConsumer using the
-// supplied message log as the destination.
-func makeUIMessageConsumer(log messagelog.MessageLog) uiMessageConsumer {
-	return func(uiMsg messages.MessageWithUI) {
-		msg := messages.WrapMessage(uiMsg)
-		log.Append(msg)
+		handle(msg)
 	}
 }

@@ -33,19 +33,19 @@ import (
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 )
 
-func TestMakeRequestHandler(t *testing.T) {
-	t.Run("Primary", testMakeRequestHandlerPrimary)
-	t.Run("Backup", testMakeRequestHandlerBackup)
+func TestMakeRequestProcessor(t *testing.T) {
+	t.Run("Primary", testMakeRequestProcessorPrimary)
+	t.Run("Backup", testMakeRequestProcessorBackup)
 }
 
-func testMakeRequestHandlerPrimary(t *testing.T) {
+func testMakeRequestProcessorPrimary(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	n := randN()
 	view := randView()
 	id := primaryID(n, view)
-	handle := setupMakeRequestHandlerMock(mock, id, n, view)
+	process := setupMakeRequestProcessorMock(mock, id, n, view)
 	clientID := rand.Uint32()
 	seq := rand.Uint64()
 	request := &messages.Request{
@@ -62,37 +62,30 @@ func testMakeRequestHandlerPrimary(t *testing.T) {
 		},
 	}
 
-	// Invalid client signature
-	mock.On("messageSignatureVerifier", request).Return(fmt.Errorf("invalid signature")).Once()
-	_, err := handle(request)
-	assert.Error(t, err)
-
 	// Already captured request ID
-	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqCapturer", request).Return(false).Once()
-	new, err := handle(request)
+	new, err := process(request)
 	assert.NoError(t, err)
 	assert.False(t, new)
 
 	// New Request
-	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
 	mock.On("requestSeqReleaser", request).Once()
 	mock.On("requestSeqPreparer", request).Return(nil).Once()
-	new, err = handle(request)
+	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }
 
-func testMakeRequestHandlerBackup(t *testing.T) {
+func testMakeRequestProcessorBackup(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	n := randN()
 	view := randView()
 	id := randBackupID(n, view)
-	handle := setupMakeRequestHandlerMock(mock, id, n, view)
+	process := setupMakeRequestProcessorMock(mock, id, n, view)
 	clientID := rand.Uint32()
 	seq := rand.Uint64()
 	request := &messages.Request{
@@ -102,35 +95,24 @@ func testMakeRequestHandlerBackup(t *testing.T) {
 		},
 	}
 
-	// Invalid client signature
-	mock.On("messageSignatureVerifier", request).Return(fmt.Errorf("invalid signature")).Once()
-	_, err := handle(request)
-	assert.Error(t, err)
-
 	// Already captured request ID
-	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqCapturer", request).Return(false).Once()
-	new, err := handle(request)
+	new, err := process(request)
 	assert.NoError(t, err)
 	assert.False(t, new)
 
 	// New Request
-	mock.On("messageSignatureVerifier", request).Return(nil).Once()
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	mock.On("requestSeqReleaser", request).Once()
-	new, err = handle(request)
+	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }
 
-func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint64) requestHandler {
+func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32, view uint64) requestProcessor {
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
-	}
-	verify := func(msg messages.MessageWithSignature) error {
-		args := mock.MethodCalled("messageSignatureVerifier", msg)
-		return args.Error(0)
 	}
 	captureSeq := func(request *messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqCapturer", request)
@@ -147,7 +129,32 @@ func setupMakeRequestHandlerMock(mock *testifymock.Mock, id, n uint32, view uint
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
 	mock.On("viewProvider").Return(view)
-	return makeRequestHandler(id, n, provideView, verify, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+	return makeRequestProcessor(id, n, provideView, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+}
+
+func TestMakeRequestValidator(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: rand.Uint32(),
+		},
+	}
+
+	verify := func(msg messages.MessageWithSignature) error {
+		args := mock.MethodCalled("messageSignatureVerifier", msg)
+		return args.Error(0)
+	}
+	validate := makeRequestValidator(verify)
+
+	mock.On("messageSignatureVerifier", request).Return(fmt.Errorf("invalid signature")).Once()
+	err := validate(request)
+	assert.Error(t, err)
+
+	mock.On("messageSignatureVerifier", request).Return(nil).Once()
+	err = validate(request)
+	assert.NoError(t, err)
 }
 
 func TestMakeRequestExecutor(t *testing.T) {
@@ -175,6 +182,7 @@ func TestMakeRequestExecutor(t *testing.T) {
 	expectedUnsignedReply := &messages.Reply{
 		Msg: &messages.Reply_M{
 			ReplicaId: replicaID,
+			ClientId:  clientID,
 			Seq:       seq,
 			Result:    expectedResult,
 		},
@@ -184,27 +192,26 @@ func TestMakeRequestExecutor(t *testing.T) {
 		Signature: expectedSignature,
 	}
 
-	mockOperationExecutor := func(operation []byte) <-chan []byte {
+	execute := func(operation []byte) <-chan []byte {
 		args := mock.MethodCalled("operationExecutor", operation)
 		return args.Get(0).(chan []byte)
 	}
-	mockReplicaMessageSigner := func(msg messages.MessageWithSignature) {
+	sign := func(msg messages.MessageWithSignature) {
 		mock.MethodCalled("replicaMessageSigner", msg)
 		msg.AttachSignature(expectedSignature)
 	}
-	mockReplyConsumer := func(reply *messages.Reply, clientID uint32) {
-		mock.MethodCalled("replyConsumer", reply, clientID)
+	handleGeneratedMessage := func(msg interface{}) {
+		mock.MethodCalled("generatedMessageHandler", msg)
 	}
 
-	requestExecutor := makeRequestExecutor(replicaID,
-		mockOperationExecutor, mockReplicaMessageSigner, mockReplyConsumer)
+	requestExecutor := makeRequestExecutor(replicaID, execute, sign, handleGeneratedMessage)
 
 	resultChan := make(chan []byte, 1)
 	resultChan <- expectedResult
 	done := make(chan struct{})
 	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
 	mock.On("replicaMessageSigner", expectedUnsignedReply).Once()
-	mock.On("replyConsumer", expectedSignedReply, clientID).Run(
+	mock.On("generatedMessageHandler", expectedSignedReply).Run(
 		func(testifymock.Arguments) { close(done) },
 	).Once()
 	requestExecutor(request)
@@ -396,30 +403,6 @@ func TestMakeRequestReplier(t *testing.T) {
 	assert.Equal(t, reply, <-out)
 	_, more = <-out
 	assert.False(t, more, "Channel should be closed")
-}
-
-func TestMakeReplyConsumer(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	expectedClientID := rand.Uint32()
-	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
-
-	consumer := makeReplyConsumer(provider)
-
-	seq := rand.Uint64()
-	reply := &messages.Reply{
-		Msg: &messages.Reply_M{
-			ReplicaId: rand.Uint32(),
-			Seq:       seq,
-		},
-	}
-
-	state.EXPECT().AddReply(reply).Return(nil)
-	assert.NotPanics(t, func() { consumer(reply, expectedClientID) })
-
-	state.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
-	assert.Panics(t, func() { consumer(reply, expectedClientID) })
 }
 
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {

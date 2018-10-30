@@ -23,53 +23,77 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// prepareHandler fully handles a Prepare message. The Prepare message
-// will be fully verified and processed. The return value new
-// indicates that the valid message hasn't been processed before.
-type prepareHandler func(prepare *messages.Prepare) (new bool, err error)
+// prepareValidator validates a Prepare message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type prepareValidator func(prepare *messages.Prepare) error
 
-// makePrepareHandler constructs an instance of prepareHandler using
-// id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces.
-func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, captureUI uiCapturer, prepareRequestSeq requestSeqPreparer, handleRequest requestHandler, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler, releaseUI uiReleaser) prepareHandler {
-	return func(prepare *messages.Prepare) (new bool, err error) {
-		replicaID := prepare.ReplicaID()
-		logger.Debugf(
-			"Replica %d handling Prepare from replica %d: view=%d client=%d seq=%d",
-			id, replicaID, prepare.Msg.View,
-			prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
+// prepareProcessor processes a valid Prepare message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type prepareProcessor func(prepare *messages.Prepare) (new bool, err error)
 
-		ui, err := verifyUI(prepare)
-		if err != nil {
-			return false, fmt.Errorf("UI not valid: %s", err)
+// makePrepareValidator constructs an instance of prepareValidator
+// using n as the total number of nodes, and the supplied abstract
+// interfaces.
+func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest requestValidator) prepareValidator {
+	return func(prepare *messages.Prepare) error {
+		replicaID := prepare.Msg.ReplicaId
+		view := prepare.Msg.View
+
+		if !isPrimary(view, replicaID, n) {
+			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
 		}
+
+		if err := validateRequest(prepare.Msg.Request); err != nil {
+			return fmt.Errorf("Request invalid: %s", err)
+		}
+
+		if _, err := verifyUI(prepare); err != nil {
+			return fmt.Errorf("UI not valid: %s", err)
+		}
+
+		return nil
+	}
+}
+
+// makePrepareProcessor constructs an instance of prepareProcessor
+// using id as the current replica ID, and the supplied abstract
+// interfaces.
+func makePrepareProcessor(id uint32, view viewProvider, captureUI uiCapturer, prepareSeq requestSeqPreparer, processRequest requestProcessor, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareProcessor {
+	return func(prepare *messages.Prepare) (new bool, err error) {
+		replicaID := prepare.Msg.ReplicaId
 
 		if replicaID == id {
 			return false, nil
 		}
 
-		if new = captureUI(replicaID, ui); !new {
+		request := prepare.Msg.Request
+
+		if _, err = processRequest(request); err != nil {
+			return false, fmt.Errorf("Failed to process request: %s", err)
+		}
+
+		new, releaseUI := captureUI(prepare)
+		if !new {
 			return false, nil
 		}
-		defer releaseUI(replicaID, ui)
+		defer releaseUI()
 
 		currentView := view()
 
 		if prepare.Msg.View != currentView {
 			return false, fmt.Errorf("Prepare is for view %d, current view is %d",
 				prepare.Msg.View, currentView)
-		} else if !isPrimary(currentView, replicaID, n) {
-			return false, fmt.Errorf("Prepare from backup %d in view %d",
-				replicaID, currentView)
 		}
 
-		request := prepare.Msg.Request
-
-		if _, err = handleRequest(request); err != nil {
-			return false, fmt.Errorf("Failed to process request: %s", err)
-		}
-
-		if err = prepareRequestSeq(request); err != nil {
+		if err = prepareSeq(request); err != nil {
 			return false, fmt.Errorf("Failed to check request ID: %s", err)
 		}
 
@@ -85,10 +109,6 @@ func makePrepareHandler(id, n uint32, view viewProvider, verifyUI uiVerifier, ca
 		if err := collectCommit(commit); err != nil {
 			panic("Failed to collect own Commit")
 		}
-
-		logger.Debugf("Replica %d generated Commit: view=%d primary=%d client=%d seq=%d",
-			id, commit.Msg.View, commit.Msg.PrimaryId,
-			commit.Msg.Request.Msg.ClientId, commit.Msg.Request.Msg.Seq)
 
 		handleGeneratedUIMessage(commit)
 

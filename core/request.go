@@ -18,7 +18,6 @@
 package minbft
 
 import (
-	"fmt"
 	"sync/atomic"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -26,17 +25,28 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// requestHandler fully handles a Request message.
+// requestReplier provides Reply message given Request message.
 //
-// The Request message will be fully verified and processed. The
-// return value new indicates if the Request has not been processed by
-// this replica before.
-type requestHandler func(request *messages.Request) (new bool, err error)
-
-// requestReplier returns a channel that can be used to receive a
-// Reply message corresponding to the supplied Request message. It is
-// safe to invoke concurrently.
+// It returns a channel that can be used to receive a Reply message
+// corresponding to the supplied Request message. It is safe to invoke
+// concurrently.
 type requestReplier func(request *messages.Request) <-chan *messages.Reply
+
+// requestValidator validates a Request message.
+//
+// It authenticates and checks the supplied message for internal
+// consistency. It does not use replica's current state and has no
+// side-effect. It is safe to invoke concurrently.
+type requestValidator func(request *messages.Request) error
+
+// requestProcessor processes a valid Request message.
+//
+// It fully processes the supplied message in the context of the
+// current replica's state. The supplied message is assumed to be
+// authentic and internally consistent. The return value new indicates
+// if the message has not been processed by this replica before. It is
+// safe to invoke concurrently.
+type requestProcessor func(request *messages.Request) (new bool, err error)
 
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
@@ -82,45 +92,19 @@ type requestSeqPreparer func(request *messages.Request) error
 // It is safe to invoke concurrently.
 type requestSeqRetirer func(request *messages.Request) error
 
-// replyConsumer performs further processing of the supplied Reply
-// message produced locally. The message should be ready to serialize
-// and deliver to the client. It is safe to invoke concurrently.
-type replyConsumer func(reply *messages.Reply, clientID uint32)
-
-// defaultRequestHandler constructs a standard requestHandler using id
-// as the current replica ID, n as the total number of nodes, and the
-// supplied abstract interfaces.
-func defaultRequestHandler(id, n uint32, view viewProvider, authen api.Authenticator, clientStates clientstate.Provider, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
-	verify := makeMessageSignatureVerifier(authen)
-	captureSeq := makeRequestSeqCapturer(clientStates)
-	releaseSeq := makeRequestSeqReleaser(clientStates)
-	prepareSeq := makeRequestSeqPreparer(clientStates)
-
-	return makeRequestHandler(id, n, view, verify, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+// makeRequestValidator constructs an instance of requestValidator
+// using the supplied abstractions.
+func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
+	return func(request *messages.Request) error {
+		return verify(request)
+	}
 }
 
-// defaultRequestExecutor constructs a standard requestExecutor using
-// id as the current replica ID, and the supplied abstract interfaces.
-func defaultRequestExecutor(id uint32, clientStates clientstate.Provider, stack Stack) requestExecutor {
-	executeOperation := makeOperationExecutor(stack)
-	signMessage := makeReplicaMessageSigner(stack)
-	consumeReply := makeReplyConsumer(clientStates)
-	return makeRequestExecutor(id, executeOperation, signMessage, consumeReply)
-}
-
-// makeRequestHandler constructs an instance of requestHandler using
-// id as the current replica ID, n as the total number of nodes, and
-// the supplied abstract interfaces.
-func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignatureVerifier, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestHandler {
+// makeRequestProcessor constructs an instance of requestProcessor
+// using id as the current replica ID, n as the total number of nodes,
+// and the supplied abstractions.
+func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeqCapturer, releaseSeq requestSeqReleaser, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestProcessor {
 	return func(request *messages.Request) (new bool, err error) {
-		logger.Debugf("Replica %d handling Request from client %d: seq=%d op=%s",
-			id, request.Msg.ClientId, request.Msg.Seq, request.Msg.Payload)
-
-		if err = verify(request); err != nil {
-			err = fmt.Errorf("Failed to authenticate Request message: %s", err)
-			return false, err
-		}
-
 		view := view()
 		primary := isPrimary(view, id, n)
 
@@ -140,10 +124,6 @@ func makeRequestHandler(id, n uint32, view viewProvider, verify messageSignature
 					Request:   request,
 				},
 			}
-
-			logger.Debugf("Replica %d generated Prepare: view=%d client=%d seq=%d",
-				prepare.Msg.ReplicaId, prepare.Msg.View,
-				prepare.Msg.Request.Msg.ClientId, prepare.Msg.Request.Msg.Seq)
 
 			handleGeneratedUIMessage(prepare)
 		}
@@ -172,7 +152,7 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID, operation executor, message signer, and
 // reply consumer.
-func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer replicaMessageSigner, consumer replyConsumer) requestExecutor {
+func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMessageSigner, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request *messages.Request) {
 		resultChan := executor(request.Msg.Payload)
 		go func() {
@@ -180,15 +160,14 @@ func makeRequestExecutor(replicaID uint32, executor operationExecutor, signer re
 
 			reply := &messages.Reply{
 				Msg: &messages.Reply_M{
-					ReplicaId: replicaID,
+					ReplicaId: id,
+					ClientId:  request.Msg.ClientId,
 					Seq:       request.Msg.Seq,
 					Result:    result,
 				},
 			}
 			signer(reply)
-			logger.Debugf("Replica %d generated Reply for client %d: seq=%d result=%s",
-				replicaID, request.Msg.ClientId, reply.Msg.Seq, reply.Msg.Result)
-			consumer(reply, request.Msg.ClientId)
+			handleGeneratedMessage(reply)
 		}()
 	}
 }
@@ -253,15 +232,5 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 		seq := request.Msg.Seq
 
 		return provideClientState(clientID).RetireRequestSeq(seq)
-	}
-}
-
-// makeReplyConsumer constructs an instance of replyConsumer using the
-// supplied client state provider.
-func makeReplyConsumer(provider clientstate.Provider) replyConsumer {
-	return func(reply *messages.Reply, clientID uint32) {
-		if err := provider(clientID).AddReply(reply); err != nil {
-			panic(err) // Erroneous Reply must never be supplied
-		}
 	}
 }

@@ -41,8 +41,9 @@ message Request {
 message Reply {
     message M {
         uint32 replica_id = 1;  // s: replica id
-        uint64 seq = 2;         // seq: corresponding request sequence
-        bytes result = 3;       // res: result
+        uint32 client_id = 2;   // c: client id
+        uint64 seq = 3;         // seq: corresponding request sequence
+        bytes result = 4;       // res: result
     }
     M msg = 1;           // reply message
     bytes signature = 2; // replica's signature over the message
@@ -56,9 +57,9 @@ message Reply {
 //      M msg = 1;
 //      bytes replica_ui = 2;
 //  }
-// 
+//
 // and the message requires a `ReplicaID` field:
-// 
+//
 //  message M {
 //      uint32 replica_id = 1;
 //      .....

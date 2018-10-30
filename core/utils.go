@@ -18,6 +18,11 @@
 package minbft
 
 import (
+	"fmt"
+	"os"
+
+	logging "github.com/op/go-logging"
+
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -72,4 +77,52 @@ func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVeri
 // current view.
 func isPrimary(view uint64, id uint32, n uint32) bool {
 	return uint64(id) == view%uint64(n)
+}
+
+func messageString(msg interface{}) string {
+	var cv uint64
+	if msg, ok := msg.(messages.MessageWithUI); ok {
+		if ui, err := parseMessageUI(msg); err == nil {
+			cv = ui.Counter
+		}
+	}
+
+	switch msg := msg.(type) {
+	case *messages.Request:
+		m := msg.GetMsg()
+		return fmt.Sprintf("REQUEST<client=%d seq=%d payload=%s>",
+			m.GetClientId(), m.GetSeq(), m.GetPayload())
+	case *messages.Reply:
+		m := msg.GetMsg()
+		return fmt.Sprintf("REPLY<replica=%d seq=%d result=%s>",
+			m.GetReplicaId(), m.GetSeq(), m.GetResult())
+	case *messages.Prepare:
+		m := msg.GetMsg()
+		req := m.GetRequest().GetMsg()
+		return fmt.Sprintf("PREPARE<cv=%d replica=%d view=%d client=%d seq=%d>",
+			cv, m.GetReplicaId(), m.GetView(),
+			req.GetClientId(), req.GetSeq())
+	case *messages.Commit:
+		m := msg.GetMsg()
+		req := m.GetRequest().GetMsg()
+		return fmt.Sprintf("COMMIT<cv=%d replica=%d primary=%d view=%d client=%d seq=%d>",
+			cv, m.GetReplicaId(), m.GetPrimaryId(), m.GetView(),
+			req.GetClientId(), req.GetSeq())
+	}
+	return "(unknown message)"
+}
+
+func makeLogger(id uint32) *logging.Logger {
+	logger := logging.MustGetLogger(module)
+	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
+	stringFormatter := logging.MustStringFormatter(logFormatString)
+	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
+	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
+
+	logger.SetBackend(formattedLoggerBackend)
+
+	formattedLoggerBackend.SetLevel(logging.DEBUG, module)
+
+	return logger
 }
