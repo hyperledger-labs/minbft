@@ -3,39 +3,16 @@ jobs:
   build:
     working_directory: ~/go/src/github.com/hyperledger-labs/minbft
     docker:
-      - image: circleci/buildpack-deps:bionic
-    environment:
-      SGX_SDK: /opt/intel/sgxsdk
+      - image: necblockchain/minbft
     steps:
-      - run:
-          name: Install Go
-          command: |
-            wget "https://golang.org/dl/go1.10.3.linux-amd64.tar.gz" -O golang.tar.gz
-            sudo tar -C /usr/local -xaf golang.tar.gz
-            rm golang.tar.gz
-            echo 'export GOPATH=$HOME/go' >> $BASH_ENV
-            echo 'export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH' >> $BASH_ENV
-      - run:
-          name: Install Intel SGX SDK
-          command: |
-            sudo apt-get update -q
-            sudo apt-get install -qy --no-install-recommends ca-certificates build-essential python wget git make pkg-config
-            wget "https://download.01.org/intel-sgx/linux-2.3.1/ubuntu18.04/sgx_linux_x64_sdk_2.3.101.46683.bin" -O sgx_installer.bin
-            chmod +x sgx_installer.bin
-            echo -e "no\n$(dirname $SGX_SDK)" | sudo ./sgx_installer.bin
-            rm sgx_installer.bin
-            echo '. $SGX_SDK/environment' >> $BASH_ENV
-      - run:
-          name: Install gometalinter
-          command: |
-            go get -u github.com/alecthomas/gometalinter
-            gometalinter --install
       - checkout
       - run:
           name: Test
+          shell: /bin/bash -leo pipefail
           command: |
             make build check SGX_MODE=SIM
       - run:
           name: Lint
+          shell: /bin/bash -leo pipefail
           command: |
             make lint || : allow failure
