@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
 	minbft "github.com/hyperledger-labs/minbft/core"
@@ -108,8 +109,27 @@ func run() error {
 		peerAddrs[uint32(p.ID)] = p.Addr
 	}
 
+	opts := []minbft.Option{}
+
+	if viper.GetString("logging.level") != "" {
+		logLevel, err := logging.LogLevel(viper.GetString("logging.level"))
+		if err != nil {
+			return fmt.Errorf("Failed to set logging level: %s", err)
+		}
+		opts = append(opts, minbft.WithLogLevel(logLevel))
+	}
+
+	if viper.GetString("logging.file") != "" {
+		logFile, err := os.OpenFile(viper.GetString("logging.file"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return fmt.Errorf("Failed to open logging file: %s", err)
+		}
+		defer logFile.Close()
+		opts = append(opts, minbft.WithLogFile(logFile))
+	}
+
 	replicaConnector := connector.New()
-	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger})
+	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger}, opts...)
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}

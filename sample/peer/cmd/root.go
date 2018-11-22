@@ -67,6 +67,14 @@ func init() {
 	rootCmd.PersistentFlags().String("keys", defKeysFile, "keyset file")
 	must(viper.BindPFlag("keys",
 		rootCmd.PersistentFlags().Lookup("keys")))
+
+	rootCmd.PersistentFlags().String("logging-level", "", "logging level")
+	must(viper.BindPFlag("logging.level",
+		rootCmd.PersistentFlags().Lookup("logging-level")))
+
+	rootCmd.PersistentFlags().String("logging-file", "", "logging file")
+	must(viper.BindPFlag("logging.file",
+		rootCmd.PersistentFlags().Lookup("logging-file")))
 }
 
 // initConfig reads in config file and ENV variables if set.

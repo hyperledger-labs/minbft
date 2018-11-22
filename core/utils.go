@@ -19,7 +19,6 @@ package minbft
 
 import (
 	"fmt"
-	"os"
 
 	logging "github.com/op/go-logging"
 
@@ -112,17 +111,17 @@ func messageString(msg interface{}) string {
 	return "(unknown message)"
 }
 
-func makeLogger(id uint32) *logging.Logger {
+func makeLogger(id uint32, opts Options) *logging.Logger {
 	logger := logging.MustGetLogger(module)
 	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
 	stringFormatter := logging.MustStringFormatter(logFormatString)
-	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backend := logging.NewLogBackend(opts.LogFile, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
 	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
 
 	logger.SetBackend(formattedLoggerBackend)
 
-	formattedLoggerBackend.SetLevel(logging.DEBUG, module)
+	formattedLoggerBackend.SetLevel(opts.LogLevel, module)
 
 	return logger
 }
