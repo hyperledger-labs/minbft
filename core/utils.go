@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/viper"
 	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -112,17 +113,36 @@ func messageString(msg interface{}) string {
 	return "(unknown message)"
 }
 
-func makeLogger(id uint32) *logging.Logger {
+func makeLogger(id uint32) (*logging.Logger, error) {
+	logLevel := logging.DEBUG
+	logBackend := os.Stdout
+	var err error
+
+	if viper.GetString("logging.level") != "" {
+		logLevel, err = logging.LogLevel(viper.GetString("logging.level"))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if viper.GetString("logging.file") != "" {
+		logBackend, err = os.OpenFile(viper.GetString("logging.file"),
+			os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	logger := logging.MustGetLogger(module)
 	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
 	stringFormatter := logging.MustStringFormatter(logFormatString)
-	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backend := logging.NewLogBackend(logBackend, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
 	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
 
 	logger.SetBackend(formattedLoggerBackend)
 
-	formattedLoggerBackend.SetLevel(logging.DEBUG, module)
+	formattedLoggerBackend.SetLevel(logLevel, module)
 
-	return logger
+	return logger, nil
 }
