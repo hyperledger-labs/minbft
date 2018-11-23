@@ -44,6 +44,20 @@ func (mr *MockMessageWithUIMockRecorder) AttachUI(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachUI", reflect.TypeOf((*MockMessageWithUI)(nil).AttachUI), arg0)
 }
 
+// EmbeddedMessages mocks base method
+func (m *MockMessageWithUI) EmbeddedMessages() []interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EmbeddedMessages")
+	ret0, _ := ret[0].([]interface{})
+	return ret0
+}
+
+// EmbeddedMessages indicates an expected call of EmbeddedMessages
+func (mr *MockMessageWithUIMockRecorder) EmbeddedMessages() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmbeddedMessages", reflect.TypeOf((*MockMessageWithUI)(nil).EmbeddedMessages))
+}
+
 // Payload mocks base method
 func (m *MockMessageWithUI) Payload() []byte {
 	m.ctrl.T.Helper()
@@ -107,6 +121,20 @@ func NewMockReplicaMessage(ctrl *gomock.Controller) *MockReplicaMessage {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockReplicaMessage) EXPECT() *MockReplicaMessageMockRecorder {
 	return m.recorder
+}
+
+// EmbeddedMessages mocks base method
+func (m *MockReplicaMessage) EmbeddedMessages() []interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EmbeddedMessages")
+	ret0, _ := ret[0].([]interface{})
+	return ret0
+}
+
+// EmbeddedMessages indicates an expected call of EmbeddedMessages
+func (mr *MockReplicaMessageMockRecorder) EmbeddedMessages() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmbeddedMessages", reflect.TypeOf((*MockReplicaMessage)(nil).EmbeddedMessages))
 }
 
 // ReplicaID mocks base method
