@@ -49,6 +49,15 @@ type MessageWithUI interface {
 	AttachUI(ui []byte)
 }
 
+// ViewMessage represents any message that has to be processed in a
+// specific view.
+//
+// View returns the view number, which the message has to be processed
+// in.
+type ViewMessage interface {
+	View() uint64
+}
+
 // MessageWithSignature represents any message with normal signature
 // attached
 //
@@ -71,7 +80,9 @@ var (
 	_ ReplicaMessage       = (*Reply)(nil)
 	_ MessageWithSignature = (*Reply)(nil)
 	_ MessageWithUI        = (*Prepare)(nil)
+	_ ViewMessage          = (*Prepare)(nil)
 	_ MessageWithUI        = (*Commit)(nil)
+	_ ViewMessage          = (*Commit)(nil)
 )
 
 // ClientID returns ID of the client created the message
@@ -148,6 +159,12 @@ func (m *Prepare) AttachUI(ui []byte) {
 	m.ReplicaUi = ui
 }
 
+// View returns the view number which this message has to be
+// processed.
+func (m *Prepare) View() uint64 {
+	return m.Msg.View
+}
+
 // ReplicaID returns ID of the replica created the message
 func (m *Commit) ReplicaID() uint32 {
 	return m.Msg.GetReplicaId()
@@ -170,6 +187,12 @@ func (m *Commit) UIBytes() []byte {
 // AttachUI attaches a serialized UI to the message
 func (m *Commit) AttachUI(ui []byte) {
 	m.ReplicaUi = ui
+}
+
+// View returns the view number which this message has to be
+// processed.
+func (m *Commit) View() uint64 {
+	return m.Msg.View
 }
 
 // Prepare extracts the corresponding Prepare message
