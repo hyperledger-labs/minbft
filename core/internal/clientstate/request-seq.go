@@ -44,7 +44,7 @@ func newSeqState() *seqState {
 	return s
 }
 
-func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
+func (s *seqState) CaptureRequestSeq(seq uint64) (new bool, release func()) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -56,7 +56,7 @@ func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
 				s.seqReleased.Wait()
 			}
 
-			return false
+			return false, nil
 		}
 
 		// The request ID might be new. Check if the greatest
@@ -71,24 +71,14 @@ func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
 
 		s.lastCapturedSeq = seq
 
-		return true
+		return true, func() {
+			s.Lock()
+			defer s.Unlock()
+
+			s.lastReleasedSeq = s.lastCapturedSeq
+			s.seqReleased.Broadcast()
+		}
 	}
-}
-
-func (s *seqState) ReleaseRequestSeq(seq uint64) error {
-	s.Lock()
-	defer s.Unlock()
-
-	if seq != s.lastCapturedSeq {
-		return fmt.Errorf("request ID is not the last captured")
-	} else if seq <= s.lastReleasedSeq {
-		return fmt.Errorf("request ID already released")
-	}
-
-	s.lastReleasedSeq = seq
-	s.seqReleased.Broadcast()
-
-	return nil
 }
 
 func (s *seqState) PrepareRequestSeq(seq uint64) (new bool, err error) {
