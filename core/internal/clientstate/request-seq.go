@@ -97,8 +97,8 @@ func (s *seqState) PrepareRequestSeq(seq uint64) (new bool, err error) {
 
 	if seq <= s.lastPreparedSeq {
 		return false, nil
-	} else if seq > s.lastReleasedSeq {
-		return false, fmt.Errorf("Request ID not captured/released")
+	} else if seq > s.lastCapturedSeq {
+		return false, fmt.Errorf("Request ID not captured")
 	}
 
 	s.lastPreparedSeq = seq

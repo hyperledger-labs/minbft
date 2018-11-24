@@ -71,7 +71,7 @@ func NewProvider() Provider {
 //
 // PrepareRequestSeq records the request identifier seq as prepared.
 // An identifier can only be prepared if it is greater than the last
-// prepared and has been captured and released before.
+// prepared and has been captured before.
 //
 // RetireRequestSeq records the request identifier seq as retired. An
 // identifier can only be retired if it is greater than the last
