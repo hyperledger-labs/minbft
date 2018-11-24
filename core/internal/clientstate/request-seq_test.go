@@ -140,15 +140,15 @@ func testPrepareRequestSeq(t *testing.T) {
 		desc string
 		seq  int
 
-		release bool
+		capture bool
 		prepare bool
 
 		new bool
 		ok  bool
 	}{{
-		desc:    "Release and prepare first ID",
+		desc:    "Capture and prepare first ID",
 		seq:     100,
-		release: true,
+		capture: true,
 		prepare: true,
 		new:     true,
 		ok:      true,
@@ -165,14 +165,14 @@ func testPrepareRequestSeq(t *testing.T) {
 		new:     false,
 		ok:      true,
 	}, {
-		desc:    "Prepare before release",
+		desc:    "Prepare before capture",
 		seq:     200,
 		prepare: true,
 		ok:      false,
 	}, {
-		desc:    "Release and prepare another ID",
+		desc:    "Capture and prepare another ID",
 		seq:     200,
-		release: true,
+		capture: true,
 		prepare: true,
 		new:     true,
 		ok:      true,
@@ -180,12 +180,14 @@ func testPrepareRequestSeq(t *testing.T) {
 
 	for _, c := range cases {
 		seq := uint64(c.seq)
-		if c.release {
+		if c.capture {
 			new := s.CaptureRequestSeq(seq)
 			require.True(t, new, c.desc)
 
-			err := s.ReleaseRequestSeq(seq)
-			require.NoError(t, err, c.desc)
+			go func() {
+				err := s.ReleaseRequestSeq(seq)
+				require.NoError(t, err, c.desc)
+			}()
 		}
 		if c.prepare {
 			new, err := s.PrepareRequestSeq(seq)

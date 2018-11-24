@@ -83,8 +83,7 @@ type requestSeqReleaser func(request *messages.Request)
 // It records the request identifier from the supplied message as
 // prepared. It returns true if the request identifier from the client
 // could not have been prepared before. The identifier must be
-// previously captured and released. It is safe to invoke
-// concurrently.
+// previously captured. It is safe to invoke concurrently.
 type requestSeqPreparer func(request *messages.Request) (new bool)
 
 // requestSeqRetirer records request identifier as retired.
@@ -114,6 +113,7 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 		if new = captureSeq(request); !new {
 			return false, nil
 		}
+		defer releaseSeq(request)
 
 		// TODO: A new request ID has arrived; the request
 		// timer should be re-/started in backup replicas at
@@ -129,11 +129,7 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 			}
 
 			handleGeneratedUIMessage(prepare)
-		}
 
-		releaseSeq(request)
-
-		if primary {
 			if new := prepareSeq(request); !new {
 				panic("Duplicate Prepare generated")
 			}
