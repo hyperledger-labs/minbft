@@ -234,7 +234,8 @@ func TestMakeCommitCollector(t *testing.T) {
 
 	mock.On("commitCounter", commit).Return(true, nil).Once()
 	mock.On("requestSeqRetirer", request).Return(false).Once()
-	assert.Panics(t, func() { collector(commit) }, "Request already accepted for execution")
+	err = collector(commit)
+	assert.NoError(t, err)
 
 	mock.On("commitCounter", commit).Return(true, nil).Once()
 	mock.On("requestSeqRetirer", request).Return(true).Once()
@@ -262,10 +263,11 @@ func TestMakeCommitCounter(t *testing.T) {
 			ok:        true,
 			done:      true,
 		}, {
-			desc:      "Extra Commit from another backup replica is ignored",
+			desc:      "Extra Commit from another backup replica",
 			prepareCV: 1,
 			replicaID: 2,
 			ok:        true,
+			done:      true,
 		}, {
 			desc:      "Commit from primary is not okay",
 			prepareCV: 2, // new Prepare
@@ -302,10 +304,11 @@ func TestMakeCommitCounter(t *testing.T) {
 			ok:        true,
 			done:      true,
 		}, {
-			desc:      "Extra Commit is ingnored",
+			desc:      "Extra Commit for the first request",
 			prepareCV: 1,
 			replicaID: 2,
 			ok:        true,
+			done:      true,
 		}},
 	}
 

@@ -48,12 +48,10 @@ type commitProcessor func(commit *messages.Commit) (new bool, err error)
 type commitCollector func(commit *messages.Commit) error
 
 // commitCounter counts matching Commit messages and signals as the
-// threshold to execute the operation is reached. The signal is
-// received only once and any subsequent Commit message for the
-// corresponding Prepare is simply ignored. All Commit messages are
-// assumed to be valid and do not have to have UI assigned. An error
-// is returned if any inconsistency detected. It is safe to invoke
-// concurrently.
+// threshold to execute the operation is reached. All Commit messages
+// are assumed to be valid and do not have to have UI assigned. An
+// error is returned if any inconsistency detected. It is safe to
+// invoke concurrently.
 type commitCounter func(commit *messages.Commit) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
@@ -120,8 +118,7 @@ func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer
 		request := commit.Request()
 
 		if new := retireSeq(request); !new {
-			// commitCounter should never let us reach here
-			panic("Request already accepted for execution")
+			return nil // request already accepted for execution
 		}
 
 		// TODO: This is probably the place to stop the
@@ -160,7 +157,7 @@ func makeCommitCounter(f uint32) commitCounter {
 		defer lock.Unlock()
 
 		if prepareCV <= lastDoneCV {
-			return false, nil // ignore extra Commit
+			return true, nil // ignore extra Commit
 		}
 
 		replicasCommitted := prepareStates[prepareCV]
