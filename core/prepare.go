@@ -93,8 +93,8 @@ func makePrepareProcessor(id uint32, view viewProvider, captureUI uiCapturer, pr
 				prepare.Msg.View, currentView)
 		}
 
-		if err = prepareSeq(request); err != nil {
-			return false, fmt.Errorf("Failed to check request ID: %s", err)
+		if new = prepareSeq(request); !new {
+			return false, fmt.Errorf("Request already prepared")
 		}
 
 		commit := &messages.Commit{

@@ -58,10 +58,11 @@ func (mr *MockStateMockRecorder) CaptureRequestSeq(arg0 interface{}) *gomock.Cal
 }
 
 // PrepareRequestSeq mocks base method
-func (m *MockState) PrepareRequestSeq(arg0 uint64) error {
+func (m *MockState) PrepareRequestSeq(arg0 uint64) (bool, error) {
 	ret := m.ctrl.Call(m, "PrepareRequestSeq", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // PrepareRequestSeq indicates an expected call of PrepareRequestSeq
@@ -94,10 +95,11 @@ func (mr *MockStateMockRecorder) ReplyChannel(arg0 interface{}) *gomock.Call {
 }
 
 // RetireRequestSeq mocks base method
-func (m *MockState) RetireRequestSeq(arg0 uint64) error {
+func (m *MockState) RetireRequestSeq(arg0 uint64) (bool, error) {
 	ret := m.ctrl.Call(m, "RetireRequestSeq", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // RetireRequestSeq indicates an expected call of RetireRequestSeq

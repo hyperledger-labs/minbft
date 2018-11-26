@@ -78,19 +78,22 @@ type requestSeqCapturer func(request *messages.Request) (new bool)
 // by requestSeqCapturer. It is safe to invoke concurrently.
 type requestSeqReleaser func(request *messages.Request)
 
-// requestSeqPreparer ensures request identifier has not been prepared.
+// requestSeqPreparer records request identifier as prepared.
 //
-// It succeeds only if it is guaranteed that the same request
-// identifier from the same client could not have been prepared
-// before. It is safe to invoke concurrently.
-type requestSeqPreparer func(request *messages.Request) error
+// It records the request identifier from the supplied message as
+// prepared. It returns true if the request identifier from the client
+// could not have been prepared before. The identifier must be
+// previously captured and released. It is safe to invoke
+// concurrently.
+type requestSeqPreparer func(request *messages.Request) (new bool)
 
-// requestSeqRetirer ensures request identifier has not been retired.
+// requestSeqRetirer records request identifier as retired.
 //
-// It succeeds only if it is guaranteed that the same request
-// identifier from the same client could not have been retired before.
-// It is safe to invoke concurrently.
-type requestSeqRetirer func(request *messages.Request) error
+// It records the request identifier from the supplied message as
+// retired. It returns true if the request identifier from the client
+// could not have been retired before. The identifier must be
+// previously prepared. It is safe to invoke concurrently.
+type requestSeqRetirer func(request *messages.Request) (new bool)
 
 // makeRequestValidator constructs an instance of requestValidator
 // using the supplied abstractions.
@@ -131,8 +134,8 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 		releaseSeq(request)
 
 		if primary {
-			if err := prepareSeq(request); err != nil {
-				panic(err)
+			if new := prepareSeq(request); !new {
+				panic("Duplicate Prepare generated")
 			}
 		}
 
@@ -216,21 +219,33 @@ func makeRequestSeqReleaser(provideClientState clientstate.Provider) requestSeqR
 // makeRequestSeqPreparer constructs an instance of requestSeqPreparer
 // using the supplied interface.
 func makeRequestSeqPreparer(provideClientState clientstate.Provider) requestSeqPreparer {
-	return func(request *messages.Request) error {
+	return func(request *messages.Request) (new bool) {
 		clientID := request.Msg.ClientId
 		seq := request.Msg.Seq
 
-		return provideClientState(clientID).PrepareRequestSeq(seq)
+		if new, err := provideClientState(clientID).PrepareRequestSeq(seq); err != nil {
+			panic(err)
+		} else if !new {
+			return false
+		}
+
+		return true
 	}
 }
 
 // makeRequestSeqRetirer constructs an instance of requestSeqRetirer
 // using the supplied interface.
 func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRetirer {
-	return func(request *messages.Request) error {
+	return func(request *messages.Request) (new bool) {
 		clientID := request.Msg.ClientId
 		seq := request.Msg.Seq
 
-		return provideClientState(clientID).RetireRequestSeq(seq)
+		if new, err := provideClientState(clientID).RetireRequestSeq(seq); err != nil {
+			panic(err)
+		} else if !new {
+			return false
+		}
+
+		return true
 	}
 }

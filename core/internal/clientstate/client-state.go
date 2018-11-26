@@ -90,8 +90,8 @@ func NewProvider() Provider {
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool)
 	ReleaseRequestSeq(seq uint64) error
-	PrepareRequestSeq(seq uint64) error
-	RetireRequestSeq(seq uint64) error
+	PrepareRequestSeq(seq uint64) (new bool, err error)
+	RetireRequestSeq(seq uint64) (new bool, err error)
 
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply

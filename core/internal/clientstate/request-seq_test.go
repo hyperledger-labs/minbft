@@ -143,23 +143,27 @@ func testPrepareRequestSeq(t *testing.T) {
 		release bool
 		prepare bool
 
-		ok bool
+		new bool
+		ok  bool
 	}{{
 		desc:    "Release and prepare first ID",
 		seq:     100,
 		release: true,
 		prepare: true,
+		new:     true,
 		ok:      true,
 	}, {
 		desc:    "Prepare the same ID",
 		seq:     100,
 		prepare: true,
-		ok:      false,
+		new:     false,
+		ok:      true,
 	}, {
 		desc:    "Prepare older ID",
 		seq:     50,
 		prepare: true,
-		ok:      false,
+		new:     false,
+		ok:      true,
 	}, {
 		desc:    "Prepare before release",
 		seq:     200,
@@ -170,6 +174,7 @@ func testPrepareRequestSeq(t *testing.T) {
 		seq:     200,
 		release: true,
 		prepare: true,
+		new:     true,
 		ok:      true,
 	}}
 
@@ -183,8 +188,9 @@ func testPrepareRequestSeq(t *testing.T) {
 			require.NoError(t, err, c.desc)
 		}
 		if c.prepare {
-			err := s.PrepareRequestSeq(seq)
+			new, err := s.PrepareRequestSeq(seq)
 			if c.ok {
+				require.Equal(t, c.new, new)
 				require.NoError(t, err, c.desc)
 			} else {
 				require.Error(t, err, c.desc)
@@ -203,23 +209,27 @@ func testRetireRequestSeq(t *testing.T) {
 		prepare bool
 		retire  bool
 
-		ok bool
+		new bool
+		ok  bool
 	}{{
 		desc:    "Prepare and retire first ID",
 		seq:     100,
 		prepare: true,
 		retire:  true,
+		new:     true,
 		ok:      true,
 	}, {
 		desc:   "Retire the same ID",
 		seq:    100,
 		retire: true,
-		ok:     false,
+		new:    false,
+		ok:     true,
 	}, {
 		desc:   "Retire older ID",
 		seq:    50,
 		retire: true,
-		ok:     false,
+		new:    false,
+		ok:     true,
 	}, {
 		desc:   "Retire before prepare",
 		seq:    200,
@@ -230,6 +240,7 @@ func testRetireRequestSeq(t *testing.T) {
 		seq:     200,
 		prepare: true,
 		retire:  true,
+		new:     true,
 		ok:      true,
 	}}
 
@@ -242,12 +253,14 @@ func testRetireRequestSeq(t *testing.T) {
 			err := s.ReleaseRequestSeq(seq)
 			require.NoError(t, err, c.desc)
 
-			err = s.PrepareRequestSeq(seq)
+			new, err = s.PrepareRequestSeq(seq)
+			require.True(t, new)
 			require.NoError(t, err, c.desc)
 		}
 		if c.retire {
-			err := s.RetireRequestSeq(seq)
+			new, err := s.RetireRequestSeq(seq)
 			if c.ok {
+				require.Equal(t, c.new, new)
 				require.NoError(t, err, c.desc)
 			} else {
 				require.Error(t, err, c.desc)

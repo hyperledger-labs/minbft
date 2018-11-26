@@ -72,7 +72,7 @@ func testMakeRequestProcessorPrimary(t *testing.T) {
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
 	mock.On("requestSeqReleaser", request).Once()
-	mock.On("requestSeqPreparer", request).Return(nil).Once()
+	mock.On("requestSeqPreparer", request).Return(true).Once()
 	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
@@ -121,9 +121,9 @@ func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32, view ui
 	releaseSeq := func(request *messages.Request) {
 		mock.MethodCalled("requestSeqReleaser", request)
 	}
-	prepareSeq := func(request *messages.Request) error {
+	prepareSeq := func(request *messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Error(0)
+		return args.Bool(0)
 	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
@@ -302,7 +302,7 @@ func TestMakeRequestSeqReleaser(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().ReleaseRequestSeq(seq).Return(fmt.Errorf("Invalid ID"))
+	state.EXPECT().ReleaseRequestSeq(seq).Return(fmt.Errorf("Error"))
 	assert.Panics(t, func() { releaseSeq(request) })
 
 	state.EXPECT().ReleaseRequestSeq(seq).Return(nil)
@@ -326,13 +326,16 @@ func TestMakeRequestSeqPreparer(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().PrepareRequestSeq(seq).Return(fmt.Errorf("old request ID"))
-	err := prepareSeq(request)
-	assert.Error(t, err)
+	state.EXPECT().PrepareRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	assert.Panics(t, func() { prepareSeq(request) })
 
-	state.EXPECT().PrepareRequestSeq(seq).Return(nil)
-	err = prepareSeq(request)
-	assert.NoError(t, err)
+	state.EXPECT().PrepareRequestSeq(seq).Return(false, nil)
+	new := prepareSeq(request)
+	assert.False(t, new)
+
+	state.EXPECT().PrepareRequestSeq(seq).Return(true, nil)
+	new = prepareSeq(request)
+	assert.True(t, new)
 }
 
 func TestMakeRequestSeqRetirer(t *testing.T) {
@@ -352,13 +355,16 @@ func TestMakeRequestSeqRetirer(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().RetireRequestSeq(seq).Return(fmt.Errorf("old request ID"))
-	err := retireSeq(request)
-	assert.Error(t, err)
+	state.EXPECT().RetireRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	assert.Panics(t, func() { retireSeq(request) })
 
-	state.EXPECT().RetireRequestSeq(seq).Return(nil)
-	err = retireSeq(request)
-	assert.NoError(t, err)
+	state.EXPECT().RetireRequestSeq(seq).Return(false, nil)
+	new := retireSeq(request)
+	assert.False(t, new)
+
+	state.EXPECT().RetireRequestSeq(seq).Return(true, nil)
+	new = retireSeq(request)
+	assert.True(t, new)
 }
 
 func TestMakeRequestReplier(t *testing.T) {
