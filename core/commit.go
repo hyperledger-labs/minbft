@@ -119,8 +119,9 @@ func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer
 
 		request := commit.Request()
 
-		if err := retireSeq(request); err != nil {
-			return fmt.Errorf("Failed to check request ID: %s", err)
+		if new := retireSeq(request); !new {
+			// commitCounter should never let us reach here
+			panic("Request already accepted for execution")
 		}
 
 		// TODO: This is probably the place to stop the

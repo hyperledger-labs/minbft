@@ -91,32 +91,32 @@ func (s *seqState) ReleaseRequestSeq(seq uint64) error {
 	return nil
 }
 
-func (s *seqState) PrepareRequestSeq(seq uint64) error {
+func (s *seqState) PrepareRequestSeq(seq uint64) (new bool, err error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if seq <= s.lastPreparedSeq {
-		return fmt.Errorf("old request ID")
+		return false, nil
 	} else if seq > s.lastReleasedSeq {
-		return fmt.Errorf("request ID not captured/released")
+		return false, fmt.Errorf("Request ID not captured/released")
 	}
 
 	s.lastPreparedSeq = seq
 
-	return nil
+	return true, nil
 }
 
-func (s *seqState) RetireRequestSeq(seq uint64) error {
+func (s *seqState) RetireRequestSeq(seq uint64) (new bool, err error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if seq <= s.lastRetiredSeq {
-		return fmt.Errorf("old request ID")
+		return false, nil
 	} else if seq > s.lastPreparedSeq {
-		return fmt.Errorf("request ID not prepared")
+		return false, fmt.Errorf("Request ID not prepared")
 	}
 
 	s.lastRetiredSeq = seq
 
-	return nil
+	return true, nil
 }

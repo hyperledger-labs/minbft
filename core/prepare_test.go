@@ -191,21 +191,21 @@ func testMakePrepareProcessorBackup(t *testing.T) {
 
 	mock.On("requestProcessor", request).Return(false, nil).Once()
 	mock.On("uiCapturer", prepare).Return(true, nil).Once()
-	mock.On("requestSeqPreparer", request).Return(fmt.Errorf("Old request ID")).Once()
+	mock.On("requestSeqPreparer", request).Return(false).Once()
 	mock.On("uiReleaser", prepare).Once()
 	_, err = process(prepare)
-	assert.Error(t, err, "Old request ID")
+	assert.Error(t, err, "Request already prepared")
 
 	mock.On("requestProcessor", request).Return(false, nil).Once()
 	mock.On("uiCapturer", prepare).Return(true, nil).Once()
-	mock.On("requestSeqPreparer", request).Return(nil).Once()
+	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("commitCollector", commit).Return(fmt.Errorf("Duplicated commit detected")).Once()
 	mock.On("uiReleaser", prepare).Once()
 	assert.Panics(t, func() { process(prepare) }, "Failed collecting own Commit")
 
 	mock.On("requestProcessor", request).Return(false, nil).Once()
 	mock.On("uiCapturer", prepare).Return(true, nil).Once()
-	mock.On("requestSeqPreparer", request).Return(nil).Once()
+	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("commitCollector", commit).Return(nil).Once()
 	mock.On("generatedUIMessageProcessor", commit).Once()
 	mock.On("uiReleaser", prepare).Once()
@@ -229,9 +229,9 @@ func setupMakePrepareProcessorMock(mock *testifymock.Mock, id uint32, view uint6
 		args := mock.MethodCalled("requestProcessor", request)
 		return args.Bool(0), args.Error(1)
 	}
-	prepareRequestSeq := func(request *messages.Request) error {
+	prepareRequestSeq := func(request *messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Error(0)
+		return args.Bool(0)
 	}
 	collectCommit := func(commit *messages.Commit) error {
 		args := mock.MethodCalled("commitCollector", commit)
