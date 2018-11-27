@@ -52,7 +52,7 @@ type Replica struct {
 }
 
 // New creates a new instance of replica node
-func New(id uint32, configer api.Configer, stack Stack) (*Replica, error) {
+func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replica, error) {
 	n := configer.N()
 	f := configer.F()
 
