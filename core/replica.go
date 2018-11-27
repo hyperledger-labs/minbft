@@ -60,6 +60,8 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 		return nil, fmt.Errorf("%d nodes is not enough to tolerate %d faulty", n, f)
 	}
 
+	logOpts := newOptions(opts...)
+
 	replica := &Replica{
 		id: id,
 		n:  n,
@@ -69,7 +71,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 		log: messagelog.New(),
 	}
 
-	logger := makeLogger(id)
+	logger := makeLogger(id, logOpts)
 	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
 	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
