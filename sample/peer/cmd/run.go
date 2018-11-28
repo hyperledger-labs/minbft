@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"github.com/a8m/envsubst"
+	logging "github.com/op/go-logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -72,6 +73,14 @@ func init() {
 		defUsigEnclaveFile, "USIG enclave file")
 	must(viper.BindPFlag("usig.enclaveFile",
 		runCmd.Flags().Lookup("usig-enclave-file")))
+
+	rootCmd.PersistentFlags().String("logging-level", "", "logging level")
+	must(viper.BindPFlag("logging.level",
+		rootCmd.PersistentFlags().Lookup("logging-level")))
+
+	rootCmd.PersistentFlags().String("logging-file", "", "logging file")
+	must(viper.BindPFlag("logging.file",
+		rootCmd.PersistentFlags().Lookup("logging-file")))
 }
 
 type replicaStack struct {
@@ -108,8 +117,12 @@ func run() error {
 		peerAddrs[uint32(p.ID)] = p.Addr
 	}
 
+	loggingOpts, err := getLoggingOptions()
+	if err != nil {
+		return fmt.Errorf("Failed to create logging options: %s", err)
+	}
 	replicaConnector := connector.New()
-	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger})
+	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger}, loggingOpts...)
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}
@@ -141,4 +154,26 @@ func run() error {
 	}
 
 	return <-srvErrChan
+}
+
+func getLoggingOptions() ([]minbft.Option, error) {
+	opts := []minbft.Option{}
+
+	if viper.GetString("logging.level") != "" {
+		logLevel, err := logging.LogLevel(viper.GetString("logging.level"))
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set logging level: %s", err)
+		}
+		opts = append(opts, minbft.WithLogLevel(logLevel))
+	}
+
+	if viper.GetString("logging.file") != "" {
+		logFile, err := os.OpenFile(viper.GetString("logging.file"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to open logging file: %s", err)
+		}
+		opts = append(opts, minbft.WithLogFile(logFile))
+	}
+
+	return opts, nil
 }
