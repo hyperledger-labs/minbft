@@ -40,7 +40,7 @@ func primaryID(n uint32, view uint64) uint32 {
 // viewForPrimary returns a random view given its primary ID
 func viewForPrimary(n uint32, id uint32) uint64 {
 	otherView := randView()
-	return otherView - otherView/uint64(n) + uint64(id)
+	return otherView - otherView%uint64(n) + uint64(id)
 }
 
 // randBackupID returns random backup replica ID
