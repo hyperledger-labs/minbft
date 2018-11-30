@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/messages"
-	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // commitValidator validates a Commit message.
@@ -165,8 +164,7 @@ func makeCommitCounter(f uint32) commitCounter {
 	return func(commit *messages.Commit) (done bool, err error) {
 		prepare := commit.Prepare()
 
-		prepareUI := new(usig.UI)
-		err = prepareUI.UnmarshalBinary(prepare.UIBytes())
+		prepareUI, err := parseMessageUI(prepare)
 		if err != nil {
 			panic(err) // valid Commit must have full valid Prepare
 		}
