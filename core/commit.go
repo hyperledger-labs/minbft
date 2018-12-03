@@ -47,18 +47,25 @@ type commitProcessor func(commit *messages.Commit) (new bool, err error)
 // internally consistent. It is safe to invoke concurrently.
 type commitApplier func(commit *messages.Commit) error
 
-// commitCollector accepts valid Commit messages and takes further
-// actions when the threshold of the required number of matching
-// Commit messages is reached. Supplied Commit messages do not have to
-// have UI assigned.
-type commitCollector func(commit *messages.Commit) error
+// commitmentCollector collects commitment on prepared Request.
+//
+// The supplied Prepare message is assumed to be valid and should have
+// a UI assigned. Once the threshold of matching commitments from
+// distinct replicas has been reached, it triggers further required
+// actions to complete the prepared Request. It is safe to invoke
+// concurrently.
+type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
 
-// commitCounter counts matching Commit messages and signals as the
-// threshold to execute the operation is reached. All Commit messages
-// are assumed to be valid and do not have to have UI assigned. An
-// error is returned if any inconsistency detected. It is safe to
-// invoke concurrently.
-type commitCounter func(commit *messages.Commit) (done bool, err error)
+// commitmentCounter counts commitments on prepared Request.
+//
+// The supplied Prepare message is assumed to be valid and should have
+// a UI assigned. The return value done indicates if enough
+// commitments from different replicas are counted for the supplied
+// Prepare, such that the threshold to execute the prepared operation
+// has been reached. Note that the supplied Prepare message implies a
+// commitment from the primary. An error is returned if any
+// inconsistency is detected. It is safe to invoke concurrently.
+type commitmentCounter func(replicaID uint32, prepare *messages.Prepare) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
@@ -113,9 +120,12 @@ func makeCommitProcessor(id uint32, processPrepare prepareProcessor, captureUI u
 
 // makeCommitApplier constructs an instance of commitApplier using the
 // supplied abstractions.
-func makeCommitApplier(collectCommit commitCollector) commitApplier {
+func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 	return func(commit *messages.Commit) error {
-		if err := collectCommit(commit); err != nil {
+		replicaID := commit.ReplicaID()
+		prepare := commit.Prepare()
+
+		if err := collectCommitment(replicaID, prepare); err != nil {
 			return fmt.Errorf("Commit cannot be taken into account: %s", err)
 		}
 
@@ -123,17 +133,17 @@ func makeCommitApplier(collectCommit commitCollector) commitApplier {
 	}
 }
 
-// makeCommitCollector constructs an instance of commitCollector using
-// the supplied abstractions.
-func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitCollector {
-	return func(commit *messages.Commit) error {
-		if done, err := countCommits(commit); err != nil {
+// makeCommitmentCollector constructs an instance of
+// commitmentCollector using the supplied abstractions.
+func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitmentCollector {
+	return func(replicaID uint32, prepare *messages.Prepare) error {
+		if done, err := countCommitment(replicaID, prepare); err != nil {
 			return err
 		} else if !done {
 			return nil
 		}
 
-		request := commit.Request()
+		request := prepare.Msg.Request
 
 		if new := retireSeq(request); !new {
 			return nil // request already accepted for execution
@@ -148,25 +158,25 @@ func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer
 	}
 }
 
-// makeCommitCounter constructs an instance of commitCounter given the
-// number of tolerated faulty nodes.
-func makeCommitCounter(f uint32) commitCounter {
+// makeCommitmentCounter constructs an instance of commitmentCounter
+// given the number of tolerated faulty nodes.
+func makeCommitmentCounter(f uint32) commitmentCounter {
 	// Replica ID -> committed
 	type replicasCommittedMap map[uint32]bool
 
 	var (
-		lock       sync.Mutex
-		lastDoneCV = uint64(0)
-		// Prepare UI -> replicasCommittedMap
+		lock sync.Mutex
+
+		lastDoneCV uint64
+
+		// Primary UI counter -> replicasCommittedMap
 		prepareStates = make(map[uint64]replicasCommittedMap)
 	)
 
-	return func(commit *messages.Commit) (done bool, err error) {
-		prepare := commit.Prepare()
-
+	return func(replicaID uint32, prepare *messages.Prepare) (done bool, err error) {
 		prepareUI, err := parseMessageUI(prepare)
 		if err != nil {
-			panic(err) // valid Commit must have full valid Prepare
+			panic(err)
 		}
 		prepareCV := prepareUI.Counter
 
@@ -174,7 +184,7 @@ func makeCommitCounter(f uint32) commitCounter {
 		defer lock.Unlock()
 
 		if prepareCV <= lastDoneCV {
-			return true, nil // ignore extra Commit
+			return true, nil // ignore extra commitment
 		}
 
 		replicasCommitted := prepareStates[prepareCV]
@@ -194,10 +204,10 @@ func makeCommitCounter(f uint32) commitCounter {
 			prepareStates[prepareCV] = replicasCommitted
 		}
 
-		if replicasCommitted[commit.ReplicaID()] {
-			return false, fmt.Errorf("Duplicated Commit detected")
+		if replicasCommitted[replicaID] {
+			return false, fmt.Errorf("Duplicated commitment")
 		}
-		replicasCommitted[commit.ReplicaID()] = true
+		replicasCommitted[replicaID] = true
 
 		if len(replicasCommitted) == int(f+1) {
 			if prepareCV != lastDoneCV+1 {
