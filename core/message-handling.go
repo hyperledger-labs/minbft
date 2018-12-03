@@ -104,10 +104,10 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	handleGeneratedMessage := makeGeneratedMessageHandler(log, clientStates, logger)
 
-	countCommits := makeCommitCounter(f)
+	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
 	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
-	collectCommit := makeCommitCollector(countCommits, retireSeq, executeRequest)
+	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, executeRequest)
 
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
@@ -116,7 +116,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
 
-	applyCommit := makeCommitApplier(collectCommit)
+	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, handleGeneratedUIMessage, applyCommit)
 	applyRequest := makeRequestApplier(id, n, view, handleGeneratedUIMessage, applyPrepare)
 
