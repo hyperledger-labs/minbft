@@ -34,12 +34,19 @@ type commitValidator func(commit *messages.Commit) error
 
 // commitProcessor processes a valid Commit message.
 //
-// It fully processes the supplied message in the context of the
-// current replica's state. The supplied message is assumed to be
-// authentic and internally consistent. The return value new indicates
-// if the message has not been processed by this replica before. It is
-// safe to invoke concurrently.
+// It fully processes the supplied message. The supplied message is
+// assumed to be authentic and internally consistent. The return value
+// new indicates if the message has not been processed by this replica
+// before. It is safe to invoke concurrently.
 type commitProcessor func(commit *messages.Commit) (new bool, err error)
+
+// commitApplier applies Commit message to current replica state.
+//
+// The supplied message is applied to the current replica state by
+// changing the state accordingly and producing any required side
+// effects. The supplied message is assumed to be authentic and
+// internally consistent. It is safe to invoke concurrently.
+type commitApplier func(commit *messages.Commit) error
 
 // commitCollector accepts valid Commit messages and takes further
 // actions when the threshold of the required number of matching
@@ -74,7 +81,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 	}
 }
 
-func makeCommitProcessor(id uint32, view viewProvider, captureUI uiCapturer, processPrepare prepareProcessor, collectCommit commitCollector) commitProcessor {
+func makeCommitProcessor(id uint32, processPrepare prepareProcessor, captureUI uiCapturer, view viewProvider, applyCommit commitApplier) commitProcessor {
 	return func(commit *messages.Commit) (new bool, err error) {
 		replicaID := commit.ReplicaID()
 
@@ -97,11 +104,23 @@ func makeCommitProcessor(id uint32, view viewProvider, captureUI uiCapturer, pro
 				commit.Msg.View, currentView)
 		}
 
-		if err := collectCommit(commit); err != nil {
-			return false, fmt.Errorf("Commit cannot be taken into account: %s", err)
+		if err := applyCommit(commit); err != nil {
+			return false, fmt.Errorf("Failed to apply Commit: %s", err)
 		}
 
-		return new, nil
+		return true, nil
+	}
+}
+
+// makeCommitApplier constructs an instance of commitApplier using the
+// supplied abstractions.
+func makeCommitApplier(collectCommit commitCollector) commitApplier {
+	return func(commit *messages.Commit) error {
+		if err := collectCommit(commit); err != nil {
+			return fmt.Errorf("Commit cannot be taken into account: %s", err)
+		}
+
+		return nil
 	}
 }
 

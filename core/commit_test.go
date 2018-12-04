@@ -119,11 +119,11 @@ func TestMakeCommitProcessor(t *testing.T) {
 		args := mock.MethodCalled("prepareProcessor", prepare)
 		return args.Bool(0), args.Error(1)
 	}
-	collectCommit := func(commit *messages.Commit) error {
-		args := mock.MethodCalled("collectCommit", commit)
+	applyCommit := func(commit *messages.Commit) error {
+		args := mock.MethodCalled("commitApplier", commit)
 		return args.Error(0)
 	}
-	process := makeCommitProcessor(id, provideView, captureUI, processPrepare, collectCommit)
+	process := makeCommitProcessor(id, processPrepare, captureUI, provideView, applyCommit)
 
 	prepareUIBytes := make([]byte, 1)
 	rand.Read(prepareUIBytes)
@@ -175,19 +175,51 @@ func TestMakeCommitProcessor(t *testing.T) {
 	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
 	mock.On("uiCapturer", commit).Return(true).Once()
 	mock.On("viewProvider").Return(view).Once()
-	mock.On("collectCommit", commit).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
 	mock.On("uiReleaser", commit).Once()
 	_, err = process(commit)
-	assert.Error(t, err, "Commit cannot be taken into account")
+	assert.Error(t, err, "Failed to apply Commit")
 
 	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
 	mock.On("uiCapturer", commit).Return(true).Once()
 	mock.On("viewProvider").Return(view).Once()
-	mock.On("collectCommit", commit).Return(nil).Once()
+	mock.On("commitApplier", commit).Return(nil).Once()
 	mock.On("uiReleaser", commit).Once()
 	new, err = process(commit)
 	assert.NoError(t, err)
 	assert.True(t, new)
+}
+
+func TestMakeCommitApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	collectCommit := func(commit *messages.Commit) error {
+		args := mock.MethodCalled("commitCollector", commit)
+		return args.Error(0)
+	}
+	apply := makeCommitApplier(collectCommit)
+
+	n := randN()
+	view := randView()
+	primary := primaryID(n, view)
+	id := randOtherReplicaID(primary, n)
+
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			View:      view,
+			ReplicaId: id,
+			PrimaryId: primary,
+		},
+	}
+
+	mock.On("commitCollector", commit).Return(fmt.Errorf("Error")).Once()
+	err := apply(commit)
+	assert.Error(t, err, "Failed to collect commitment")
+
+	mock.On("commitCollector", commit).Return(nil).Once()
+	err = apply(commit)
+	assert.NoError(t, err)
 }
 
 func TestMakeCommitCollector(t *testing.T) {
