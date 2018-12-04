@@ -117,9 +117,11 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
 
+	applyCommit := makeCommitApplier(collectCommit)
+
 	processRequest := makeRequestProcessor(id, n, view, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
 	processPrepare := makePrepareProcessor(id, view, captureUI, prepareSeq, processRequest, collectCommit, handleGeneratedUIMessage)
-	processCommit := makeCommitProcessor(id, view, captureUI, processPrepare, collectCommit)
+	processCommit := makeCommitProcessor(id, processPrepare, captureUI, view, applyCommit)
 	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)
 
 	replyRequest := makeRequestReplier(clientStates)
