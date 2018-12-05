@@ -118,8 +118,9 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	applyCommit := makeCommitApplier(collectCommit)
 	applyPrepare := makePrepareApplier(id, prepareSeq, handleGeneratedUIMessage, collectCommit)
+	applyRequest := makeRequestApplier(id, n, view, prepareSeq, handleGeneratedUIMessage)
 
-	processRequest := makeRequestProcessor(id, n, view, captureSeq, prepareSeq, handleGeneratedUIMessage)
+	processRequest := makeRequestProcessor(captureSeq, applyRequest)
 	processPrepare := makePrepareProcessor(id, processRequest, captureUI, view, applyPrepare)
 	processCommit := makeCommitProcessor(id, processPrepare, captureUI, view, applyCommit)
 	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)

@@ -37,17 +37,52 @@ func TestMakeRequestProcessor(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	ownView := randView()
-	otherView := randOtherView(ownView)
-	id := primaryID(n, ownView)
-
 	captureSeq := func(request *messages.Request) (new bool, release func()) {
 		args := mock.MethodCalled("requestSeqCapturer", request)
 		return args.Bool(0), func() {
 			mock.MethodCalled("requestSeqReleaser", request)
 		}
 	}
+	applyRequest := func(request *messages.Request) error {
+		args := mock.MethodCalled("requestApplier", request)
+		return args.Error(0)
+	}
+	process := makeRequestProcessor(captureSeq, applyRequest)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
+
+	mock.On("requestSeqCapturer", request).Return(false).Once()
+	new, err := process(request)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("requestSeqCapturer", request).Return(true).Once()
+	mock.On("requestApplier", request).Return(fmt.Errorf("Failed")).Once()
+	mock.On("requestSeqReleaser", request).Once()
+	_, err = process(request)
+	assert.Error(t, err, "Failed to apply Request")
+
+	mock.On("requestSeqCapturer", request).Return(true).Once()
+	mock.On("requestApplier", request).Return(nil).Once()
+	mock.On("requestSeqReleaser", request).Once()
+	new, err = process(request)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeRequestApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	ownView := randView()
+	otherView := randOtherView(ownView)
+	id := primaryID(n, ownView)
+
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
@@ -59,7 +94,7 @@ func TestMakeRequestProcessor(t *testing.T) {
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	process := makeRequestProcessor(id, n, provideView, captureSeq, prepareSeq, handleGeneratedUIMessage)
+	apply := makeRequestApplier(id, n, provideView, prepareSeq, handleGeneratedUIMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -74,26 +109,20 @@ func TestMakeRequestProcessor(t *testing.T) {
 		},
 	}
 
-	mock.On("requestSeqCapturer", request).Return(false).Once()
-	new, err := process(request)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("requestSeqCapturer", request).Return(true).Once()
 	mock.On("viewProvider").Return(otherView).Once()
-	mock.On("requestSeqReleaser", request).Once()
-	new, err = process(request)
+	err := apply(request)
 	assert.NoError(t, err)
-	assert.True(t, new)
 
-	mock.On("requestSeqCapturer", request).Return(true).Once()
 	mock.On("viewProvider").Return(ownView).Once()
-	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("requestSeqReleaser", request).Once()
-	new, err = process(request)
+	mock.On("requestSeqPreparer", request).Return(false).Once()
+	assert.Panics(t, func() { apply(request) }, "Duplicated Prepare generated")
+
+	mock.On("viewProvider").Return(ownView).Once()
+	mock.On("generatedUIMessageHandler", prepare).Once()
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	err = apply(request)
 	assert.NoError(t, err)
-	assert.True(t, new)
 }
 
 func TestMakeRequestValidator(t *testing.T) {

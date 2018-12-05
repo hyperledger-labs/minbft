@@ -18,6 +18,7 @@
 package minbft
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -41,12 +42,19 @@ type requestValidator func(request *messages.Request) error
 
 // requestProcessor processes a valid Request message.
 //
-// It fully processes the supplied message in the context of the
-// current replica's state. The supplied message is assumed to be
-// authentic and internally consistent. The return value new indicates
-// if the message has not been processed by this replica before. It is
-// safe to invoke concurrently.
+// It fully processes the supplied message. The supplied message is
+// assumed to be authentic and internally consistent. The return value
+// new indicates if the message has not been processed by this replica
+// before. It is safe to invoke concurrently.
 type requestProcessor func(request *messages.Request) (new bool, err error)
+
+// requestApplier applies Request message to current replica state.
+//
+// The supplied message is applied to the current replica state by
+// changing the state accordingly and producing any required messages
+// or side effects. The supplied message is assumed to be authentic
+// and internally consistent. It is safe to invoke concurrently.
+type requestApplier func(request *messages.Request) error
 
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
@@ -98,7 +106,7 @@ func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
 // makeRequestProcessor constructs an instance of requestProcessor
 // using id as the current replica ID, n as the total number of nodes,
 // and the supplied abstractions.
-func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeqCapturer, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestProcessor {
+func makeRequestProcessor(captureSeq requestSeqCapturer, applyRequest requestApplier) requestProcessor {
 	return func(request *messages.Request) (new bool, err error) {
 		new, releaseSeq := captureSeq(request)
 		if !new {
@@ -106,12 +114,21 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 		}
 		defer releaseSeq()
 
-		// TODO: A new request ID has arrived; the request
-		// timer should be re-/started in backup replicas at
-		// this point.
+		if err := applyRequest(request); err != nil {
+			return false, fmt.Errorf("Failed to apply Request: %s", err)
+		}
 
+		return true, nil
+	}
+}
+
+func makeRequestApplier(id, n uint32, view viewProvider, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestApplier {
+	return func(request *messages.Request) error {
 		view := view()
 		primary := isPrimary(view, id, n)
+
+		// TODO: A new Request has arrived; the request timer
+		// should be re-/started at this point.
 
 		if primary {
 			prepare := &messages.Prepare{
@@ -129,7 +146,7 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 			}
 		}
 
-		return true, nil
+		return nil
 	}
 }
 
