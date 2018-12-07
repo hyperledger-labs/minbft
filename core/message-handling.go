@@ -59,6 +59,15 @@ type messageValidator func(msg interface{}) error
 // safe to invoke concurrently.
 type messageProcessor func(msg interface{}) (new bool, err error)
 
+// replicaMessageApplier applies a replica message to current replica
+// state.
+//
+// The supplied message is applied to the current replica state by
+// changing the state accordingly and producing any required messages
+// or side effects. The supplied message is assumed to be authentic
+// and internally consistent. It is safe to invoke concurrently.
+type replicaMessageApplier func(msg messages.ReplicaMessage) error
+
 // messageReplier provides reply to a valid message.
 //
 // If there is any message to be produced in reply to the supplied
@@ -224,6 +233,23 @@ func makeMessageProcessor(processRequest requestProcessor, processPrepare prepar
 			return processPrepare(msg)
 		case *messages.Commit:
 			return processCommit(msg)
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
+// makeMessageApplier constructs an instance of messageApplier using
+// the supplied abstractions.
+func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
+	return func(msg messages.ReplicaMessage) error {
+		switch msg := msg.(type) {
+		case *messages.Prepare:
+			return applyPrepare(msg)
+		case *messages.Commit:
+			return applyCommit(msg)
+		case *messages.Reply:
+			return nil
 		default:
 			panic("Unknown message type")
 		}

@@ -253,6 +253,68 @@ func TestMakeMessageProcessor(t *testing.T) {
 	assert.True(t, new)
 }
 
+func TestMakeReplicaMessageApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	applyPrepare := func(msg *messages.Prepare) error {
+		args := mock.MethodCalled("prepareApplier", msg)
+		return args.Error(0)
+	}
+	applyCommit := func(msg *messages.Commit) error {
+		args := mock.MethodCalled("commitApplier", msg)
+		return args.Error(0)
+	}
+	apply := makeReplicaMessageApplier(applyPrepare, applyCommit)
+
+	reqSeq := rand.Uint64()
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: reqSeq,
+		},
+	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			Request: request,
+		},
+	}
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			Request: request,
+		},
+	}
+	reply := &messages.Reply{
+		Msg: &messages.Reply_M{
+			Seq: reqSeq,
+		},
+	}
+
+	msg := mock_messages.NewMockReplicaMessage(ctrl)
+	assert.Panics(t, func() { apply(msg) }, "Unknown message type")
+
+	mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
+	err := apply(prepare)
+	assert.Error(t, err, "Failed to apply Prepare")
+
+	mock.On("prepareApplier", prepare).Return(nil).Once()
+	err = apply(prepare)
+	assert.NoError(t, err)
+
+	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
+	err = apply(commit)
+	assert.Error(t, err, "Failed to apply Commit")
+
+	mock.On("commitApplier", commit).Return(nil).Once()
+	err = apply(commit)
+	assert.NoError(t, err)
+
+	err = apply(reply)
+	assert.NoError(t, err)
+}
+
 func TestMakeMessageReplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
