@@ -100,14 +100,15 @@ func TestMakeCommitProcessor(t *testing.T) {
 
 	n := randN()
 	view := randView()
+	otherView := randOtherView(view)
 	primary := primaryID(n, view)
-	id := randOtherReplicaID(primary, n)
+	backup := randOtherReplicaID(primary, n)
+	id := randOtherReplicaID(backup, n)
 
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
 	}
-	mock.On("viewProvider").Return(view)
 	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
 		args := mock.MethodCalled("uiCapturer", msg)
 		return args.Bool(0), func() {
@@ -122,73 +123,69 @@ func TestMakeCommitProcessor(t *testing.T) {
 		args := mock.MethodCalled("collectCommit", commit)
 		return args.Error(0)
 	}
-	handle := makeCommitProcessor(id, provideView, captureUI, processPrepare, collectCommit)
+	process := makeCommitProcessor(id, provideView, captureUI, processPrepare, collectCommit)
 
 	prepareUIBytes := make([]byte, 1)
 	rand.Read(prepareUIBytes)
-	makePrepareMsg := func(view uint64) *messages.Prepare {
-		return &messages.Prepare{
-			Msg: &messages.Prepare_M{
-				View:      view,
-				ReplicaId: primaryID(n, view),
-			},
-			ReplicaUi: prepareUIBytes,
-		}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			View:      view,
+			ReplicaId: primary,
+		},
+		ReplicaUi: prepareUIBytes,
 	}
-	makeCommitMsg := func(id uint32, view uint64) *messages.Commit {
-		return &messages.Commit{
-			Msg: &messages.Commit_M{
-				View:      view,
-				ReplicaId: id,
-				PrimaryId: primaryID(n, view),
-				PrimaryUi: prepareUIBytes,
-			},
-		}
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			View:      view,
+			ReplicaId: backup,
+			PrimaryId: primary,
+			PrimaryUi: prepareUIBytes,
+		},
+	}
+	ownCommit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			View:      view,
+			ReplicaId: id,
+			PrimaryId: primary,
+			PrimaryUi: prepareUIBytes,
+		},
 	}
 
-	otherPrimary := randOtherBackupID(id, n, view)
-	otherView := viewForPrimary(n, otherPrimary)
-	otherBackup := randOtherBackupID(id, n, otherView)
-	prepare := makePrepareMsg(otherView)
-	commit := makeCommitMsg(otherBackup, otherView)
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
-	mock.On("uiReleaser", commit).Once()
-	_, err := handle(commit)
-	assert.Error(t, err, "Commit is for different view")
-
-	commit = makeCommitMsg(id, view)
-	new, err := handle(commit)
+	new, err := process(ownCommit)
 	assert.NoError(t, err)
-	assert.False(t, new, "Own Commit")
-
-	otherBackup = randOtherBackupID(id, n, view)
-	prepare = makePrepareMsg(view)
-	commit = makeCommitMsg(otherBackup, view)
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(false, nil).Once()
-	new, err = handle(commit)
-	assert.NoError(t, err)
-	assert.False(t, new, "UI already processed")
+	assert.False(t, new, "Own message")
 
 	mock.On("prepareProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
-	_, err = handle(commit)
+	_, err = process(commit)
 	assert.Error(t, err, "Commit refers to invalid Prepare")
 
 	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
-	mock.On("collectCommit", commit).Return(fmt.Errorf("Duplicated Commit")).Once()
+	mock.On("uiCapturer", commit).Return(false).Once()
+	new, err = process(commit)
+	assert.NoError(t, err)
+	assert.False(t, new, "UI already processed")
+
+	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
+	mock.On("uiCapturer", commit).Return(true).Once()
+	mock.On("viewProvider").Return(otherView).Once()
 	mock.On("uiReleaser", commit).Once()
-	_, err = handle(commit)
+	_, err = process(commit)
+	assert.Error(t, err, "Commit is for different view")
+
+	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
+	mock.On("uiCapturer", commit).Return(true).Once()
+	mock.On("viewProvider").Return(view).Once()
+	mock.On("collectCommit", commit).Return(fmt.Errorf("Error")).Once()
+	mock.On("uiReleaser", commit).Once()
+	_, err = process(commit)
 	assert.Error(t, err, "Commit cannot be taken into account")
 
 	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
+	mock.On("uiCapturer", commit).Return(true).Once()
+	mock.On("viewProvider").Return(view).Once()
 	mock.On("collectCommit", commit).Return(nil).Once()
 	mock.On("uiReleaser", commit).Once()
-	new, err = handle(commit)
+	new, err = process(commit)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }
