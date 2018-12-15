@@ -94,7 +94,32 @@ func TestMakePrepareProcessor(t *testing.T) {
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
 
-	process := setupMakePrepareProcessorMock(mock, id)
+	processRequest := func(request *messages.Request) (new bool, err error) {
+		args := mock.MethodCalled("requestProcessor", request)
+		return args.Bool(0), args.Error(1)
+	}
+	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
+		args := mock.MethodCalled("uiCapturer", msg)
+		return args.Bool(0), func() {
+			mock.MethodCalled("uiReleaser", msg)
+		}
+	}
+	provideView := func() uint64 {
+		args := mock.MethodCalled("viewProvider")
+		return args.Get(0).(uint64)
+	}
+	prepareRequestSeq := func(request *messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqPreparer", request)
+		return args.Bool(0)
+	}
+	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("generatedUIMessageProcessor", msg)
+	}
+	collectCommit := func(commit *messages.Commit) error {
+		args := mock.MethodCalled("commitCollector", commit)
+		return args.Error(0)
+	}
+	process := makePrepareProcessor(id, provideView, captureUI, prepareRequestSeq, processRequest, collectCommit, handleGeneratedUIMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -171,33 +196,4 @@ func TestMakePrepareProcessor(t *testing.T) {
 	new, err = process(prepare)
 	assert.NoError(t, err)
 	assert.True(t, new)
-}
-
-func setupMakePrepareProcessorMock(mock *testifymock.Mock, id uint32) prepareProcessor {
-	provideView := func() uint64 {
-		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64)
-	}
-	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
-		args := mock.MethodCalled("uiCapturer", msg)
-		return args.Bool(0), func() {
-			mock.MethodCalled("uiReleaser", msg)
-		}
-	}
-	processRequest := func(request *messages.Request) (new bool, err error) {
-		args := mock.MethodCalled("requestProcessor", request)
-		return args.Bool(0), args.Error(1)
-	}
-	prepareRequestSeq := func(request *messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Bool(0)
-	}
-	collectCommit := func(commit *messages.Commit) error {
-		args := mock.MethodCalled("commitCollector", commit)
-		return args.Error(0)
-	}
-	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
-		mock.MethodCalled("generatedUIMessageProcessor", msg)
-	}
-	return makePrepareProcessor(id, provideView, captureUI, prepareRequestSeq, processRequest, collectCommit, handleGeneratedUIMessage)
 }
