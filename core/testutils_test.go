@@ -53,11 +53,6 @@ func viewForPrimary(n uint32, id uint32) uint64 {
 	return otherView - otherView%uint64(n) + uint64(id)
 }
 
-// randBackupID returns random backup replica ID
-func randBackupID(n uint32, view uint64) uint32 {
-	return randOtherReplicaID(primaryID(n, view), n)
-}
-
 // randOtherReplicaID returns an ID of some other replica
 func randOtherReplicaID(id, n uint32) uint32 {
 	offset := rand.Intn(int(n)-1) + 1
