@@ -199,6 +199,13 @@ func TestMakePrepareApplier(t *testing.T) {
 			Seq: rand.Uint64(),
 		},
 	}
+	ownPrepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			View:      viewForPrimary(n, id),
+			ReplicaId: id,
+			Request:   request,
+		},
+	}
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{
 			View:      view,
@@ -218,6 +225,14 @@ func TestMakePrepareApplier(t *testing.T) {
 	mock.On("requestSeqPreparer", request).Return(false).Once()
 	err := apply(prepare)
 	assert.Error(t, err, "Request ID already prepared")
+
+	mock.On("requestSeqPreparer", request).Return(false).Once()
+	err = apply(ownPrepare)
+	assert.Error(t, err, "Request ID already prepared")
+
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	err = apply(ownPrepare)
+	assert.NoError(t, err)
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
