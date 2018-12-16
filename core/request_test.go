@@ -34,82 +34,52 @@ import (
 )
 
 func TestMakeRequestProcessor(t *testing.T) {
-	t.Run("Primary", testMakeRequestProcessorPrimary)
-	t.Run("Backup", testMakeRequestProcessorBackup)
-}
-
-func testMakeRequestProcessorPrimary(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	n := randN()
-	view := randView()
-	id := primaryID(n, view)
-	process := setupMakeRequestProcessorMock(mock, id, n, view)
-	clientID := rand.Uint32()
-	seq := rand.Uint64()
+	ownView := randView()
+	otherView := randOtherView(ownView)
+	id := primaryID(n, ownView)
+
+	process := setupMakeRequestProcessorMock(mock, id, n)
+
 	request := &messages.Request{
 		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      seq,
+			Seq: rand.Uint64(),
 		},
 	}
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{
-			View:      view,
-			ReplicaId: uint32(id),
+			View:      ownView,
+			ReplicaId: id,
 			Request:   request,
 		},
 	}
 
-	// Already captured request ID
 	mock.On("requestSeqCapturer", request).Return(false).Once()
 	new, err := process(request)
 	assert.NoError(t, err)
 	assert.False(t, new)
 
-	// New Request
 	mock.On("requestSeqCapturer", request).Return(true).Once()
+	mock.On("viewProvider").Return(otherView).Once()
+	mock.On("requestSeqReleaser", request).Once()
+	new, err = process(request)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	mock.On("requestSeqCapturer", request).Return(true).Once()
+	mock.On("viewProvider").Return(ownView).Once()
+	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
 	mock.On("requestSeqReleaser", request).Once()
-	mock.On("requestSeqPreparer", request).Return(true).Once()
 	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }
 
-func testMakeRequestProcessorBackup(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	n := randN()
-	view := randView()
-	id := randBackupID(n, view)
-	process := setupMakeRequestProcessorMock(mock, id, n, view)
-	clientID := rand.Uint32()
-	seq := rand.Uint64()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      seq,
-		},
-	}
-
-	// Already captured request ID
-	mock.On("requestSeqCapturer", request).Return(false).Once()
-	new, err := process(request)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	// New Request
-	mock.On("requestSeqCapturer", request).Return(true).Once()
-	mock.On("requestSeqReleaser", request).Once()
-	new, err = process(request)
-	assert.NoError(t, err)
-	assert.True(t, new)
-}
-
-func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32, view uint64) requestProcessor {
+func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32) requestProcessor {
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
@@ -127,7 +97,6 @@ func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32, view ui
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	mock.On("viewProvider").Return(view)
 	return makeRequestProcessor(id, n, provideView, captureSeq, prepareSeq, handleGeneratedUIMessage)
 }
 
