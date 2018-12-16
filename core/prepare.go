@@ -112,11 +112,17 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, handleGenerate
 			return fmt.Errorf("Request already prepared")
 		}
 
+		primaryID := prepare.ReplicaID()
+
+		if id == primaryID {
+			return nil // primary does not generate Commit
+		}
+
 		commit := &messages.Commit{
 			Msg: &messages.Commit_M{
 				View:      prepare.Msg.View,
 				ReplicaId: id,
-				PrimaryId: prepare.ReplicaID(),
+				PrimaryId: primaryID,
 				Request:   prepare.Msg.Request,
 				PrimaryUi: prepare.UIBytes(),
 			},
