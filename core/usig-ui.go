@@ -58,11 +58,7 @@ func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 
 		peerState := providePeerState(replicaID)
 
-		return peerState.CaptureUI(ui), func() {
-			if err := peerState.ReleaseUI(ui); err != nil {
-				panic(err)
-			}
-		}
+		return peerState.CaptureUI(ui)
 	}
 }
 
