@@ -42,7 +42,24 @@ func TestMakeRequestProcessor(t *testing.T) {
 	otherView := randOtherView(ownView)
 	id := primaryID(n, ownView)
 
-	process := setupMakeRequestProcessorMock(mock, id, n)
+	captureSeq := func(request *messages.Request) (new bool, release func()) {
+		args := mock.MethodCalled("requestSeqCapturer", request)
+		return args.Bool(0), func() {
+			mock.MethodCalled("requestSeqReleaser", request)
+		}
+	}
+	provideView := func() uint64 {
+		args := mock.MethodCalled("viewProvider")
+		return args.Get(0).(uint64)
+	}
+	prepareSeq := func(request *messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqPreparer", request)
+		return args.Bool(0)
+	}
+	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("generatedUIMessageHandler", msg)
+	}
+	process := makeRequestProcessor(id, n, provideView, captureSeq, prepareSeq, handleGeneratedUIMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -77,27 +94,6 @@ func TestMakeRequestProcessor(t *testing.T) {
 	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
-}
-
-func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32) requestProcessor {
-	provideView := func() uint64 {
-		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64)
-	}
-	captureSeq := func(request *messages.Request) (new bool, release func()) {
-		args := mock.MethodCalled("requestSeqCapturer", request)
-		return args.Bool(0), func() {
-			mock.MethodCalled("requestSeqReleaser", request)
-		}
-	}
-	prepareSeq := func(request *messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Bool(0)
-	}
-	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
-		mock.MethodCalled("generatedUIMessageHandler", msg)
-	}
-	return makeRequestProcessor(id, n, provideView, captureSeq, prepareSeq, handleGeneratedUIMessage)
 }
 
 func TestMakeRequestValidator(t *testing.T) {
