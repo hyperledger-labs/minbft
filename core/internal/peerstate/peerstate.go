@@ -17,7 +17,6 @@
 package peerstate
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/usig"
@@ -58,15 +57,11 @@ func NewProvider() Provider {
 // UI that is captured for the first time has to be released before it
 // can be captured again. If the UI cannot be captured immediately, it
 // will block until the UI can be captured. The return value new
-// indicates if the UI has not been captured and released before.
-//
-// ReleaseUI releases the last captured new USIG unique identifier ui
-// so that the subsequent or the same UI can be captured. It is an
-// error attempting to release a UI that has not been captured before
-// or to release the same UI more than once.
+// indicates if the UI has not been captured and released before. In
+// that case, the newly captured UI has to be released by invoking the
+// returned release function.
 type State interface {
-	CaptureUI(ui *usig.UI) (new bool)
-	ReleaseUI(ui *usig.UI) error
+	CaptureUI(ui *usig.UI) (new bool, release func())
 }
 
 // New creates a new instance of peer replica state representation.
@@ -83,7 +78,7 @@ type peerState struct {
 	released       *sync.Cond
 }
 
-func (s *peerState) CaptureUI(ui *usig.UI) (new bool) {
+func (s *peerState) CaptureUI(ui *usig.UI) (new bool, release func()) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -99,26 +94,16 @@ func (s *peerState) CaptureUI(ui *usig.UI) (new bool) {
 			s.released.Wait()
 		}
 
-		return false
+		return false, nil
 	}
 
 	s.lastCapturedCV = ui.Counter
 
-	return true
-}
+	return true, func() {
+		s.Lock()
+		defer s.Unlock()
 
-func (s *peerState) ReleaseUI(ui *usig.UI) error {
-	s.Lock()
-	defer s.Unlock()
-
-	if ui.Counter != s.lastCapturedCV {
-		return fmt.Errorf("UI is not the last captured")
-	} else if ui.Counter <= s.lastReleasedCV {
-		return fmt.Errorf("UI already released")
+		s.lastReleasedCV = s.lastCapturedCV
+		s.released.Broadcast()
 	}
-
-	s.lastReleasedCV = ui.Counter
-	s.released.Broadcast()
-
-	return nil
 }
