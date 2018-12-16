@@ -100,9 +100,6 @@ func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
 // and the supplied abstractions.
 func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeqCapturer, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestProcessor {
 	return func(request *messages.Request) (new bool, err error) {
-		view := view()
-		primary := isPrimary(view, id, n)
-
 		new, releaseSeq := captureSeq(request)
 		if !new {
 			return false, nil
@@ -112,6 +109,9 @@ func makeRequestProcessor(id, n uint32, view viewProvider, captureSeq requestSeq
 		// TODO: A new request ID has arrived; the request
 		// timer should be re-/started in backup replicas at
 		// this point.
+
+		view := view()
+		primary := isPrimary(view, id, n)
 
 		if primary {
 			prepare := &messages.Prepare{
