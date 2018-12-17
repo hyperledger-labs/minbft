@@ -2,15 +2,24 @@
 > Environment variables substitution for Go. see docs [below](#docs)
 
 #### Installation:
-```sh
-$ go get github.com/a8m/envsubst/cmd/envsubst
+```console
+go get github.com/a8m/envsubst/cmd/envsubst
 ```
+
+The `envsubst` binary is also available via Github releases
+```console
+curl -L https://github.com/a8m/envsubst/releases/download/v1.0.0/envsubst-`uname -s`-`uname -m` -o envsubst
+chmod +x envsubst
+sudo mv envsubst /usr/local/bin
+```
+
+
 
 #### Using via cli
 ```sh
-$ envsubst < input.tmpl > output.text
-$ echo 'welcome $HOME ${USER:=a8m}' | envsubst
-$ envsubst -help
+envsubst < input.tmpl > output.text
+echo 'welcome $HOME ${USER:=a8m}' | envsubst
+envsubst -help
 ```
 
 #### Imposing restrictions
@@ -47,14 +56,16 @@ func main() {
 
 |__Expression__     | __Meaning__    |
 | ----------------- | -------------- |
-|`${var}`	   | Value of var (same as `$var`)
+|`${var}`           | Value of var (same as `$var`)
 |`${var-$DEFAULT}`  | If var not set, evaluate expression as $DEFAULT
 |`${var:-$DEFAULT}` | If var not set or is empty, evaluate expression as $DEFAULT
 |`${var=$DEFAULT}`  | If var not set, evaluate expression as $DEFAULT
 |`${var:=$DEFAULT}` | If var not set or is empty, evaluate expression as $DEFAULT
-|`${var+$OTHER}`	   | If var set, evaluate expression as $OTHER, otherwise as empty string
+|`${var+$OTHER}`    | If var set, evaluate expression as $OTHER, otherwise as empty string
 |`${var:+$OTHER}`   | If var set, evaluate expression as $OTHER, otherwise as empty string
-<sub>table taken from [here](http://www.tldp.org/LDP/abs/html/refcards.html#AEN22728)</sub>
+|`$$var`            | Escape expressions. Result will be `$var`. 
+
+<sub>Most of the rows in this table were taken from [here](http://www.tldp.org/LDP/abs/html/refcards.html#AEN22728)</sub>
 
 ### See also
 
