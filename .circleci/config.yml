@@ -17,4 +17,4 @@ jobs:
           name: Lint
           shell: /bin/bash -leo pipefail
           command: |
-            make lint || : allow failure
+            make lint
