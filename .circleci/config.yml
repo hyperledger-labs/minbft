@@ -4,15 +4,17 @@ jobs:
     working_directory: ~/go/src/github.com/hyperledger-labs/minbft
     docker:
       - image: necblockchain/minbft
+    environment:
+      SGX_MODE: SIM
     steps:
       - checkout
       - run:
           name: Test
           shell: /bin/bash -leo pipefail
           command: |
-            make build check SGX_MODE=SIM
+            make build check
       - run:
           name: Lint
           shell: /bin/bash -leo pipefail
           command: |
-            make lint || : allow failure
+            make lint
