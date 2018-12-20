@@ -210,10 +210,6 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 		replicasCommitted[replicaID] = true
 
 		if len(replicasCommitted) == int(f+1) {
-			if prepareCV != lastDoneCV+1 {
-				panic("Request must be accepted in sequence assigned by primary")
-			}
-
 			delete(prepareStates, prepareCV)
 			lastDoneCV++
 
