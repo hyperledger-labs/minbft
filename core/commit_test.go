@@ -292,7 +292,12 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}{
 		// f=1
 		1: {{
-			// Commitment from primary replica is implied
+			desc:      "Commitment from primary",
+			prepareCV: 1,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
 			desc:      "One commitment from backup replica is enough",
 			prepareCV: 1,
 			replicaID: 1,
@@ -304,19 +309,26 @@ func TestMakeCommitmentCounter(t *testing.T) {
 			replicaID: 2,
 			ok:        true,
 			done:      true,
-		}, {
-			desc:      "Commitment from primary is duplication",
-			prepareCV: 2, // new Prepare
-			replicaID: 0, // primary is always replica 0 for this test
-			ok:        false,
 		}},
 
 		// f=2
 		2: {{
+			desc:      "Commitment from primary",
+			prepareCV: 1,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
 			desc:      "First commitment from backup replica",
 			prepareCV: 1,
 			replicaID: 1,
 			ok:        true,
+		}, {
+			desc:      "Another commitment from primary",
+			prepareCV: 2,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
 		}, {
 			desc:      "Another commitment for another Prepare",
 			prepareCV: 2,
