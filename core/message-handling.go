@@ -208,7 +208,7 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 		case *messages.Commit:
 			return validateCommit(msg)
 		default:
-			return fmt.Errorf("Unknown message type")
+			panic("Unknown message type")
 		}
 	}
 }
@@ -225,7 +225,7 @@ func makeMessageProcessor(processRequest requestProcessor, processPrepare prepar
 		case *messages.Commit:
 			return processCommit(msg)
 		default:
-			return false, fmt.Errorf("Unknown message type")
+			panic("Unknown message type")
 		}
 	}
 }
@@ -246,11 +246,10 @@ func makeMessageReplier(replyRequest requestReplier) messageReplier {
 			}()
 			return outChan, nil
 		case *messages.Prepare, *messages.Commit:
+			return nil, nil
 		default:
-			return nil, fmt.Errorf("Unknown message type")
+			panic("Unknown message type")
 		}
-
-		return nil, nil
 	}
 }
 

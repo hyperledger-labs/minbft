@@ -147,11 +147,10 @@ func TestMakeMessageValidator(t *testing.T) {
 		},
 	}
 
-	err := validateMessage(struct{}{})
-	assert.Error(t, err, "Unknown message type")
+	assert.Panics(t, func() { validateMessage(struct{}{}) }, "Unknown message type")
 
 	mock.On("requestValidator", request).Return(fmt.Errorf("Error")).Once()
-	err = validateMessage(request)
+	err := validateMessage(request)
 	assert.Error(t, err, "Invalid Request")
 
 	mock.On("requestValidator", request).Return(nil).Once()
@@ -209,11 +208,10 @@ func TestMakeMessageProcessor(t *testing.T) {
 		},
 	}
 
-	_, err := processMessage(struct{}{})
-	assert.Error(t, err, "Unknown message type")
+	assert.Panics(t, func() { processMessage(struct{}{}) }, "Unknown message type")
 
 	mock.On("requestProcessor", request).Return(false, fmt.Errorf("Error")).Once()
-	_, err = processMessage(request)
+	_, err := processMessage(request)
 	assert.Error(t, err, "Invalid Request")
 
 	mock.On("requestProcessor", request).Return(false, nil).Once()
@@ -287,8 +285,7 @@ func TestMakeMessageReplier(t *testing.T) {
 
 	replyMessage := makeMessageReplier(replyRequest)
 
-	_, err := replyMessage(struct{}{})
-	assert.Error(t, err)
+	assert.Panics(t, func() { replyMessage(struct{}{}) }, "Unknown message type")
 
 	replyChan := make(chan *messages.Reply, 1)
 	replyChan <- reply
