@@ -62,9 +62,8 @@ type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
 // a UI assigned. The return value done indicates if enough
 // commitments from different replicas are counted for the supplied
 // Prepare, such that the threshold to execute the prepared operation
-// has been reached. Note that the supplied Prepare message implies a
-// commitment from the primary. An error is returned if any
-// inconsistency is detected. It is safe to invoke concurrently.
+// has been reached. An error is returned if any inconsistency is
+// detected. It is safe to invoke concurrently.
 type commitmentCounter func(replicaID uint32, prepare *messages.Prepare) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
@@ -189,18 +188,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 
 		replicasCommitted := prepareStates[prepareCV]
 		if replicasCommitted == nil {
-			// Every Commit message must include an
-			// equivalent of a corresponding Prepare
-			// message, which in turn signifies a
-			// commitment from the primary replica to the
-			// assigned order of request execution.
-			// Therefore the extracted Prepare message is
-			// treated as a virtual Commit from the
-			// primary, thus the primary replica is
-			// initially marked in the map.
-			replicasCommitted = map[uint32]bool{
-				prepare.Msg.ReplicaId: true,
-			}
+			replicasCommitted = make(replicasCommittedMap)
 			prepareStates[prepareCV] = replicasCommitted
 		}
 

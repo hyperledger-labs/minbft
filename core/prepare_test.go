@@ -185,6 +185,10 @@ func TestMakePrepareApplier(t *testing.T) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
 		return args.Bool(0)
 	}
+	collectCommitment := func(id uint32, prepare *messages.Prepare) error {
+		args := mock.MethodCalled("commitmentCollector", id, prepare)
+		return args.Error(0)
+	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
@@ -192,7 +196,7 @@ func TestMakePrepareApplier(t *testing.T) {
 		args := mock.MethodCalled("commitApplier", commit)
 		return args.Error(0)
 	}
-	apply := makePrepareApplier(id, prepareRequestSeq, handleGeneratedUIMessage, applyCommit)
+	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedUIMessage, applyCommit)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -231,14 +235,27 @@ func TestMakePrepareApplier(t *testing.T) {
 	assert.Error(t, err, "Request ID already prepared")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitmentCollector", id, ownPrepare).Return(fmt.Errorf("Error")).Once()
+	err = apply(ownPrepare)
+	assert.Error(t, err, "Failed to collect commitment")
+
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitmentCollector", id, ownPrepare).Return(nil).Once()
 	err = apply(ownPrepare)
 	assert.NoError(t, err)
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitmentCollector", primary, prepare).Return(fmt.Errorf("Error")).Once()
+	err = apply(prepare)
+	assert.Error(t, err, "Failed to collect commitment")
+
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
 	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
 	assert.Panics(t, func() { apply(prepare) }, "Failed to apply own Commit")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
 	mock.On("commitApplier", commit).Return(nil).Once()
 	mock.On("generatedUIMessageHandler", commit).Once()
 	err = apply(prepare)

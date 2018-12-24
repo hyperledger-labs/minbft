@@ -106,13 +106,17 @@ func makePrepareProcessor(id uint32, processRequest requestProcessor, captureUI 
 
 // makePrepareApplier constructs an instance of prepareApplier using
 // id as the current replica ID, and the supplied abstract interfaces.
-func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler, applyCommit commitApplier) prepareApplier {
+func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedUIMessage generatedUIMessageHandler, applyCommit commitApplier) prepareApplier {
 	return func(prepare *messages.Prepare) error {
 		if new := prepareSeq(prepare.Msg.Request); !new {
 			return fmt.Errorf("Request already prepared")
 		}
 
 		primaryID := prepare.ReplicaID()
+
+		if err := collectCommitment(primaryID, prepare); err != nil {
+			return fmt.Errorf("Prepare cannot be taken into account: %s", err)
+		}
 
 		if id == primaryID {
 			return nil // primary does not generate Commit
