@@ -87,14 +87,14 @@ func TestMakeRequestApplier(t *testing.T) {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
 	}
-	prepareSeq := func(request *messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Bool(0)
-	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	apply := makeRequestApplier(id, n, provideView, prepareSeq, handleGeneratedUIMessage)
+	applyPrepare := func(prepare *messages.Prepare) error {
+		args := mock.MethodCalled("prepareApplier", prepare)
+		return args.Error(0)
+	}
+	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, applyPrepare)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -115,12 +115,12 @@ func TestMakeRequestApplier(t *testing.T) {
 
 	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("requestSeqPreparer", request).Return(false).Once()
-	assert.Panics(t, func() { apply(request) }, "Duplicated Prepare generated")
+	mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
+	assert.Panics(t, func() { apply(request) }, "Failed to apply generated Prepare")
 
 	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("prepareApplier", prepare).Return(nil).Once()
 	err = apply(request)
 	assert.NoError(t, err)
 }

@@ -122,7 +122,7 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, applyRequest requestApp
 	}
 }
 
-func makeRequestApplier(id, n uint32, view viewProvider, prepareSeq requestSeqPreparer, handleGeneratedUIMessage generatedUIMessageHandler) requestApplier {
+func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, applyPrepare prepareApplier) requestApplier {
 	return func(request *messages.Request) error {
 		view := view()
 		primary := isPrimary(view, id, n)
@@ -141,8 +141,8 @@ func makeRequestApplier(id, n uint32, view viewProvider, prepareSeq requestSeqPr
 
 			handleGeneratedUIMessage(prepare)
 
-			if new := prepareSeq(request); !new {
-				panic("Duplicate Prepare generated")
+			if err := applyPrepare(prepare); err != nil {
+				panic(fmt.Errorf("Failed to apply generated Prepare: %s", err))
 			}
 		}
 
