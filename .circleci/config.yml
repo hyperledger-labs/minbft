@@ -3,18 +3,41 @@ jobs:
   build:
     working_directory: ~/go/src/github.com/hyperledger-labs/minbft
     docker:
-      - image: necblockchain/minbft
+      - image: circleci/buildpack-deps:bionic-curl
     environment:
+      GO_URL: https://dl.google.com/go/go1.10.4.linux-amd64.tar.gz
+      SGX_SDK_URL: https://download.01.org/intel-sgx/linux-2.3.1/ubuntu18.04/sgx_linux_x64_sdk_2.3.101.46683.bin
+      GOMETALINTER_URL: https://github.com/alecthomas/gometalinter/releases/download/v2.0.11/gometalinter-2.0.11-linux-amd64.tar.gz
       SGX_MODE: SIM
     steps:
+      - run:
+          name: Install Go
+          command: |
+            curl $GO_URL | sudo tar -C /usr/local -xzf -
+            echo 'export GOPATH=$HOME/go' >> $BASH_ENV
+            echo 'export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH' >> $BASH_ENV
+      - run:
+          name: Install Intel SGX SDK
+          command: |
+            sudo apt-get update
+            sudo apt-get -y install build-essential python pkg-config
+            curl $SGX_SDK_URL -o sgx_linux_x64_sdk.bin
+            chmod +x sgx_linux_x64_sdk.bin
+            printf "no\n/opt/intel\n" | sudo ./sgx_linux_x64_sdk.bin
+            rm sgx_linux_x64_sdk.bin
+            echo ". /opt/intel/sgxsdk/environment" >> $BASH_ENV
+      - run:
+          name: Install gometalinter
+          command: |
+            sudo mkdir /opt/gometalinter
+            curl -L $GOMETALINTER_URL | sudo tar --strip-components=1 -C /opt/gometalinter -xzf -
+            echo 'export PATH=/opt/gometalinter:$PATH' >> $BASH_ENV
       - checkout
       - run:
           name: Test
-          shell: /bin/bash -leo pipefail
           command: |
             make build check
       - run:
           name: Lint
-          shell: /bin/bash -leo pipefail
           command: |
             make lint
