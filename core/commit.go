@@ -31,14 +31,6 @@ import (
 // side-effect. It is safe to invoke concurrently.
 type commitValidator func(commit *messages.Commit) error
 
-// commitProcessor processes a valid Commit message.
-//
-// It fully processes the supplied message. The supplied message is
-// assumed to be authentic and internally consistent. The return value
-// new indicates if the message has not been processed by this replica
-// before. It is safe to invoke concurrently.
-type commitProcessor func(commit *messages.Commit) (new bool, err error)
-
 // commitApplier applies Commit message to current replica state.
 //
 // The supplied message is applied to the current replica state by
@@ -83,37 +75,6 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 		}
 
 		return nil
-	}
-}
-
-func makeCommitProcessor(id uint32, processPrepare prepareProcessor, captureUI uiCapturer, view viewProvider, applyCommit commitApplier) commitProcessor {
-	return func(commit *messages.Commit) (new bool, err error) {
-		replicaID := commit.ReplicaID()
-
-		if replicaID == id {
-			return false, nil
-		}
-
-		if _, err := processPrepare(commit.Prepare()); err != nil {
-			return false, fmt.Errorf("Failed to process Prepare: %s", err)
-		}
-
-		new, releaseUI := captureUI(commit)
-		if !new {
-			return false, nil
-		}
-		defer releaseUI()
-
-		if currentView := view(); commit.Msg.View != currentView {
-			return false, fmt.Errorf("Commit is for view %d, current view is %d",
-				commit.Msg.View, currentView)
-		}
-
-		if err := applyCommit(commit); err != nil {
-			return false, fmt.Errorf("Failed to apply Commit: %s", err)
-		}
-
-		return true, nil
 	}
 }
 
