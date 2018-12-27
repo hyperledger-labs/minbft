@@ -30,14 +30,6 @@ import (
 // side-effect. It is safe to invoke concurrently.
 type prepareValidator func(prepare *messages.Prepare) error
 
-// prepareProcessor processes a valid Prepare message.
-//
-// It fully processes the supplied message. The supplied message is
-// assumed to be authentic and internally consistent. The return value
-// new indicates if the message has not been processed by this replica
-// before. It is safe to invoke concurrently.
-type prepareProcessor func(prepare *messages.Prepare) (new bool, err error)
-
 // prepareApplier applies Prepare message to current replica state.
 //
 // The supplied message is applied to the current replica state by
@@ -67,40 +59,6 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 		}
 
 		return nil
-	}
-}
-
-// makePrepareProcessor constructs an instance of prepareProcessor
-// using id as the current replica ID, and the supplied abstract
-// interfaces.
-func makePrepareProcessor(id uint32, processRequest requestProcessor, captureUI uiCapturer, view viewProvider, applyPrepare prepareApplier) prepareProcessor {
-	return func(prepare *messages.Prepare) (new bool, err error) {
-		if prepare.Msg.ReplicaId == id {
-			return false, nil
-		}
-
-		if _, err := processRequest(prepare.Msg.Request); err != nil {
-			return false, fmt.Errorf("Failed to process request: %s", err)
-		}
-
-		new, releaseUI := captureUI(prepare)
-		if !new {
-			return false, nil
-		}
-		defer releaseUI()
-
-		currentView := view()
-
-		if prepare.Msg.View != currentView {
-			return false, fmt.Errorf("Prepare is for view %d, current view is %d",
-				prepare.Msg.View, currentView)
-		}
-
-		if err := applyPrepare(prepare); err != nil {
-			return false, fmt.Errorf("Failed to apply Prepare: %s", err)
-		}
-
-		return true, nil
 	}
 }
 
