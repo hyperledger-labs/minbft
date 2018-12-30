@@ -535,33 +535,28 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	assignUI := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("uiAssigner", msg)
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
-	msg := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: rand.Uint32(),
-		},
-	}
+	msg := mock_messages.NewMockMessageWithUI(ctrl)
 
 	uiBytes := make([]byte, 1)
 	rand.Read(uiBytes)
-	msgWithUI := &messages.Prepare{
-		Msg:       msg.Msg,
-		ReplicaUi: uiBytes,
-	}
+	msg.EXPECT().AttachUI(uiBytes)
 
 	mock.On("uiAssigner", msg).Run(func(args testifymock.Arguments) {
 		m := args.Get(0).(messages.MessageWithUI)
 		m.AttachUI(uiBytes)
 	}).Once()
-	mock.On("generatedMessageHandler", msgWithUI).Once()
+	mock.On("generatedMessageHandler", msg).Once()
 	handleGeneratedUIMessage(msg)
 }
 
@@ -582,7 +577,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		mockMsg := msg.(*mock_messages.MockMessageWithUI)
 		mockMsg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		log = append(log, msg.(messages.MessageWithUI))
 	}
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
@@ -593,7 +588,8 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < nrMessages; i++ {
-				handleGeneratedUIMessage(mock_messages.NewMockMessageWithUI(ctrl))
+				msg := mock_messages.NewMockMessageWithUI(ctrl)
+				handleGeneratedUIMessage(msg)
 			}
 		}()
 	}
@@ -609,7 +605,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 	}
 }
 
-func TestMakeGeneratedMessageHandler(t *testing.T) {
+func TestMakeGeneratedMessageConsumer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -622,7 +618,7 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 		return clientState
 	}
 
-	handle := makeGeneratedMessageHandler(log, clientStates, logging.MustGetLogger(module))
+	consume := makeGeneratedMessageConsumer(log, clientStates)
 
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{
@@ -643,11 +639,37 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 	}
 
 	clientState.EXPECT().AddReply(reply).Return(nil)
-	handle(reply)
+	consume(reply)
 
 	clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
-	assert.Panics(t, func() { handle(reply) })
+	assert.Panics(t, func() { consume(reply) })
 
 	log.EXPECT().Append(msg)
-	handle(prepare)
+	consume(prepare)
+}
+
+func TestMakeGeneratedMessageHandler(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg)
+		return args.Error(0)
+	}
+	consume := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageConsumer", msg)
+	}
+	handle := makeGeneratedMessageHandler(applyReplicaMessage, consume, logging.MustGetLogger(module))
+
+	msg := mock_messages.NewMockReplicaMessage(ctrl)
+
+	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
+	assert.Panics(t, func() { handle(msg) }, "Failed to apply generated message")
+
+	mock.On("replicaMessageApplier", msg).Return(nil).Once()
+	mock.On("generatedMessageConsumer", msg).Once()
+	handle(msg)
 }

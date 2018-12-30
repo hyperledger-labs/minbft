@@ -64,7 +64,7 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 
 // makePrepareApplier constructs an instance of prepareApplier using
 // id as the current replica ID, and the supplied abstract interfaces.
-func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedUIMessage generatedUIMessageHandler, applyCommit commitApplier) prepareApplier {
+func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareApplier {
 	return func(prepare *messages.Prepare) error {
 		if new := prepareSeq(prepare.Msg.Request); !new {
 			return fmt.Errorf("Request already prepared")
@@ -88,10 +88,6 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 				Request:   prepare.Msg.Request,
 				PrimaryUi: prepare.UIBytes(),
 			},
-		}
-
-		if err := applyCommit(commit); err != nil {
-			panic(fmt.Errorf("Failed to apply generated Commit: %s", err))
 		}
 
 		handleGeneratedUIMessage(commit)

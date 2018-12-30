@@ -103,11 +103,7 @@ func TestMakePrepareApplier(t *testing.T) {
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	applyCommit := func(commit *messages.Commit) error {
-		args := mock.MethodCalled("commitApplier", commit)
-		return args.Error(0)
-	}
-	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedUIMessage, applyCommit)
+	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedUIMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -162,12 +158,6 @@ func TestMakePrepareApplier(t *testing.T) {
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
-	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
-	assert.Panics(t, func() { apply(prepare) }, "Failed to apply own Commit")
-
-	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
-	mock.On("commitApplier", commit).Return(nil).Once()
 	mock.On("generatedUIMessageHandler", commit).Once()
 	err = apply(prepare)
 	assert.NoError(t, err)

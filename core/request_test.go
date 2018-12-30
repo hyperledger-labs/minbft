@@ -90,11 +90,7 @@ func TestMakeRequestApplier(t *testing.T) {
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	applyPrepare := func(prepare *messages.Prepare) error {
-		args := mock.MethodCalled("prepareApplier", prepare)
-		return args.Error(0)
-	}
-	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, applyPrepare)
+	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -115,12 +111,6 @@ func TestMakeRequestApplier(t *testing.T) {
 
 	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
-	assert.Panics(t, func() { apply(request) }, "Failed to apply generated Prepare")
-
-	mock.On("viewProvider").Return(ownView).Once()
-	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("prepareApplier", prepare).Return(nil).Once()
 	err = apply(request)
 	assert.NoError(t, err)
 }
@@ -193,10 +183,9 @@ func TestMakeRequestExecutor(t *testing.T) {
 		mock.MethodCalled("replicaMessageSigner", msg)
 		msg.AttachSignature(expectedSignature)
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-
 	requestExecutor := makeRequestExecutor(replicaID, execute, sign, handleGeneratedMessage)
 
 	resultChan := make(chan []byte, 1)
