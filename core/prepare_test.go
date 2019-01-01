@@ -108,18 +108,11 @@ func TestMakePrepareProcessor(t *testing.T) {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
 	}
-	prepareRequestSeq := func(request *messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Bool(0)
-	}
-	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
-		mock.MethodCalled("generatedUIMessageProcessor", msg)
-	}
-	collectCommit := func(commit *messages.Commit) error {
-		args := mock.MethodCalled("commitCollector", commit)
+	applyPrepare := func(prepare *messages.Prepare) error {
+		args := mock.MethodCalled("prepareApplier", prepare)
 		return args.Error(0)
 	}
-	process := makePrepareProcessor(id, provideView, captureUI, prepareRequestSeq, processRequest, collectCommit, handleGeneratedUIMessage)
+	process := makePrepareProcessor(id, processRequest, captureUI, provideView, applyPrepare)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -137,14 +130,6 @@ func TestMakePrepareProcessor(t *testing.T) {
 		Msg: &messages.Prepare_M{
 			View:      viewForPrimary(n, id),
 			ReplicaId: id,
-			Request:   request,
-		},
-	}
-	commit := &messages.Commit{
-		Msg: &messages.Commit_M{
-			View:      view,
-			ReplicaId: id,
-			PrimaryId: primary,
 			Request:   request,
 		},
 	}
@@ -173,27 +158,74 @@ func TestMakePrepareProcessor(t *testing.T) {
 	mock.On("requestProcessor", request).Return(false, nil).Once()
 	mock.On("uiCapturer", prepare).Return(true).Once()
 	mock.On("viewProvider").Return(view).Once()
-	mock.On("requestSeqPreparer", request).Return(false).Once()
+	mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
 	mock.On("uiReleaser", prepare).Once()
 	_, err = process(prepare)
-	assert.Error(t, err, "Request ID already prepared")
+	assert.Error(t, err, "Failed to apply Prepare")
 
 	mock.On("requestProcessor", request).Return(false, nil).Once()
 	mock.On("uiCapturer", prepare).Return(true).Once()
 	mock.On("viewProvider").Return(view).Once()
-	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitCollector", commit).Return(fmt.Errorf("Error")).Once()
-	mock.On("uiReleaser", prepare).Once()
-	assert.Panics(t, func() { process(prepare) }, "Failed to collect own Commit")
-
-	mock.On("requestProcessor", request).Return(false, nil).Once()
-	mock.On("uiCapturer", prepare).Return(true).Once()
-	mock.On("viewProvider").Return(view).Once()
-	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitCollector", commit).Return(nil).Once()
-	mock.On("generatedUIMessageProcessor", commit).Once()
+	mock.On("prepareApplier", prepare).Return(nil).Once()
 	mock.On("uiReleaser", prepare).Once()
 	new, err = process(prepare)
 	assert.NoError(t, err)
 	assert.True(t, new)
+}
+
+func TestMakePrepareApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	view := randView()
+	primary := primaryID(n, view)
+	id := randOtherReplicaID(primary, n)
+	prepareRequestSeq := func(request *messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqPreparer", request)
+		return args.Bool(0)
+	}
+	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+		mock.MethodCalled("generatedUIMessageHandler", msg)
+	}
+	collectCommit := func(commit *messages.Commit) error {
+		args := mock.MethodCalled("commitCollector", commit)
+		return args.Error(0)
+	}
+	apply := makePrepareApplier(id, prepareRequestSeq, handleGeneratedUIMessage, collectCommit)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			View:      view,
+			ReplicaId: primary,
+			Request:   request,
+		},
+	}
+	commit := &messages.Commit{
+		Msg: &messages.Commit_M{
+			View:      view,
+			ReplicaId: id,
+			PrimaryId: primary,
+			Request:   request,
+		},
+	}
+
+	mock.On("requestSeqPreparer", request).Return(false).Once()
+	err := apply(prepare)
+	assert.Error(t, err, "Request ID already prepared")
+
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitCollector", commit).Return(fmt.Errorf("Error")).Once()
+	assert.Panics(t, func() { apply(prepare) }, "Failed to collect own Commit")
+
+	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("commitCollector", commit).Return(nil).Once()
+	mock.On("generatedUIMessageHandler", commit).Once()
+	err = apply(prepare)
+	assert.NoError(t, err)
 }
