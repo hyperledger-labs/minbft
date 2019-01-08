@@ -29,9 +29,7 @@ jobs:
       - run:
           name: Install gometalinter
           command: |
-            sudo mkdir /opt/gometalinter
-            curl -sL $GOMETALINTER_URL | sudo tar -xzf - --strip-components=1 -C /opt/gometalinter
-            echo 'export PATH=/opt/gometalinter:$PATH' >> $BASH_ENV
+            curl -sL $GOMETALINTER_URL | sudo tar -xzf - --strip-components=1 -C /usr/local/bin
       - checkout
       - run:
           name: Test
