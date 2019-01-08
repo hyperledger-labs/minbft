@@ -115,7 +115,7 @@ sudo apt-get install build-essential pkg-config
 
 ### Golang ###
 
-`go1.10` is used to build this project. For installation instructions
+`go1.11` is used to build this project. For installation instructions
 please visit [this page](https://golang.org/doc/install). Please make
 sure to export `GOPATH` environment variable, e.g. by adding the
 following line to `~/.profile`:
