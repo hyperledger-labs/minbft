@@ -7,7 +7,7 @@ jobs:
     environment:
       GO_URL: https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz
       SGX_SDK_URL: https://download.01.org/intel-sgx/linux-2.3.1/ubuntu18.04/sgx_linux_x64_sdk_2.3.101.46683.bin
-      GOMETALINTER_URL: https://github.com/alecthomas/gometalinter/releases/download/v2.0.11/gometalinter-2.0.11-linux-amd64.tar.gz
+      GOMETALINTER_URL: https://github.com/alecthomas/gometalinter/releases/download/v2.0.12/gometalinter-2.0.12-linux-amd64.tar.gz
       SGX_MODE: SIM
     steps:
       - run:
