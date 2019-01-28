@@ -44,6 +44,7 @@ var _ api.MessageStreamHandler = (*Replica)(nil)
 type Replica struct {
 	id uint32 // replica ID, unique in range [0,n)
 	n  uint32 // total number of nodes
+	f  uint32 // number of tolerable faulty nodes
 
 	stack Stack
 
@@ -65,6 +66,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 	replica := &Replica{
 		id: id,
 		n:  n,
+		f:  f,
 
 		stack: stack,
 
@@ -80,6 +82,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 
 // Start begins message exchange with peer replicas
 func (r *Replica) Start() error {
+	f := uint32(0)
 	for i := uint32(0); i < r.n; i++ {
 		if i == r.id {
 			continue
@@ -87,7 +90,13 @@ func (r *Replica) Start() error {
 		out := make(chan []byte)
 		sh, err := r.stack.ReplicaMessageStreamHandler(i)
 		if err != nil {
-			return fmt.Errorf("Error getting peer replica %d message stream handler: %s", i, err)
+			f++
+			if f <= r.f {
+				fmt.Printf("Error getting peer replica %d message stream handler: %s\n", i, err)
+				continue
+			} else {
+				return fmt.Errorf("Error getting connection failures from more than %d peer replicas", r.f)
+			}
 		}
 		// Reply stream is not used for replica-to-replica
 		// communication, thus return value is ignored. Each
@@ -96,7 +105,13 @@ func (r *Replica) Start() error {
 		// connected.
 		_, err = sh.HandleMessageStream(out)
 		if err != nil {
-			return fmt.Errorf("Error establishing connection to peer replica %d: %s", i, err)
+			f++
+			if f <= r.f {
+				fmt.Printf("Error establishing connection to peer replica %d: %s\n", i, err)
+				continue
+			} else {
+				return fmt.Errorf("Error getting connection failures from more than %d peer replicas", r.f)
+			}
 		}
 
 		go func() {
