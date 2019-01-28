@@ -64,8 +64,8 @@ func (c *ReplicaConnector) SetReplicaClient(replicaID uint32, client proto.Chann
 
 // ConnectReplica establishes a connection to a replica by its gRPC
 // target (address).
-func (c *ReplicaConnector) ConnectReplica(replicaID uint32, target string, dialOpts ...grpc.DialOption) error {
-	connection, err := grpc.Dial(target, dialOpts...)
+func (c *ReplicaConnector) ConnectReplica(ctx context.Context, replicaID uint32, target string, dialOpts ...grpc.DialOption) error {
+	connection, err := grpc.DialContext(ctx, target, dialOpts...)
 	if err != nil {
 		return fmt.Errorf("Failed to dial replica: %s", err)
 	}
@@ -77,9 +77,9 @@ func (c *ReplicaConnector) ConnectReplica(replicaID uint32, target string, dialO
 
 // ConnectManyReplicas establishes a connection to many replicas given
 // a map from a replica ID to its gRPC target (address).
-func (c *ReplicaConnector) ConnectManyReplicas(targets map[uint32]string, dialOpts ...grpc.DialOption) error {
+func (c *ReplicaConnector) ConnectManyReplicas(ctx context.Context, targets map[uint32]string, dialOpts ...grpc.DialOption) error {
 	for id, target := range targets {
-		err := c.ConnectReplica(id, target, dialOpts...)
+		err := c.ConnectReplica(ctx, id, target, dialOpts...)
 		if err != nil {
 			return err
 		}

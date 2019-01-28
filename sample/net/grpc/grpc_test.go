@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
@@ -42,7 +43,7 @@ func TestReplicaMessageStreamHandler(t *testing.T) {
 	defer stopLoopServers(servers)
 
 	replicaConnector := connector.New()
-	err := replicaConnector.ConnectManyReplicas(addrs, grpc.WithInsecure(), grpc.WithBlock())
+	err := replicaConnector.ConnectManyReplicas(context.Background(), addrs, grpc.WithInsecure(), grpc.WithBlock())
 	require.NoError(t, err)
 
 	inChannels := prepareInChannels(msgs)
@@ -61,7 +62,7 @@ func TestReplicaServer(t *testing.T) {
 
 	msgs := makeTestMessages(1, nrMessages)
 	replicaConnector := connector.New()
-	err := replicaConnector.ConnectReplica(uint32(0), addr, grpc.WithInsecure(), grpc.WithBlock())
+	err := replicaConnector.ConnectReplica(context.Background(), uint32(0), addr, grpc.WithInsecure(), grpc.WithBlock())
 	require.NoError(t, err)
 
 	inChannels := prepareInChannels(msgs)

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -90,7 +92,9 @@ func request(req []byte) ([]byte, error) {
 
 	rc := connector.New()
 
-	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure(), grpc.WithBlock())
+	ctx := context.Background()
+	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
+	err = rc.ConnectManyReplicas(ctx, peerAddrs, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
 	}
