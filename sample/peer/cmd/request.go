@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client"
@@ -90,7 +91,7 @@ func request(req []byte) ([]byte, error) {
 
 	rc := connector.New()
 
-	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure(), grpc.WithBlock())
+	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5 * time.Second))
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
 	}

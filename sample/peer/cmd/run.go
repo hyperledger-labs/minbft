@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/a8m/envsubst"
 	logging "github.com/op/go-logging"
@@ -144,7 +145,7 @@ func run() error {
 	}()
 
 	delete(peerAddrs, id) // avoid connecting back to this replica
-	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5 * time.Second)}
 	if err := replicaConnector.ConnectManyReplicas(peerAddrs, dialOpts...); err != nil {
 		return fmt.Errorf("Failed to connect to peers: %s", err)
 	}
