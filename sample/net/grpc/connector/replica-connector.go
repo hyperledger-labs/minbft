@@ -77,14 +77,13 @@ func (c *ReplicaConnector) ConnectReplica(replicaID uint32, target string, dialO
 
 // ConnectManyReplicas establishes a connection to many replicas given
 // a map from a replica ID to its gRPC target (address).
-func (c *ReplicaConnector) ConnectManyReplicas(targets map[uint32]string, dialOpts ...grpc.DialOption) error {
+func (c *ReplicaConnector) ConnectManyReplicas(targets map[uint32]string, dialOpts ...grpc.DialOption) {
 	for id, target := range targets {
 		err := c.ConnectReplica(id, target, dialOpts...)
 		if err != nil {
-			return err
+			fmt.Printf("Faled to connect peer %d: %s\n", id, err)
 		}
 	}
-	return nil
 }
 
 // messageStramHandler is a local representation of the replica for

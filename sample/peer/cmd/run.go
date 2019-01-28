@@ -146,9 +146,7 @@ func run() error {
 
 	delete(peerAddrs, id) // avoid connecting back to this replica
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5 * time.Second)}
-	if err := replicaConnector.ConnectManyReplicas(peerAddrs, dialOpts...); err != nil {
-		return fmt.Errorf("Failed to connect to peers: %s", err)
-	}
+	replicaConnector.ConnectManyReplicas(peerAddrs, dialOpts...)
 
 	if err := replica.Start(); err != nil {
 		return fmt.Errorf("Failed to start replica: %s", err)
