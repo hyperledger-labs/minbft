@@ -149,9 +149,7 @@ func run() error {
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	if err := replicaConnector.ConnectManyReplicas(ctx, peerAddrs, dialOpts...); err != nil {
-		return fmt.Errorf("Failed to connect to peers: %s", err)
-	}
+	replicaConnector.ConnectManyReplicas(ctx, peerAddrs, dialOpts...)
 
 	if err := replica.Start(); err != nil {
 		return fmt.Errorf("Failed to start replica: %s", err)

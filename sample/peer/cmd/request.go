@@ -94,10 +94,7 @@ func request(req []byte) ([]byte, error) {
 
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, 5*time.Second)
-	err = rc.ConnectManyReplicas(ctx, peerAddrs, grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
-	}
+	rc.ConnectManyReplicas(ctx, peerAddrs, grpc.WithInsecure(), grpc.WithBlock())
 
 	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, rc})
 	if err != nil {

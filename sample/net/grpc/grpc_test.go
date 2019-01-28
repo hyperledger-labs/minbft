@@ -43,13 +43,12 @@ func TestReplicaMessageStreamHandler(t *testing.T) {
 	defer stopLoopServers(servers)
 
 	replicaConnector := connector.New()
-	err := replicaConnector.ConnectManyReplicas(context.Background(), addrs, grpc.WithInsecure(), grpc.WithBlock())
-	require.NoError(t, err)
+	replicaConnector.ConnectManyReplicas(context.Background(), addrs, grpc.WithInsecure(), grpc.WithBlock())
 
 	inChannels := prepareInChannels(msgs)
 	outChannels := startMessageStreams(t, replicaConnector, inChannels)
 
-	_, err = replicaConnector.ReplicaMessageStreamHandler(nrReplicas)
+	_, err := replicaConnector.ReplicaMessageStreamHandler(nrReplicas)
 	assert.Error(t, err, "ReplicaMessageStreamHandler must fail with unassigned replica ID")
 
 	checkOutChannels(t, msgs, outChannels)
