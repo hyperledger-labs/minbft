@@ -94,157 +94,98 @@ func TestMakeCommitValidator(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestMakeCommitProcessor(t *testing.T) {
+func TestMakeCommitApplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
+
+	collectCommitment := func(id uint32, prepare *messages.Prepare) error {
+		args := mock.MethodCalled("commitmentCollector", id, prepare)
+		return args.Error(0)
+	}
+	apply := makeCommitApplier(collectCommitment)
 
 	n := randN()
 	view := randView()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
 
-	provideView := func() uint64 {
-		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64)
-	}
-	mock.On("viewProvider").Return(view)
-	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
-		args := mock.MethodCalled("uiCapturer", msg)
-		return args.Bool(0), func() {
-			mock.MethodCalled("uiReleaser", msg)
-		}
-	}
-	processPrepare := func(prepare *messages.Prepare) (new bool, err error) {
-		args := mock.MethodCalled("prepareProcessor", prepare)
-		return args.Bool(0), args.Error(1)
-	}
-	collectCommit := func(commit *messages.Commit) error {
-		args := mock.MethodCalled("collectCommit", commit)
-		return args.Error(0)
-	}
-	handle := makeCommitProcessor(id, provideView, captureUI, processPrepare, collectCommit)
-
-	prepareUIBytes := make([]byte, 1)
-	rand.Read(prepareUIBytes)
-	makePrepareMsg := func(view uint64) *messages.Prepare {
-		return &messages.Prepare{
-			Msg: &messages.Prepare_M{
-				View:      view,
-				ReplicaId: primaryID(n, view),
-			},
-			ReplicaUi: prepareUIBytes,
-		}
-	}
-	makeCommitMsg := func(id uint32, view uint64) *messages.Commit {
-		return &messages.Commit{
-			Msg: &messages.Commit_M{
-				View:      view,
-				ReplicaId: id,
-				PrimaryId: primaryID(n, view),
-				PrimaryUi: prepareUIBytes,
-			},
-		}
-	}
-
-	otherPrimary := randOtherBackupID(id, n, view)
-	otherView := viewForPrimary(n, otherPrimary)
-	otherBackup := randOtherBackupID(id, n, otherView)
-	prepare := makePrepareMsg(otherView)
-	commit := makeCommitMsg(otherBackup, otherView)
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
-	mock.On("uiReleaser", commit).Once()
-	_, err := handle(commit)
-	assert.Error(t, err, "Commit is for different view")
-
-	commit = makeCommitMsg(id, view)
-	new, err := handle(commit)
-	assert.NoError(t, err)
-	assert.False(t, new, "Own Commit")
-
-	otherBackup = randOtherBackupID(id, n, view)
-	prepare = makePrepareMsg(view)
-	commit = makeCommitMsg(otherBackup, view)
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(false, nil).Once()
-	new, err = handle(commit)
-	assert.NoError(t, err)
-	assert.False(t, new, "UI already processed")
-
-	mock.On("prepareProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
-	_, err = handle(commit)
-	assert.Error(t, err, "Commit refers to invalid Prepare")
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
-	mock.On("collectCommit", commit).Return(fmt.Errorf("Duplicated Commit")).Once()
-	mock.On("uiReleaser", commit).Once()
-	_, err = handle(commit)
-	assert.Error(t, err, "Commit cannot be taken into account")
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	mock.On("uiCapturer", commit).Return(true, nil).Once()
-	mock.On("collectCommit", commit).Return(nil).Once()
-	mock.On("uiReleaser", commit).Once()
-	new, err = handle(commit)
-	assert.NoError(t, err)
-	assert.True(t, new)
-}
-
-func TestMakeCommitCollector(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	countCommits := func(commit *messages.Commit) (done bool, err error) {
-		args := mock.MethodCalled("commitCounter", commit)
-		return args.Bool(0), args.Error(1)
-	}
-	retireSeq := func(request *messages.Request) error {
-		args := mock.MethodCalled("requestSeqRetirer", request)
-		return args.Error(0)
-	}
-	executeRequest := func(request *messages.Request) {
-		mock.MethodCalled("requestExecutor", request)
-	}
-
-	collector := makeCommitCollector(countCommits, retireSeq, executeRequest)
-
-	clientID := rand.Uint32()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      rand.Uint64(),
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			ReplicaId: primary,
+			View:      view,
 		},
 	}
 	commit := &messages.Commit{
 		Msg: &messages.Commit_M{
-			Request: request,
+			View:      view,
+			ReplicaId: id,
+			PrimaryId: primary,
 		},
 	}
 
-	mock.On("commitCounter", commit).Return(false, fmt.Errorf("duplicate commit")).Once()
-	err := collector(commit)
-	assert.Error(t, err)
+	mock.On("commitmentCollector", id, prepare).Return(fmt.Errorf("Error")).Once()
+	err := apply(commit)
+	assert.Error(t, err, "Failed to collect commitment")
 
-	mock.On("commitCounter", commit).Return(false, nil).Once()
-	err = collector(commit)
-	assert.NoError(t, err)
-
-	mock.On("commitCounter", commit).Return(true, nil).Once()
-	mock.On("requestSeqRetirer", request).Return(fmt.Errorf("old request ID")).Once()
-	err = collector(commit)
-	assert.Error(t, err)
-
-	mock.On("commitCounter", commit).Return(true, nil).Once()
-	mock.On("requestSeqRetirer", request).Return(nil).Once()
-	mock.On("requestExecutor", request).Once()
-	err = collector(commit)
+	mock.On("commitmentCollector", id, prepare).Return(nil).Once()
+	err = apply(commit)
 	assert.NoError(t, err)
 }
 
-func TestMakeCommitCounter(t *testing.T) {
+func TestMakeCommitmentCollector(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	countCommitment := func(id uint32, prepare *messages.Prepare) (done bool, err error) {
+		args := mock.MethodCalled("commitmentCounter", id, prepare)
+		return args.Bool(0), args.Error(1)
+	}
+	retireSeq := func(request *messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqRetirer", request)
+		return args.Bool(0)
+	}
+	executeRequest := func(request *messages.Request) {
+		mock.MethodCalled("requestExecutor", request)
+	}
+	collect := makeCommitmentCollector(countCommitment, retireSeq, executeRequest)
+
+	n := randN()
+	view := randView()
+	primary := primaryID(n, view)
+	id := randOtherReplicaID(primary, n)
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			ReplicaId: primary,
+			Request:   request,
+		},
+	}
+
+	mock.On("commitmentCounter", id, prepare).Return(false, fmt.Errorf("Error")).Once()
+	err := collect(id, prepare)
+	assert.Error(t, err, "Failed to count commitment")
+
+	mock.On("commitmentCounter", id, prepare).Return(false, nil).Once()
+	err = collect(id, prepare)
+	assert.NoError(t, err)
+
+	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
+	mock.On("requestSeqRetirer", request).Return(false).Once()
+	err = collect(id, prepare)
+	assert.NoError(t, err)
+
+	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
+	mock.On("requestSeqRetirer", request).Return(true).Once()
+	mock.On("requestExecutor", request).Once()
+	err = collect(id, prepare)
+	assert.NoError(t, err)
+}
+
+func TestMakeCommitmentCounter(t *testing.T) {
 	// fault tolerance -> list of cases
 	cases := map[uint32][]struct {
 		desc      string
@@ -255,43 +196,55 @@ func TestMakeCommitCounter(t *testing.T) {
 	}{
 		// f=1
 		1: {{
-			// Commit from primary replica is implied by
-			// extracted Prepare
-			desc:      "One Commit from backup replica is enough",
+			desc:      "Commitment from primary",
+			prepareCV: 1,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "One commitment from backup replica is enough",
 			prepareCV: 1,
 			replicaID: 1,
 			ok:        true,
 			done:      true,
 		}, {
-			desc:      "Extra Commit from another backup replica is ignored",
+			desc:      "Extra commitment from another backup replica",
 			prepareCV: 1,
 			replicaID: 2,
 			ok:        true,
-		}, {
-			desc:      "Commit from primary is not okay",
-			prepareCV: 2, // new Prepare
-			replicaID: 0, // primary is always replica 0 for this test
-			ok:        false,
+			done:      true,
 		}},
 
 		// f=2
 		2: {{
-			desc:      "First Commit from backup replica",
+			desc:      "Commitment from primary",
+			prepareCV: 1,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "First commitment from backup replica",
 			prepareCV: 1,
 			replicaID: 1,
 			ok:        true,
 		}, {
-			desc:      "Another Commit for another Prepare",
+			desc:      "Another commitment from primary",
+			prepareCV: 2,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Another commitment for another Prepare",
 			prepareCV: 2,
 			replicaID: 1,
 			ok:        true,
 		}, {
-			desc:      "Duplicate Commit is not okay",
+			desc:      "Duplicate commitment is not okay",
 			prepareCV: 1,
 			replicaID: 1,
 			ok:        false,
 		}, {
-			desc:      "Another Commit from backup replica is enough",
+			desc:      "Another commitment from backup replica is enough",
 			prepareCV: 1,
 			replicaID: 3,
 			ok:        true,
@@ -303,18 +256,19 @@ func TestMakeCommitCounter(t *testing.T) {
 			ok:        true,
 			done:      true,
 		}, {
-			desc:      "Extra Commit is ingnored",
+			desc:      "Extra commitment for the first request",
 			prepareCV: 1,
 			replicaID: 2,
 			ok:        true,
+			done:      true,
 		}},
 	}
 
 	for f, caseList := range cases {
-		counter := makeCommitCounter(f)
+		counter := makeCommitmentCounter(f)
 		for _, c := range caseList {
 			desc := fmt.Sprintf("f=%d: %s", f, c.desc)
-			done, err := counter(makeCommit(c.prepareCV, c.replicaID))
+			done, err := counter(uint32(c.replicaID), makePrepare(c.prepareCV))
 			if c.ok {
 				require.NoError(t, err, desc)
 			} else {
@@ -332,7 +286,7 @@ func TestMakeCommitCounterConcurrent(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 
-	counter := makeCommitCounter(nrFaulty)
+	counter := makeCommitmentCounter(nrFaulty)
 	for id := 1; id < nrReplicas; id++ { // replica 0 is primary
 		wg.Add(1)
 		go func(replicaID int) {
@@ -344,7 +298,7 @@ func TestMakeCommitCounterConcurrent(t *testing.T) {
 				// signaling done and still invoke it
 				// concurrently. So we only check for
 				// data races here.
-				_, err := counter(makeCommit(prepareCV, replicaID))
+				_, err := counter(uint32(replicaID), makePrepare(prepareCV))
 				assert.NoError(t, err,
 					"Replica %d, Prepare %d", replicaID, prepareCV)
 			}
@@ -354,16 +308,14 @@ func TestMakeCommitCounterConcurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func makeCommit(prepareCV, replicaID int) *messages.Commit {
+func makePrepare(cv int) *messages.Prepare {
 	prepareUI := &usig.UI{
-		Counter: uint64(prepareCV),
+		Counter: uint64(cv),
 	}
 	prepareUIBytes, _ := prepareUI.MarshalBinary()
 
-	return &messages.Commit{
-		Msg: &messages.Commit_M{
-			ReplicaId: uint32(replicaID),
-			PrimaryUi: prepareUIBytes,
-		},
+	return &messages.Prepare{
+		Msg:       &messages.Prepare_M{},
+		ReplicaUi: prepareUIBytes,
 	}
 }

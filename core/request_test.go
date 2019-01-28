@@ -34,102 +34,85 @@ import (
 )
 
 func TestMakeRequestProcessor(t *testing.T) {
-	t.Run("Primary", testMakeRequestProcessorPrimary)
-	t.Run("Backup", testMakeRequestProcessorBackup)
-}
-
-func testMakeRequestProcessorPrimary(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	view := randView()
-	id := primaryID(n, view)
-	process := setupMakeRequestProcessorMock(mock, id, n, view)
-	clientID := rand.Uint32()
-	seq := rand.Uint64()
+	captureSeq := func(request *messages.Request) (new bool, release func()) {
+		args := mock.MethodCalled("requestSeqCapturer", request)
+		return args.Bool(0), func() {
+			mock.MethodCalled("requestSeqReleaser", request)
+		}
+	}
+	applyRequest := func(request *messages.Request) error {
+		args := mock.MethodCalled("requestApplier", request)
+		return args.Error(0)
+	}
+	process := makeRequestProcessor(captureSeq, applyRequest)
+
 	request := &messages.Request{
 		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      seq,
-		},
-	}
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			View:      view,
-			ReplicaId: uint32(id),
-			Request:   request,
+			Seq: rand.Uint64(),
 		},
 	}
 
-	// Already captured request ID
 	mock.On("requestSeqCapturer", request).Return(false).Once()
 	new, err := process(request)
 	assert.NoError(t, err)
 	assert.False(t, new)
 
-	// New Request
 	mock.On("requestSeqCapturer", request).Return(true).Once()
-	mock.On("generatedUIMessageHandler", prepare).Once()
+	mock.On("requestApplier", request).Return(fmt.Errorf("Failed")).Once()
 	mock.On("requestSeqReleaser", request).Once()
-	mock.On("requestSeqPreparer", request).Return(nil).Once()
-	new, err = process(request)
-	assert.NoError(t, err)
-	assert.True(t, new)
-}
+	_, err = process(request)
+	assert.Error(t, err, "Failed to apply Request")
 
-func testMakeRequestProcessorBackup(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	n := randN()
-	view := randView()
-	id := randBackupID(n, view)
-	process := setupMakeRequestProcessorMock(mock, id, n, view)
-	clientID := rand.Uint32()
-	seq := rand.Uint64()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      seq,
-		},
-	}
-
-	// Already captured request ID
-	mock.On("requestSeqCapturer", request).Return(false).Once()
-	new, err := process(request)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	// New Request
 	mock.On("requestSeqCapturer", request).Return(true).Once()
+	mock.On("requestApplier", request).Return(nil).Once()
 	mock.On("requestSeqReleaser", request).Once()
 	new, err = process(request)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }
 
-func setupMakeRequestProcessorMock(mock *testifymock.Mock, id, n uint32, view uint64) requestProcessor {
+func TestMakeRequestApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	ownView := randView()
+	otherView := randOtherView(ownView)
+	id := primaryID(n, ownView)
+
 	provideView := func() uint64 {
 		args := mock.MethodCalled("viewProvider")
 		return args.Get(0).(uint64)
 	}
-	captureSeq := func(request *messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqCapturer", request)
-		return args.Bool(0)
-	}
-	releaseSeq := func(request *messages.Request) {
-		mock.MethodCalled("requestSeqReleaser", request)
-	}
-	prepareSeq := func(request *messages.Request) error {
-		args := mock.MethodCalled("requestSeqPreparer", request)
-		return args.Error(0)
-	}
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	mock.On("viewProvider").Return(view)
-	return makeRequestProcessor(id, n, provideView, captureSeq, releaseSeq, prepareSeq, handleGeneratedUIMessage)
+	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
+	}
+	prepare := &messages.Prepare{
+		Msg: &messages.Prepare_M{
+			View:      ownView,
+			ReplicaId: id,
+			Request:   request,
+		},
+	}
+
+	mock.On("viewProvider").Return(otherView).Once()
+	err := apply(request)
+	assert.NoError(t, err)
+
+	mock.On("viewProvider").Return(ownView).Once()
+	mock.On("generatedUIMessageHandler", prepare).Once()
+	err = apply(request)
+	assert.NoError(t, err)
 }
 
 func TestMakeRequestValidator(t *testing.T) {
@@ -200,10 +183,9 @@ func TestMakeRequestExecutor(t *testing.T) {
 		mock.MethodCalled("replicaMessageSigner", msg)
 		msg.AttachSignature(expectedSignature)
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-
 	requestExecutor := makeRequestExecutor(replicaID, execute, sign, handleGeneratedMessage)
 
 	resultChan := make(chan []byte, 1)
@@ -263,6 +245,9 @@ func TestMakeRequestSeqCapturer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
 	expectedClientID := rand.Uint32()
 	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
 
@@ -276,37 +261,17 @@ func TestMakeRequestSeqCapturer(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().CaptureRequestSeq(seq).Return(false)
-	new := captureSeq(request)
+	state.EXPECT().CaptureRequestSeq(seq).Return(false, nil)
+	new, _ := captureSeq(request)
 	assert.False(t, new)
 
-	state.EXPECT().CaptureRequestSeq(seq).Return(true)
-	new = captureSeq(request)
+	state.EXPECT().CaptureRequestSeq(seq).Return(true, func() {
+		mock.MethodCalled("requestSeqReleaser", seq)
+	})
+	new, release := captureSeq(request)
 	assert.True(t, new)
-}
-
-func TestMakeRequestSeqReleaser(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	expectedClientID := rand.Uint32()
-	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
-
-	releaseSeq := makeRequestSeqReleaser(provider)
-
-	seq := rand.Uint64()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: expectedClientID,
-			Seq:      seq,
-		},
-	}
-
-	state.EXPECT().ReleaseRequestSeq(seq).Return(fmt.Errorf("Invalid ID"))
-	assert.Panics(t, func() { releaseSeq(request) })
-
-	state.EXPECT().ReleaseRequestSeq(seq).Return(nil)
-	assert.NotPanics(t, func() { releaseSeq(request) })
+	mock.On("requestSeqReleaser", seq).Once()
+	release()
 }
 
 func TestMakeRequestSeqPreparer(t *testing.T) {
@@ -326,13 +291,16 @@ func TestMakeRequestSeqPreparer(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().PrepareRequestSeq(seq).Return(fmt.Errorf("old request ID"))
-	err := prepareSeq(request)
-	assert.Error(t, err)
+	state.EXPECT().PrepareRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	assert.Panics(t, func() { prepareSeq(request) })
 
-	state.EXPECT().PrepareRequestSeq(seq).Return(nil)
-	err = prepareSeq(request)
-	assert.NoError(t, err)
+	state.EXPECT().PrepareRequestSeq(seq).Return(false, nil)
+	new := prepareSeq(request)
+	assert.False(t, new)
+
+	state.EXPECT().PrepareRequestSeq(seq).Return(true, nil)
+	new = prepareSeq(request)
+	assert.True(t, new)
 }
 
 func TestMakeRequestSeqRetirer(t *testing.T) {
@@ -352,13 +320,16 @@ func TestMakeRequestSeqRetirer(t *testing.T) {
 		},
 	}
 
-	state.EXPECT().RetireRequestSeq(seq).Return(fmt.Errorf("old request ID"))
-	err := retireSeq(request)
-	assert.Error(t, err)
+	state.EXPECT().RetireRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	assert.Panics(t, func() { retireSeq(request) })
 
-	state.EXPECT().RetireRequestSeq(seq).Return(nil)
-	err = retireSeq(request)
-	assert.NoError(t, err)
+	state.EXPECT().RetireRequestSeq(seq).Return(false, nil)
+	new := retireSeq(request)
+	assert.False(t, new)
+
+	state.EXPECT().RetireRequestSeq(seq).Return(true, nil)
+	new = retireSeq(request)
+	assert.True(t, new)
 }
 
 func TestMakeRequestReplier(t *testing.T) {

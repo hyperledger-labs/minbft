@@ -88,19 +88,17 @@ func TestMakeUICapturer(t *testing.T) {
 
 	msg, ui := makeMockUIMsg(ctrl, replicaID, rand.Uint64())
 
-	peerState.EXPECT().CaptureUI(ui).Return(false)
+	peerState.EXPECT().CaptureUI(ui).Return(false, nil)
 	new, _ := captureUI(msg)
 	assert.False(t, new)
 
-	peerState.EXPECT().CaptureUI(ui).Return(true)
+	peerState.EXPECT().CaptureUI(ui).Return(true, func() {
+		mock.MethodCalled("uiReleaser", ui)
+	})
 	new, releaseUI := captureUI(msg)
 	assert.True(t, new)
-
-	peerState.EXPECT().ReleaseUI(ui).Return(nil)
+	mock.On("uiReleaser", ui).Once()
 	releaseUI()
-
-	peerState.EXPECT().ReleaseUI(ui).Return(fmt.Errorf("UI already released"))
-	assert.Panics(t, releaseUI)
 }
 
 func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock, replicaID uint32) (peerstate.Provider, *mock_peerstate.MockState) {

@@ -44,7 +44,7 @@ func newSeqState() *seqState {
 	return s
 }
 
-func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
+func (s *seqState) CaptureRequestSeq(seq uint64) (new bool, release func()) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -56,7 +56,7 @@ func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
 				s.seqReleased.Wait()
 			}
 
-			return false
+			return false, nil
 		}
 
 		// The request ID might be new. Check if the greatest
@@ -71,52 +71,42 @@ func (s *seqState) CaptureRequestSeq(seq uint64) (new bool) {
 
 		s.lastCapturedSeq = seq
 
-		return true
+		return true, func() {
+			s.Lock()
+			defer s.Unlock()
+
+			s.lastReleasedSeq = s.lastCapturedSeq
+			s.seqReleased.Broadcast()
+		}
 	}
 }
 
-func (s *seqState) ReleaseRequestSeq(seq uint64) error {
-	s.Lock()
-	defer s.Unlock()
-
-	if seq != s.lastCapturedSeq {
-		return fmt.Errorf("request ID is not the last captured")
-	} else if seq <= s.lastReleasedSeq {
-		return fmt.Errorf("request ID already released")
-	}
-
-	s.lastReleasedSeq = seq
-	s.seqReleased.Broadcast()
-
-	return nil
-}
-
-func (s *seqState) PrepareRequestSeq(seq uint64) error {
+func (s *seqState) PrepareRequestSeq(seq uint64) (new bool, err error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if seq <= s.lastPreparedSeq {
-		return fmt.Errorf("old request ID")
-	} else if seq > s.lastReleasedSeq {
-		return fmt.Errorf("request ID not captured/released")
+		return false, nil
+	} else if seq > s.lastCapturedSeq {
+		return false, fmt.Errorf("Request ID not captured")
 	}
 
 	s.lastPreparedSeq = seq
 
-	return nil
+	return true, nil
 }
 
-func (s *seqState) RetireRequestSeq(seq uint64) error {
+func (s *seqState) RetireRequestSeq(seq uint64) (new bool, err error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if seq <= s.lastRetiredSeq {
-		return fmt.Errorf("old request ID")
+		return false, nil
 	} else if seq > s.lastPreparedSeq {
-		return fmt.Errorf("request ID not prepared")
+		return false, fmt.Errorf("Request ID not prepared")
 	}
 
 	s.lastRetiredSeq = seq
 
-	return nil
+	return true, nil
 }

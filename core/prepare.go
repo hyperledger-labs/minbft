@@ -30,14 +30,13 @@ import (
 // side-effect. It is safe to invoke concurrently.
 type prepareValidator func(prepare *messages.Prepare) error
 
-// prepareProcessor processes a valid Prepare message.
+// prepareApplier applies Prepare message to current replica state.
 //
-// It fully processes the supplied message in the context of the
-// current replica's state. The supplied message is assumed to be
-// authentic and internally consistent. The return value new indicates
-// if the message has not been processed by this replica before. It is
-// safe to invoke concurrently.
-type prepareProcessor func(prepare *messages.Prepare) (new bool, err error)
+// The supplied message is applied to the current replica state by
+// changing the state accordingly and producing any required messages
+// or side effects. The supplied message is assumed to be authentic
+// and internally consistent. It is safe to invoke concurrently.
+type prepareApplier func(prepare *messages.Prepare) error
 
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
@@ -63,55 +62,36 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 	}
 }
 
-// makePrepareProcessor constructs an instance of prepareProcessor
-// using id as the current replica ID, and the supplied abstract
-// interfaces.
-func makePrepareProcessor(id uint32, view viewProvider, captureUI uiCapturer, prepareSeq requestSeqPreparer, processRequest requestProcessor, collectCommit commitCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareProcessor {
-	return func(prepare *messages.Prepare) (new bool, err error) {
-		replicaID := prepare.Msg.ReplicaId
-
-		if replicaID == id {
-			return false, nil
+// makePrepareApplier constructs an instance of prepareApplier using
+// id as the current replica ID, and the supplied abstract interfaces.
+func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedUIMessage generatedUIMessageHandler) prepareApplier {
+	return func(prepare *messages.Prepare) error {
+		if new := prepareSeq(prepare.Msg.Request); !new {
+			return fmt.Errorf("Request already prepared")
 		}
 
-		request := prepare.Msg.Request
+		primaryID := prepare.ReplicaID()
 
-		if _, err = processRequest(request); err != nil {
-			return false, fmt.Errorf("Failed to process request: %s", err)
+		if err := collectCommitment(primaryID, prepare); err != nil {
+			return fmt.Errorf("Prepare cannot be taken into account: %s", err)
 		}
 
-		new, releaseUI := captureUI(prepare)
-		if !new {
-			return false, nil
-		}
-		defer releaseUI()
-
-		currentView := view()
-
-		if prepare.Msg.View != currentView {
-			return false, fmt.Errorf("Prepare is for view %d, current view is %d",
-				prepare.Msg.View, currentView)
-		}
-
-		if err = prepareSeq(request); err != nil {
-			return false, fmt.Errorf("Failed to check request ID: %s", err)
+		if id == primaryID {
+			return nil // primary does not generate Commit
 		}
 
 		commit := &messages.Commit{
 			Msg: &messages.Commit_M{
-				View:      currentView,
+				View:      prepare.Msg.View,
 				ReplicaId: id,
-				PrimaryId: prepare.ReplicaID(),
+				PrimaryId: primaryID,
 				Request:   prepare.Msg.Request,
 				PrimaryUi: prepare.UIBytes(),
 			},
 		}
-		if err := collectCommit(commit); err != nil {
-			panic("Failed to collect own Commit")
-		}
 
 		handleGeneratedUIMessage(commit)
 
-		return new, nil
+		return nil
 	}
 }

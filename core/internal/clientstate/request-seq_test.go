@@ -37,64 +37,27 @@ func testCaptureReleaseRequestSeq(t *testing.T) {
 		desc string
 		seq  int
 
-		capture bool
-		release bool
-
-		ok  bool
 		new bool
 	}{{
-		desc:    "Capture and release the first ID",
-		seq:     100,
-		capture: true,
-		release: true,
-		ok:      true,
-		new:     true,
+		desc: "Capture first ID",
+		seq:  100,
+		new:  true,
 	}, {
-		desc:    "Release the same ID again",
-		seq:     100,
-		release: true,
-		ok:      false,
+		desc: "Capture another ID",
+		seq:  200,
+		new:  true,
 	}, {
-		desc:    "Release new ID before capturing",
-		seq:     200,
-		release: true,
-		ok:      false,
-	}, {
-		desc:    "Capture another ID",
-		seq:     200,
-		capture: true,
-		ok:      true,
-		new:     true,
-	}, {
-		desc:    "Capture older ID",
-		seq:     50,
-		capture: true,
-		new:     false,
-	}, {
-		desc:    "Release not captured ID",
-		seq:     150,
-		release: true,
-		ok:      false,
-	}, {
-		desc:    "Release last captured ID",
-		seq:     200,
-		release: true,
-		ok:      true,
+		desc: "Capture older ID",
+		seq:  50,
+		new:  false,
 	}}
 
 	for _, c := range cases {
 		seq := uint64(c.seq)
-		if c.capture {
-			new := s.CaptureRequestSeq(seq)
-			require.Equal(t, c.new, new, c.desc)
-		}
-		if c.release {
-			err := s.ReleaseRequestSeq(seq)
-			if c.ok {
-				require.NoError(t, err, c.desc)
-			} else {
-				require.Error(t, err, c.desc)
-			}
+		new, release := s.CaptureRequestSeq(seq)
+		require.Equal(t, c.new, new, c.desc)
+		if new {
+			go release()
 		}
 	}
 }
@@ -118,11 +81,10 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 			for seq := 1; seq <= nrSeqs; seq++ {
 				assertMsg := fmt.Sprintf("Worker %d, seq %d", workerID, seq)
 
-				if new := state.CaptureRequestSeq(uint64(seq)); new {
+				if new, release := state.CaptureRequestSeq(uint64(seq)); new {
 					assert.False(t, seqs[seq-1], assertMsg)
 					seqs[seq-1] = true
-					err := state.ReleaseRequestSeq(uint64(seq))
-					assert.NoError(t, err, assertMsg)
+					release()
 				} else {
 					assert.True(t, seqs[seq-1])
 				}
@@ -140,51 +102,55 @@ func testPrepareRequestSeq(t *testing.T) {
 		desc string
 		seq  int
 
-		release bool
+		capture bool
 		prepare bool
 
-		ok bool
+		new bool
+		ok  bool
 	}{{
-		desc:    "Release and prepare first ID",
+		desc:    "Capture and prepare first ID",
 		seq:     100,
-		release: true,
+		capture: true,
 		prepare: true,
+		new:     true,
 		ok:      true,
 	}, {
 		desc:    "Prepare the same ID",
 		seq:     100,
 		prepare: true,
-		ok:      false,
+		new:     false,
+		ok:      true,
 	}, {
 		desc:    "Prepare older ID",
 		seq:     50,
 		prepare: true,
-		ok:      false,
+		new:     false,
+		ok:      true,
 	}, {
-		desc:    "Prepare before release",
+		desc:    "Prepare before capture",
 		seq:     200,
 		prepare: true,
 		ok:      false,
 	}, {
-		desc:    "Release and prepare another ID",
+		desc:    "Capture and prepare another ID",
 		seq:     200,
-		release: true,
+		capture: true,
 		prepare: true,
+		new:     true,
 		ok:      true,
 	}}
 
 	for _, c := range cases {
 		seq := uint64(c.seq)
-		if c.release {
-			new := s.CaptureRequestSeq(seq)
+		if c.capture {
+			new, release := s.CaptureRequestSeq(seq)
 			require.True(t, new, c.desc)
-
-			err := s.ReleaseRequestSeq(seq)
-			require.NoError(t, err, c.desc)
+			go release()
 		}
 		if c.prepare {
-			err := s.PrepareRequestSeq(seq)
+			new, err := s.PrepareRequestSeq(seq)
 			if c.ok {
+				require.Equal(t, c.new, new)
 				require.NoError(t, err, c.desc)
 			} else {
 				require.Error(t, err, c.desc)
@@ -203,23 +169,27 @@ func testRetireRequestSeq(t *testing.T) {
 		prepare bool
 		retire  bool
 
-		ok bool
+		new bool
+		ok  bool
 	}{{
 		desc:    "Prepare and retire first ID",
 		seq:     100,
 		prepare: true,
 		retire:  true,
+		new:     true,
 		ok:      true,
 	}, {
 		desc:   "Retire the same ID",
 		seq:    100,
 		retire: true,
-		ok:     false,
+		new:    false,
+		ok:     true,
 	}, {
 		desc:   "Retire older ID",
 		seq:    50,
 		retire: true,
-		ok:     false,
+		new:    false,
+		ok:     true,
 	}, {
 		desc:   "Retire before prepare",
 		seq:    200,
@@ -230,24 +200,25 @@ func testRetireRequestSeq(t *testing.T) {
 		seq:     200,
 		prepare: true,
 		retire:  true,
+		new:     true,
 		ok:      true,
 	}}
 
 	for _, c := range cases {
 		seq := uint64(c.seq)
 		if c.prepare {
-			new := s.CaptureRequestSeq(seq)
+			new, release := s.CaptureRequestSeq(seq)
 			require.True(t, new, c.desc)
+			go release()
 
-			err := s.ReleaseRequestSeq(seq)
-			require.NoError(t, err, c.desc)
-
-			err = s.PrepareRequestSeq(seq)
+			new, err := s.PrepareRequestSeq(seq)
+			require.True(t, new, c.desc)
 			require.NoError(t, err, c.desc)
 		}
 		if c.retire {
-			err := s.RetireRequestSeq(seq)
+			new, err := s.RetireRequestSeq(seq)
 			if c.ok {
+				require.Equal(t, c.new, new)
 				require.NoError(t, err, c.desc)
 			} else {
 				require.Error(t, err, c.desc)

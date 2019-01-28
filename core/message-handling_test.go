@@ -147,11 +147,10 @@ func TestMakeMessageValidator(t *testing.T) {
 		},
 	}
 
-	err := validateMessage(struct{}{})
-	assert.Error(t, err, "Unknown message type")
+	assert.Panics(t, func() { validateMessage(struct{}{}) }, "Unknown message type")
 
 	mock.On("requestValidator", request).Return(fmt.Errorf("Error")).Once()
-	err = validateMessage(request)
+	err := validateMessage(request)
 	assert.Error(t, err, "Invalid Request")
 
 	mock.On("requestValidator", request).Return(nil).Once()
@@ -179,23 +178,268 @@ func TestMakeMessageProcessor(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	processRequest := func(msg *messages.Request) (new bool, err error) {
 		args := mock.MethodCalled("requestProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	processPrepare := func(msg *messages.Prepare) (new bool, err error) {
-		args := mock.MethodCalled("prepareProcessor", msg)
+	processReplicaMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
+		args := mock.MethodCalled("replicaMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	processCommit := func(msg *messages.Commit) (new bool, err error) {
-		args := mock.MethodCalled("commitProcessor", msg)
-		return args.Bool(0), args.Error(1)
-	}
-	processMessage := makeMessageProcessor(processRequest, processPrepare, processCommit)
+	process := makeMessageProcessor(processRequest, processReplicaMessage)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			Seq: rand.Uint64(),
+		},
+	}
+	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
+
+	assert.Panics(t, func() { process(struct{}{}) }, "Unknown message type")
+
+	mock.On("requestProcessor", request).Return(false, fmt.Errorf("Error")).Once()
+	_, err := process(request)
+	assert.Error(t, err, "Failed to process Request")
+
+	mock.On("requestProcessor", request).Return(false, nil).Once()
+	new, err := process(request)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("requestProcessor", request).Return(true, nil).Once()
+	new, err = process(request)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	mock.On("replicaMessageProcessor", replicaMsg).Return(false, fmt.Errorf("Error")).Once()
+	_, err = process(replicaMsg)
+	assert.Error(t, err, "Failed to process replica message")
+
+	mock.On("replicaMessageProcessor", replicaMsg).Return(false, nil).Once()
+	new, err = process(replicaMsg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("replicaMessageProcessor", replicaMsg).Return(true, nil).Once()
+	new, err = process(replicaMsg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeReplicaMessageProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n := randN()
+	id := randReplicaID(n)
+	otherID := randOtherReplicaID(id, n)
+
+	processUIMessage := func(msg messages.MessageWithUI) (new bool, err error) {
+		args := mock.MethodCalled("uiMessageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	process := makeReplicaMessageProcessor(id, processUIMessage)
+
+	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
+	uiMsg := mock_messages.NewMockMessageWithUI(ctrl)
+
+	replicaMsg.EXPECT().ReplicaID().Return(otherID)
+	assert.Panics(t, func() { process(replicaMsg) }, "Unknown message type")
+
+	uiMsg.EXPECT().ReplicaID().Return(id)
+	new, err := process(uiMsg)
+	assert.NoError(t, err)
+	assert.False(t, new, "Own message")
+
+	uiMsg.EXPECT().ReplicaID().Return(otherID).AnyTimes()
+
+	mock.On("uiMessageProcessor", uiMsg).Return(false, fmt.Errorf("Error")).Once()
+	_, err = process(uiMsg)
+	assert.Error(t, err, "Failed to process message with UI")
+
+	mock.On("uiMessageProcessor", uiMsg).Return(false, nil).Once()
+	new, err = process(uiMsg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("uiMessageProcessor", uiMsg).Return(true, nil).Once()
+	new, err = process(uiMsg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeUIMessageProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	captureUI := func(msg messages.MessageWithUI) (new bool, release func()) {
+		args := mock.MethodCalled("uiCapturer", msg)
+		return args.Bool(0), func() {
+			mock.MethodCalled("uiReleaser", msg)
+		}
+	}
+	processViewMessage := func(msg messages.ViewMessage) (new bool, err error) {
+		args := mock.MethodCalled("viewMessageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	process := makeUIMessageProcessor(captureUI, processViewMessage)
+
+	uiMsg := mock_messages.NewMockMessageWithUI(ctrl)
+	viewMsg := mock_messages.NewMockViewMessage(ctrl)
+	uiViewMsg := &struct {
+		messages.MessageWithUI
+		messages.ViewMessage
+	}{uiMsg, viewMsg}
+
+	assert.Panics(t, func() { process(uiMsg) }, "Unknown message type")
+
+	mock.On("uiCapturer", uiViewMsg).Return(false).Once()
+	new, err := process(uiViewMsg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("uiCapturer", uiViewMsg).Return(true).Once()
+	mock.On("viewMessageProcessor", uiViewMsg).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("uiReleaser", uiViewMsg).Once()
+	_, err = process(uiViewMsg)
+	assert.Error(t, err, "Failed to process view message")
+
+	mock.On("uiCapturer", uiViewMsg).Return(true).Once()
+	mock.On("viewMessageProcessor", uiViewMsg).Return(false, nil).Once()
+	mock.On("uiReleaser", uiViewMsg).Once()
+	new, err = process(uiViewMsg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("uiCapturer", uiViewMsg).Return(true).Once()
+	mock.On("viewMessageProcessor", uiViewMsg).Return(true, nil).Once()
+	mock.On("uiReleaser", uiViewMsg).Once()
+	new, err = process(uiViewMsg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeViewMessageProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	provideView := func() uint64 {
+		args := mock.MethodCalled("viewProvider")
+		return args.Get(0).(uint64)
+	}
+	processApplicableReplicaMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
+		args := mock.MethodCalled("applicableReplicaMessageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	process := makeViewMessageProcessor(provideView, processApplicableReplicaMessage)
+
+	view := randView()
+	otherView := randOtherView(view)
+
+	viewMsg := mock_messages.NewMockViewMessage(ctrl)
+	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
+	replicaViewMessage := &struct {
+		messages.ViewMessage
+		messages.ReplicaMessage
+	}{viewMsg, replicaMsg}
+
+	viewMsg.EXPECT().View().Return(view).AnyTimes()
+
+	mock.On("viewProvider").Return(view).Once()
+	assert.Panics(t, func() { process(viewMsg) }, "Unknown message type")
+
+	mock.On("viewProvider").Return(otherView).Once()
+	_, err := process(replicaViewMessage)
+	assert.Error(t, err, "Wrong view number")
+
+	mock.On("viewProvider").Return(view).Once()
+	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(false, nil).Once()
+	new, err := process(replicaViewMessage)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	mock.On("viewProvider").Return(view).Once()
+	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(true, nil).Once()
+	new, err = process(replicaViewMessage)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeApplicableReplicaMessageProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	processMessage := func(msg interface{}) (new bool, err error) {
+		args := mock.MethodCalled("messageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg)
+		return args.Error(0)
+	}
+	process := makeApplicableReplicaMessageProcessor(processMessage, applyReplicaMessage)
+
+	msg := mock_messages.NewMockReplicaMessage(ctrl)
+	embeddedMsgs := []interface{}{
+		&struct{ foo int }{0},
+		&struct{ bar int }{1},
+	}
+	msg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
+	_, err := process(msg)
+	assert.Error(t, err, "Failed to process embedded message")
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil).Once()
+	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil).Once()
+	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
+	_, err = process(msg)
+	assert.Error(t, err, "Failed to apply message")
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil).Once()
+	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil).Once()
+	mock.On("replicaMessageApplier", msg).Return(nil).Once()
+	new, err := process(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeReplicaMessageApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	applyPrepare := func(msg *messages.Prepare) error {
+		args := mock.MethodCalled("prepareApplier", msg)
+		return args.Error(0)
+	}
+	applyCommit := func(msg *messages.Commit) error {
+		args := mock.MethodCalled("commitApplier", msg)
+		return args.Error(0)
+	}
+	apply := makeReplicaMessageApplier(applyPrepare, applyCommit)
+
+	reqSeq := rand.Uint64()
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: reqSeq,
 		},
 	}
 	prepare := &messages.Prepare{
@@ -208,51 +452,33 @@ func TestMakeMessageProcessor(t *testing.T) {
 			Request: request,
 		},
 	}
+	reply := &messages.Reply{
+		Msg: &messages.Reply_M{
+			Seq: reqSeq,
+		},
+	}
 
-	_, err := processMessage(struct{}{})
-	assert.Error(t, err, "Unknown message type")
+	msg := mock_messages.NewMockReplicaMessage(ctrl)
+	assert.Panics(t, func() { apply(msg) }, "Unknown message type")
 
-	mock.On("requestProcessor", request).Return(false, fmt.Errorf("Error")).Once()
-	_, err = processMessage(request)
-	assert.Error(t, err, "Invalid Request")
+	mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
+	err := apply(prepare)
+	assert.Error(t, err, "Failed to apply Prepare")
 
-	mock.On("requestProcessor", request).Return(false, nil).Once()
-	new, err := processMessage(request)
+	mock.On("prepareApplier", prepare).Return(nil).Once()
+	err = apply(prepare)
 	assert.NoError(t, err)
-	assert.False(t, new)
 
-	mock.On("requestProcessor", request).Return(true, nil).Once()
-	new, err = processMessage(request)
+	mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
+	err = apply(commit)
+	assert.Error(t, err, "Failed to apply Commit")
+
+	mock.On("commitApplier", commit).Return(nil).Once()
+	err = apply(commit)
 	assert.NoError(t, err)
-	assert.True(t, new)
 
-	mock.On("prepareProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
-	_, err = processMessage(prepare)
-	assert.Error(t, err, "Invalid Prepare")
-
-	mock.On("prepareProcessor", prepare).Return(false, nil).Once()
-	new, err = processMessage(prepare)
+	err = apply(reply)
 	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("prepareProcessor", prepare).Return(true, nil).Once()
-	new, err = processMessage(prepare)
-	assert.NoError(t, err)
-	assert.True(t, new)
-
-	mock.On("commitProcessor", commit).Return(false, fmt.Errorf("Error")).Once()
-	_, err = processMessage(commit)
-	assert.Error(t, err, "Invalid Commit")
-
-	mock.On("commitProcessor", commit).Return(false, nil).Once()
-	new, err = processMessage(commit)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("commitProcessor", commit).Return(true, nil).Once()
-	new, err = processMessage(commit)
-	assert.NoError(t, err)
-	assert.True(t, new)
 }
 
 func TestMakeMessageReplier(t *testing.T) {
@@ -287,8 +513,7 @@ func TestMakeMessageReplier(t *testing.T) {
 
 	replyMessage := makeMessageReplier(replyRequest)
 
-	_, err := replyMessage(struct{}{})
-	assert.Error(t, err)
+	assert.Panics(t, func() { replyMessage(struct{}{}) }, "Unknown message type")
 
 	replyChan := make(chan *messages.Reply, 1)
 	replyChan <- reply
@@ -310,33 +535,28 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	assignUI := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("uiAssigner", msg)
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
-	msg := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: rand.Uint32(),
-		},
-	}
+	msg := mock_messages.NewMockMessageWithUI(ctrl)
 
 	uiBytes := make([]byte, 1)
 	rand.Read(uiBytes)
-	msgWithUI := &messages.Prepare{
-		Msg:       msg.Msg,
-		ReplicaUi: uiBytes,
-	}
+	msg.EXPECT().AttachUI(uiBytes)
 
 	mock.On("uiAssigner", msg).Run(func(args testifymock.Arguments) {
 		m := args.Get(0).(messages.MessageWithUI)
 		m.AttachUI(uiBytes)
 	}).Once()
-	mock.On("generatedMessageHandler", msgWithUI).Once()
+	mock.On("generatedMessageHandler", msg).Once()
 	handleGeneratedUIMessage(msg)
 }
 
@@ -357,7 +577,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		mockMsg := msg.(*mock_messages.MockMessageWithUI)
 		mockMsg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 	}
-	handleGeneratedMessage := func(msg interface{}) {
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		log = append(log, msg.(messages.MessageWithUI))
 	}
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
@@ -368,7 +588,8 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < nrMessages; i++ {
-				handleGeneratedUIMessage(mock_messages.NewMockMessageWithUI(ctrl))
+				msg := mock_messages.NewMockMessageWithUI(ctrl)
+				handleGeneratedUIMessage(msg)
 			}
 		}()
 	}
@@ -384,7 +605,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 	}
 }
 
-func TestMakeGeneratedMessageHandler(t *testing.T) {
+func TestMakeGeneratedMessageConsumer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -397,7 +618,7 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 		return clientState
 	}
 
-	handle := makeGeneratedMessageHandler(log, clientStates, logging.MustGetLogger(module))
+	consume := makeGeneratedMessageConsumer(log, clientStates)
 
 	prepare := &messages.Prepare{
 		Msg: &messages.Prepare_M{
@@ -418,11 +639,37 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 	}
 
 	clientState.EXPECT().AddReply(reply).Return(nil)
-	handle(reply)
+	consume(reply)
 
 	clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
-	assert.Panics(t, func() { handle(reply) })
+	assert.Panics(t, func() { consume(reply) })
 
 	log.EXPECT().Append(msg)
-	handle(prepare)
+	consume(prepare)
+}
+
+func TestMakeGeneratedMessageHandler(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg)
+		return args.Error(0)
+	}
+	consume := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageConsumer", msg)
+	}
+	handle := makeGeneratedMessageHandler(applyReplicaMessage, consume, logging.MustGetLogger(module))
+
+	msg := mock_messages.NewMockReplicaMessage(ctrl)
+
+	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
+	assert.Panics(t, func() { handle(msg) }, "Failed to apply generated message")
+
+	mock.On("replicaMessageApplier", msg).Return(nil).Once()
+	mock.On("generatedMessageConsumer", msg).Once()
+	handle(msg)
 }

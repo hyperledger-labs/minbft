@@ -61,17 +61,13 @@ func NewProvider() Provider {
 // captured. An identifier is new if it is greater than the greatest
 // captured. If an identifier cannot be captured immediately, it will
 // block until the identifier can be captured. The return value new
-// indicates if the supplied identifier was new.
-//
-// ReleaseRequestSeq releases the last captured new request identifier
-// seq so that another new identifier of the same identifier can be
-// captured. It is an error attempting to release an identifier that
-// has not been captured before or to release the same identifier more
-// than once.
+// indicates if the supplied identifier was new. In that case, the
+// newly captured request identifier has to be released by invoking
+// the returned release function.
 //
 // PrepareRequestSeq records the request identifier seq as prepared.
 // An identifier can only be prepared if it is greater than the last
-// prepared and has been captured and released before.
+// prepared and has been captured before.
 //
 // RetireRequestSeq records the request identifier seq as retired. An
 // identifier can only be retired if it is greater than the last
@@ -88,10 +84,9 @@ func NewProvider() Provider {
 // there will be no Reply message to be added for the supplied request
 // identifier.
 type State interface {
-	CaptureRequestSeq(seq uint64) (new bool)
-	ReleaseRequestSeq(seq uint64) error
-	PrepareRequestSeq(seq uint64) error
-	RetireRequestSeq(seq uint64) error
+	CaptureRequestSeq(seq uint64) (new bool, release func())
+	PrepareRequestSeq(seq uint64) (new bool, err error)
+	RetireRequestSeq(seq uint64) (new bool, err error)
 
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply

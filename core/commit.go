@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/messages"
-	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // commitValidator validates a Commit message.
@@ -32,29 +31,32 @@ import (
 // side-effect. It is safe to invoke concurrently.
 type commitValidator func(commit *messages.Commit) error
 
-// commitProcessor processes a valid Commit message.
+// commitApplier applies Commit message to current replica state.
 //
-// It fully processes the supplied message in the context of the
-// current replica's state. The supplied message is assumed to be
-// authentic and internally consistent. The return value new indicates
-// if the message has not been processed by this replica before. It is
-// safe to invoke concurrently.
-type commitProcessor func(commit *messages.Commit) (new bool, err error)
+// The supplied message is applied to the current replica state by
+// changing the state accordingly and producing any required side
+// effects. The supplied message is assumed to be authentic and
+// internally consistent. It is safe to invoke concurrently.
+type commitApplier func(commit *messages.Commit) error
 
-// commitCollector accepts valid Commit messages and takes further
-// actions when the threshold of the required number of matching
-// Commit messages is reached. Supplied Commit messages do not have to
-// have UI assigned.
-type commitCollector func(commit *messages.Commit) error
-
-// commitCounter counts matching Commit messages and signals as the
-// threshold to execute the operation is reached. The signal is
-// received only once and any subsequent Commit message for the
-// corresponding Prepare is simply ignored. All Commit messages are
-// assumed to be valid and do not have to have UI assigned. An error
-// is returned if any inconsistency detected. It is safe to invoke
+// commitmentCollector collects commitment on prepared Request.
+//
+// The supplied Prepare message is assumed to be valid and should have
+// a UI assigned. Once the threshold of matching commitments from
+// distinct replicas has been reached, it triggers further required
+// actions to complete the prepared Request. It is safe to invoke
 // concurrently.
-type commitCounter func(commit *messages.Commit) (done bool, err error)
+type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
+
+// commitmentCounter counts commitments on prepared Request.
+//
+// The supplied Prepare message is assumed to be valid and should have
+// a UI assigned. The return value done indicates if enough
+// commitments from different replicas are counted for the supplied
+// Prepare, such that the threshold to execute the prepared operation
+// has been reached. An error is returned if any inconsistency is
+// detected. It is safe to invoke concurrently.
+type commitmentCounter func(replicaID uint32, prepare *messages.Prepare) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
@@ -76,51 +78,35 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 	}
 }
 
-func makeCommitProcessor(id uint32, view viewProvider, captureUI uiCapturer, processPrepare prepareProcessor, collectCommit commitCollector) commitProcessor {
-	return func(commit *messages.Commit) (new bool, err error) {
+// makeCommitApplier constructs an instance of commitApplier using the
+// supplied abstractions.
+func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
+	return func(commit *messages.Commit) error {
 		replicaID := commit.ReplicaID()
+		prepare := commit.Prepare()
 
-		if replicaID == id {
-			return false, nil
+		if err := collectCommitment(replicaID, prepare); err != nil {
+			return fmt.Errorf("Commit cannot be taken into account: %s", err)
 		}
 
-		if _, err := processPrepare(commit.Prepare()); err != nil {
-			return false, fmt.Errorf("Failed to process Prepare: %s", err)
-		}
-
-		new, releaseUI := captureUI(commit)
-		if !new {
-			return false, nil
-		}
-		defer releaseUI()
-
-		if currentView := view(); commit.Msg.View != currentView {
-			return false, fmt.Errorf("Commit is for view %d, current view is %d",
-				commit.Msg.View, currentView)
-		}
-
-		if err := collectCommit(commit); err != nil {
-			return false, fmt.Errorf("Commit cannot be taken into account: %s", err)
-		}
-
-		return new, nil
+		return nil
 	}
 }
 
-// makeCommitCollector constructs an instance of commitCollector using
-// the supplied abstractions.
-func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitCollector {
-	return func(commit *messages.Commit) error {
-		if done, err := countCommits(commit); err != nil {
+// makeCommitmentCollector constructs an instance of
+// commitmentCollector using the supplied abstractions.
+func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, executeRequest requestExecutor) commitmentCollector {
+	return func(replicaID uint32, prepare *messages.Prepare) error {
+		if done, err := countCommitment(replicaID, prepare); err != nil {
 			return err
 		} else if !done {
 			return nil
 		}
 
-		request := commit.Request()
+		request := prepare.Msg.Request
 
-		if err := retireSeq(request); err != nil {
-			return fmt.Errorf("Failed to check request ID: %s", err)
+		if new := retireSeq(request); !new {
+			return nil // request already accepted for execution
 		}
 
 		// TODO: This is probably the place to stop the
@@ -132,26 +118,25 @@ func makeCommitCollector(countCommits commitCounter, retireSeq requestSeqRetirer
 	}
 }
 
-// makeCommitCounter constructs an instance of commitCounter given the
-// number of tolerated faulty nodes.
-func makeCommitCounter(f uint32) commitCounter {
+// makeCommitmentCounter constructs an instance of commitmentCounter
+// given the number of tolerated faulty nodes.
+func makeCommitmentCounter(f uint32) commitmentCounter {
 	// Replica ID -> committed
 	type replicasCommittedMap map[uint32]bool
 
 	var (
-		lock       sync.Mutex
-		lastDoneCV = uint64(0)
-		// Prepare UI -> replicasCommittedMap
+		lock sync.Mutex
+
+		lastDoneCV uint64
+
+		// Primary UI counter -> replicasCommittedMap
 		prepareStates = make(map[uint64]replicasCommittedMap)
 	)
 
-	return func(commit *messages.Commit) (done bool, err error) {
-		prepare := commit.Prepare()
-
-		prepareUI := new(usig.UI)
-		err = prepareUI.UnmarshalBinary(prepare.UIBytes())
+	return func(replicaID uint32, prepare *messages.Prepare) (done bool, err error) {
+		prepareUI, err := parseMessageUI(prepare)
 		if err != nil {
-			panic(err) // valid Commit must have full valid Prepare
+			panic(err)
 		}
 		prepareCV := prepareUI.Counter
 
@@ -159,36 +144,21 @@ func makeCommitCounter(f uint32) commitCounter {
 		defer lock.Unlock()
 
 		if prepareCV <= lastDoneCV {
-			return false, nil // ignore extra Commit
+			return true, nil
 		}
 
 		replicasCommitted := prepareStates[prepareCV]
 		if replicasCommitted == nil {
-			// Every Commit message must include an
-			// equivalent of a corresponding Prepare
-			// message, which in turn signifies a
-			// commitment from the primary replica to the
-			// assigned order of request execution.
-			// Therefore the extracted Prepare message is
-			// treated as a virtual Commit from the
-			// primary, thus the primary replica is
-			// initially marked in the map.
-			replicasCommitted = map[uint32]bool{
-				prepare.Msg.ReplicaId: true,
-			}
+			replicasCommitted = make(replicasCommittedMap)
 			prepareStates[prepareCV] = replicasCommitted
 		}
 
-		if replicasCommitted[commit.ReplicaID()] {
-			return false, fmt.Errorf("Duplicated Commit detected")
+		if replicasCommitted[replicaID] {
+			return false, fmt.Errorf("Duplicated commitment")
 		}
-		replicasCommitted[commit.ReplicaID()] = true
+		replicasCommitted[replicaID] = true
 
 		if len(replicasCommitted) == int(f+1) {
-			if prepareCV != lastDoneCV+1 {
-				panic("Request must be accepted in sequence assigned by primary")
-			}
-
 			delete(prepareStates, prepareCV)
 			lastDoneCV++
 

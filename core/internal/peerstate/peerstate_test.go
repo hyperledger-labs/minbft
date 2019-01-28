@@ -32,76 +32,35 @@ func TestCaptureReleaseUI(t *testing.T) {
 		desc string
 		cv   int
 
-		ok  bool
 		new bool
-
-		capture bool
-		release bool
 	}{{
-		desc:    "First valid UI",
-		cv:      1,
-		ok:      true,
-		new:     true,
-		capture: true,
-		release: true,
+		desc: "First valid UI",
+		cv:   1,
+		new:  true,
 	}, {
-		desc:    "The same UI again after releasing",
-		cv:      1,
-		ok:      true,
-		new:     false,
-		capture: true,
+		desc: "The same UI again",
+		cv:   1,
+		new:  false,
 	}, {
-		desc:    "Duplicate release",
-		cv:      1,
-		ok:      false,
-		release: true,
+		desc: "Second valid UI",
+		cv:   2,
+		new:  true,
 	}, {
-		desc:    "Release not captured UI",
-		cv:      2,
-		ok:      false,
-		release: true,
+		desc: "Old UI",
+		cv:   1,
+		new:  false,
 	}, {
-		desc:    "Second valid UI",
-		cv:      2,
-		ok:      true,
-		new:     true,
-		capture: true,
-		release: true,
-	}, {
-		desc:    "Release old UI",
-		cv:      1,
-		ok:      false,
-		release: true,
-	}, {
-		desc:    "Capture old UI",
-		cv:      1,
-		ok:      true,
-		new:     false,
-		capture: true,
-	}, {
-		desc:    "Third valid UI",
-		cv:      3,
-		ok:      true,
-		new:     true,
-		capture: true,
-		release: true,
+		desc: "Third valid UI",
+		cv:   3,
+		new:  true,
 	}}
 
 	for _, c := range cases {
 		ui := &usig.UI{Counter: uint64(c.cv)}
-		if c.capture {
-			assertMsg := fmt.Sprintf("CaptureUI: %s", c.desc)
-			new := state.CaptureUI(ui)
-			require.Equal(t, c.new, new, assertMsg)
-		}
-		if c.release {
-			assertMsg := fmt.Sprintf("ReleaseUI: %s", c.desc)
-			err := state.ReleaseUI(ui)
-			if c.ok {
-				require.NoError(t, err, assertMsg)
-			} else {
-				require.Error(t, err, assertMsg)
-			}
+		new, release := state.CaptureUI(ui)
+		require.Equal(t, c.new, new, c.desc)
+		if new {
+			go release()
 		}
 	}
 }
@@ -128,11 +87,10 @@ func TestConcurrent(t *testing.T) {
 				go func() {
 					defer wg.Done()
 
-					if new := state.CaptureUI(ui); new {
+					if new, release := state.CaptureUI(ui); new {
 						assert.Nil(t, uis[cv-1], assertMsg)
 						uis[cv-1] = ui
-						err := state.ReleaseUI(ui)
-						assert.NoError(t, err, assertMsg)
+						release()
 					} else {
 						assert.Equal(t, ui, uis[cv-1], assertMsg)
 					}
