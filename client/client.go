@@ -59,7 +59,7 @@ func New(id uint32, n, f uint32, stack Stack) (Client, error) {
 
 	buf := requestbuffer.New()
 
-	if err := startReplicaConnections(id, n, buf, stack); err != nil {
+	if err := startReplicaConnections(id, n, f, buf, stack); err != nil {
 		return nil, fmt.Errorf("Failed to initiate connections to replicas: %s", err)
 	}
 

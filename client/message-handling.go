@@ -30,17 +30,24 @@ import (
 // starts message exchange with them given a total number of replicas,
 // request buffer to add/fetch messages to/from and a stack of
 // interfaces to external modules.
-func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack) error {
+func startReplicaConnections(clientID, n uint32, f uint32, buf *requestbuffer.T, stack Stack) error {
 	outHandler := makeOutgoingMessageHandler(buf)
 	authenticator := makeReplyAuthenticator(clientID, stack)
 	consumer := makeReplyConsumer(buf)
 	handleReply := makeReplyMessageHandler(consumer, authenticator)
 
+	faulty := uint32(0)
 	for i := uint32(0); i < n; i++ {
 		connector := makeReplicaConnector(i, stack)
 		inHandler := makeIncomingMessageHandler(i, handleReply)
 		if err := startReplicaConnection(outHandler, inHandler, connector); err != nil {
-			return fmt.Errorf("Error connecting to replica %d: %s", i, err)
+			faulty += 1
+			if faulty <= f {
+				fmt.Printf("Error connecting to replica %d: %s\n", i, err)
+				continue
+			} else {
+				return fmt.Errorf("Error getting connection failures from more than %d replicas", f)
+			}
 		}
 	}
 
