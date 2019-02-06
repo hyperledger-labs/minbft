@@ -97,7 +97,7 @@ type messageStreamHandler struct {
 
 // HandleMessageStream implements actual communication with remote
 // replica by means of the gRPC connection established to the replica.
-func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	var stream proto.Channel_ChatClient
 	var wg sync.WaitGroup
 	out := make(chan []byte)
@@ -147,5 +147,5 @@ func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []b
 		}
 	}()
 
-	return out, nil
+	return out
 }
