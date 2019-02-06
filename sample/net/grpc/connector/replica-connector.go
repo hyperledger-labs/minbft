@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"sync"
 
 	"google.golang.org/grpc"
 
@@ -97,14 +98,23 @@ type messageStreamHandler struct {
 // HandleMessageStream implements actual communication with remote
 // replica by means of the gRPC connection established to the replica.
 func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+	var stream proto.Channel_ChatClient
+	var wg sync.WaitGroup
 	out := make(chan []byte)
 
-	stream, err := h.client.Chat(context.Background())
-	if err != nil {
-		return nil, err
-	}
+	wg.Add(1)
+	go func() {
+		var err error
+		stream, err = h.client.Chat(context.Background(), grpc.FailFast(false))
+		if err != nil {
+			log.Printf("Error initializing client stream to replica %d: %s\n",
+				h.replicaID, err)
+		}
+		wg.Done()
+	}()
 
 	go func() {
+		wg.Wait()
 		for msg := range in {
 			err := stream.Send(&proto.Message{Payload: msg})
 			if err != nil {
@@ -122,6 +132,7 @@ func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []b
 
 	go func() {
 		defer close(out)
+		wg.Wait()
 		for {
 			msg, err := stream.Recv()
 			if err == io.EOF {
