@@ -53,6 +53,8 @@ type Configer interface {
 // guarantees reliable and secure message delivery to the replica.
 // Message delivery delay is assumed not to grow indefinitely. This
 // assumption has to be satisfied to ensure the liveness of the system.
+// ReplicaMessageStreamHandler never fails except when incorrect replica
+// ID is passed.
 type ReplicaConnector interface {
 	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
 }
@@ -64,7 +66,9 @@ type ReplicaConnector interface {
 // produced in reply. Each value sent/received through a channel is a
 // single complete serialized message. Once a message is received from
 // any of the channels, it is the receiver's responsibility to finish
-// handling of the message.
+// handling of the message. Another note is that the remote replica
+// might be unreachable, and in order to avoid whole system being stuck,
+// you should also initialize message stream asynchronously in goroutine.
 type MessageStreamHandler interface {
 	HandleMessageStream(in <-chan []byte) (out <-chan []byte)
 }
