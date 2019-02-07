@@ -42,7 +42,7 @@ func TestReplicaMessageStreamHandler(t *testing.T) {
 	defer stopLoopServers(servers)
 
 	replicaConnector := connector.New()
-	err := replicaConnector.ConnectManyReplicas(addrs, grpc.WithInsecure(), grpc.WithBlock())
+	err := replicaConnector.ConnectManyReplicas(addrs, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	inChannels := prepareInChannels(msgs)
