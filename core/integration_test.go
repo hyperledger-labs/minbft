@@ -134,6 +134,9 @@ func initTestnetPeers(numReplica int, numClient int) {
 	replicaConnectors = createReplicaConnectors(numReplica)
 	clientConnectors = createReplicaConnectors(numClient)
 
+	connectReplicas(replicaConnectors, numReplica)
+	connectClients(clientConnectors, numReplica)
+
 	// replicas
 	for i := 0; i < numReplica; i++ {
 		id := uint32(i)
@@ -146,9 +149,6 @@ func initTestnetPeers(numReplica int, numClient int) {
 		replicas = append(replicas, replica)
 	}
 
-	connectReplicas(replicaConnectors, replicas)
-	connectClients(clientConnectors, replicas)
-
 	// clients
 	for i := 0; i < numClient; i++ {
 		au, _ := authen.New([]api.AuthenticationRole{api.ClientAuthen}, testClientID, bytes.NewBuffer(testKeys))
@@ -159,11 +159,8 @@ func initTestnetPeers(numReplica int, numClient int) {
 		clients = append(clients, client)
 	}
 
-	for _, r := range replicas {
-		if err := r.Start(); err != nil {
-			panic(err)
-		}
-	}
+	setReadyReplicas(replicaConnectors, replicas, numReplica)
+	setReadyClients(clientConnectors, replicas, numReplica)
 }
 
 func createReplicaConnectors(n int) []*dummyConnector.ReplicaConnector {
@@ -174,25 +171,47 @@ func createReplicaConnectors(n int) []*dummyConnector.ReplicaConnector {
 	return connectors
 }
 
-func connectReplicas(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
+func setReadyReplicas(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica, numReplica int) {
 	for i, connector := range connectors {
-		peers := makeReplicaMap(replicas)
+		for j := 0; j < numReplica; j++ {
+			if i != j {
+				if err := connector.SetReady(uint32(j), replicas[uint32(j)]); err != nil {
+					fmt.Printf("Failed to set connection ready: %s\n", err)
+				}
+			}
+		}
+	}
+}
+
+func setReadyClients(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica, numReplica int) {
+	for _, connector := range connectors {
+		for j := 0; j < numReplica; j++ {
+			if err := connector.SetReady(uint32(j), replicas[uint32(j)]); err != nil {
+				fmt.Printf("Failed to set connection ready: %s\n", err)
+			}
+		}
+	}
+}
+
+func connectReplicas(connectors []*dummyConnector.ReplicaConnector, numReplica int) {
+	for i, connector := range connectors {
+		peers := makeReplicaMap(numReplica)
 		delete(peers, uint32(i)) // avoid connecting replica to itself
 		connector.ConnectManyReplicas(peers)
 	}
 }
 
-func connectClients(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
-	peers := makeReplicaMap(replicas)
+func connectClients(connectors []*dummyConnector.ReplicaConnector, numReplica int) {
+	peers := makeReplicaMap(numReplica)
 	for _, connector := range connectors {
 		connector.ConnectManyReplicas(peers)
 	}
 }
 
-func makeReplicaMap(replicas []*minbft.Replica) map[uint32]api.MessageStreamHandler {
-	replicaMap := make(map[uint32]api.MessageStreamHandler)
-	for i, r := range replicas {
-		replicaMap[uint32(i)] = r
+func makeReplicaMap(numReplica int) map[uint32]chan bool {
+	replicaMap := make(map[uint32]chan bool)
+	for i := 0; i < numReplica; i++ {
+		replicaMap[uint32(i)] = make(chan bool)
 	}
 	return replicaMap
 }

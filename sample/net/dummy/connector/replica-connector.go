@@ -49,15 +49,53 @@ func (c *ReplicaConnector) ReplicaMessageStreamHandler(replicaID uint32) (api.Me
 	return replica, nil
 }
 
-// ConnectReplica assigns a replica instance to replica ID.
-func (c *ReplicaConnector) ConnectReplica(replicaID uint32, replica api.MessageStreamHandler) {
-	c.replicas[replicaID] = replica
+// ConnectReplica initializes a messageStreamHandler instance.
+func (c *ReplicaConnector) ConnectReplica(replicaID uint32, ready chan bool) {
+	c.replicas[replicaID] = &messageStreamHandler{replicaID, ready, nil}
 }
 
-// ConnectManyReplicas assigns replica instances to replica IDs
-// according to the supplied map indexed by replica ID.
-func (c *ReplicaConnector) ConnectManyReplicas(replicas map[uint32]api.MessageStreamHandler) {
+// ConnectManyReplicas assigns messageStreamHandlers for a set of replica IDs.
+func (c *ReplicaConnector) ConnectManyReplicas(replicas map[uint32]chan bool) {
 	for id, r := range replicas {
 		c.ConnectReplica(id, r)
 	}
+}
+
+// SetReady sets replica instance to replica connector.
+func (c *ReplicaConnector) SetReady(replicaID uint32, replica api.MessageStreamHandler) error {
+	r, ok := c.replicas[replicaID]
+	if !ok {
+		return fmt.Errorf("messageStreamHandler not available for replica %d", replicaID)
+	}
+	r.(*messageStreamHandler).setReplica(replica)
+	return nil
+}
+
+// messageStreamHandler is a local representation of the replica for
+// the purpose of message exchange.
+type messageStreamHandler struct {
+	replicaID uint32
+	ready     chan bool
+	replica   api.MessageStreamHandler
+}
+
+// SetReady sets a replica instance and notifies that we are now ready to
+// start handling messages from h.replica.HandleMessageStream.
+func (h *messageStreamHandler) setReplica(replica api.MessageStreamHandler) {
+	h.replica = replica
+	h.ready <- true
+}
+
+// HandleMessageStream implements actual communication with other replica.
+func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
+	out := make(chan []byte)
+
+	go func() {
+		<-h.ready
+		for msg := range h.replica.HandleMessageStream(in) {
+			out <- msg
+		}
+	}()
+
+	return out
 }
