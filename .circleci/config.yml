@@ -39,3 +39,8 @@ jobs:
           name: Lint
           command: |
             make lint
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
