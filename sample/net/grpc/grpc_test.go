@@ -113,8 +113,7 @@ func startMessageStreams(t *testing.T, replicaConnector *connector.ReplicaConnec
 		require.NoError(t, err)
 		require.NotNil(t, streamHandler)
 
-		out, err := streamHandler.HandleMessageStream(in)
-		require.NoError(t, err)
+		out := streamHandler.HandleMessageStream(in)
 		require.NotNil(t, out)
 		outChannels[i] = out
 	}
@@ -172,7 +171,7 @@ type loopReplica struct {
 	grpcServer *grpc.Server
 }
 
-func (r *loopReplica) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+func (r *loopReplica) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	// Buffer a couple of messages to create a bit of concurrency
 	out := make(chan []byte, 2)
 	go func() {
@@ -181,7 +180,7 @@ func (r *loopReplica) HandleMessageStream(in <-chan []byte) (<-chan []byte, erro
 		}
 		close(out)
 	}()
-	return out, nil
+	return out
 }
 
 func (r *loopReplica) start() (addr string) {

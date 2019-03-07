@@ -119,10 +119,7 @@ func makeReplicaConnector(replicaID uint32, connector api.ReplicaConnector) repl
 		if err != nil {
 			return nil, fmt.Errorf("Error getting message stream handler: %s", err)
 		}
-		in, err := streamHandler.HandleMessageStream(out)
-		if err != nil {
-			return nil, fmt.Errorf("Error establishing connection: %s", err)
-		}
+		in := streamHandler.HandleMessageStream(out)
 		return in, nil
 	}
 }
