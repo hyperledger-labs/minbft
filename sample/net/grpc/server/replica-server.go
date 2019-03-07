@@ -77,10 +77,7 @@ func (s *ReplicaServer) Stop() {
 // Chat implements a corresponding gRPC server interface method
 func (s *ReplicaServer) Chat(stream proto.Channel_ChatServer) error {
 	in := make(chan []byte)
-	out, err := s.replica.HandleMessageStream(in)
-	if err != nil {
-		return err
-	}
+	out := s.replica.HandleMessageStream(in)
 
 	eg := new(errgroup.Group)
 

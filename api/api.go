@@ -66,7 +66,7 @@ type ReplicaConnector interface {
 // any of the channels, it is the receiver's responsibility to finish
 // handling of the message.
 type MessageStreamHandler interface {
-	HandleMessageStream(in <-chan []byte) (out <-chan []byte, err error)
+	HandleMessageStream(in <-chan []byte) (out <-chan []byte)
 }
 
 //======= Interface for module 'authentication' ========

@@ -94,10 +94,7 @@ func (r *Replica) Start() error {
 		// replica will establish connections to other peers
 		// the same way, so they all will be eventually fully
 		// connected.
-		_, err = sh.HandleMessageStream(out)
-		if err != nil {
-			return fmt.Errorf("Error establishing connection to peer replica %d: %s", i, err)
-		}
+		sh.HandleMessageStream(out)
 
 		go func() {
 			for msg := range r.log.Stream(nil) {
@@ -114,10 +111,10 @@ func (r *Replica) Start() error {
 
 // HandleMessageStream initiates handling of incoming messages and
 // supplies reply messages back, if any.
-func (r *Replica) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+func (r *Replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
 	go r.handleStream(in, out)
 
-	return out, nil
+	return out
 }
