@@ -19,39 +19,35 @@
 package connector
 
 import (
-	"fmt"
-
 	"github.com/hyperledger-labs/minbft/api"
 )
 
 // ReplicaConnector allows to connect replica instances in the same
 // process directly. It is useful for testing.
 type ReplicaConnector struct {
-	replicas map[uint32]api.MessageStreamHandler
+	replicas map[uint32]chan api.MessageStreamHandler
 }
 
 var _ api.ReplicaConnector = (*ReplicaConnector)(nil)
 
 // New creates an instance of ReplicaConnector
-func New() *ReplicaConnector {
-	return &ReplicaConnector{
-		replicas: make(map[uint32]api.MessageStreamHandler),
+func New(n int) *ReplicaConnector {
+	replicas := make(map[uint32]chan api.MessageStreamHandler)
+	for i := 0; i < n; i++ {
+		replicas[uint32(i)] = make(chan api.MessageStreamHandler)
 	}
+	return &ReplicaConnector{replicas: replicas}
 }
 
 // ReplicaMessageStreamHandler returns the instance previously
 // assigned to replica ID.
 func (c *ReplicaConnector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
-	replica, ok := c.replicas[replicaID]
-	if !ok {
-		return nil, fmt.Errorf("No message stream handler registered for replica %d", replicaID)
-	}
-	return replica, nil
+	return &messageStreamHandler{replicaID, c}, nil
 }
 
 // ConnectReplica assigns a replica instance to replica ID.
 func (c *ReplicaConnector) ConnectReplica(replicaID uint32, replica api.MessageStreamHandler) {
-	c.replicas[replicaID] = replica
+	c.replicas[replicaID] <- replica
 }
 
 // ConnectManyReplicas assigns replica instances to replica IDs
@@ -60,4 +56,25 @@ func (c *ReplicaConnector) ConnectManyReplicas(replicas map[uint32]api.MessageSt
 	for id, r := range replicas {
 		c.ConnectReplica(id, r)
 	}
+}
+
+// messageStreamHandler is a local representation of the replica for
+// the purpose of message exchange.
+type messageStreamHandler struct {
+	replicaID uint32
+	connector *ReplicaConnector
+}
+
+// HandleMessageStream implements actual communication with other replica.
+func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
+	out := make(chan []byte)
+
+	go func() {
+		replica := <-h.connector.replicas[h.replicaID]
+		for msg := range replica.HandleMessageStream(in) {
+			out <- msg
+		}
+	}()
+
+	return out
 }
