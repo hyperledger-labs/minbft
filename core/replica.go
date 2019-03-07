@@ -75,11 +75,15 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
 	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
+	if err := replica.start(); err != nil {
+		return nil, fmt.Errorf("Failed to start replica: %s", err)
+	}
+
 	return replica, nil
 }
 
 // Start begins message exchange with peer replicas
-func (r *Replica) Start() error {
+func (r *Replica) start() error {
 	for i := uint32(0); i < r.n; i++ {
 		if i == r.id {
 			continue
