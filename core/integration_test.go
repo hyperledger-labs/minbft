@@ -131,8 +131,8 @@ func initTestnetPeers(numReplica int, numClient int) {
 		panic(err)
 	}
 
-	replicaConnectors = createReplicaConnectors(numReplica)
-	clientConnectors = createReplicaConnectors(numClient)
+	replicaConnectors = createReplicaConnectors(numReplica, numReplica)
+	clientConnectors = createReplicaConnectors(numReplica, numClient)
 
 	// replicas
 	for i := 0; i < numReplica; i++ {
@@ -146,9 +146,6 @@ func initTestnetPeers(numReplica int, numClient int) {
 		replicas = append(replicas, replica)
 	}
 
-	connectReplicas(replicaConnectors, replicas)
-	connectClients(clientConnectors, replicas)
-
 	// clients
 	for i := 0; i < numClient; i++ {
 		au, _ := authen.New([]api.AuthenticationRole{api.ClientAuthen}, testClientID, bytes.NewBuffer(testKeys))
@@ -159,17 +156,14 @@ func initTestnetPeers(numReplica int, numClient int) {
 		clients = append(clients, client)
 	}
 
-	for _, r := range replicas {
-		if err := r.Start(); err != nil {
-			panic(err)
-		}
-	}
+	connectReplicas(replicaConnectors, replicas)
+	connectClients(clientConnectors, replicas)
 }
 
-func createReplicaConnectors(n int) []*dummyConnector.ReplicaConnector {
+func createReplicaConnectors(numReplica int, n int) []*dummyConnector.ReplicaConnector {
 	connectors := make([]*dummyConnector.ReplicaConnector, n)
 	for i := range connectors {
-		connectors[i] = dummyConnector.New()
+		connectors[i] = dummyConnector.New(numReplica)
 	}
 	return connectors
 }
