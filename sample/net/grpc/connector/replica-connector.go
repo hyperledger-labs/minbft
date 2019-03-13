@@ -96,15 +96,23 @@ type messageStreamHandler struct {
 
 // HandleMessageStream implements actual communication with remote
 // replica by means of the gRPC connection established to the replica.
-func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
+	var stream proto.Channel_ChatClient
+	ready := make(chan struct{})
 	out := make(chan []byte)
 
-	stream, err := h.client.Chat(context.Background())
-	if err != nil {
-		return nil, err
-	}
+	go func() {
+		defer close(ready)
+		var err error
+		stream, err = h.client.Chat(context.Background(), grpc.WaitForReady(true))
+		if err != nil {
+			log.Printf("Error initializing client stream to replica %d: %s\n",
+				h.replicaID, err)
+		}
+	}()
 
 	go func() {
+		<-ready
 		for msg := range in {
 			err := stream.Send(&proto.Message{Payload: msg})
 			if err != nil {
@@ -122,6 +130,7 @@ func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []b
 
 	go func() {
 		defer close(out)
+		<-ready
 		for {
 			msg, err := stream.Recv()
 			if err == io.EOF {
@@ -136,5 +145,5 @@ func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) (<-chan []b
 		}
 	}()
 
-	return out, nil
+	return out
 }

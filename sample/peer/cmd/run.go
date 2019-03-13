@@ -113,8 +113,14 @@ func run() error {
 	ledger := requestconsumer.NewSimpleLedger()
 
 	peerAddrs := make(map[uint32]string)
+	var listenAddr string
 	for _, p := range cfg.Peers() {
-		peerAddrs[uint32(p.ID)] = p.Addr
+		// avoid connecting back to this replica
+		if uint32(p.ID) == id {
+			listenAddr = p.Addr
+		} else {
+			peerAddrs[uint32(p.ID)] = p.Addr
+		}
 	}
 
 	loggingOpts, err := getLoggingOptions()
@@ -122,18 +128,17 @@ func run() error {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
 	replicaConnector := connector.New()
+	if err = replicaConnector.ConnectManyReplicas(peerAddrs, grpc.WithInsecure()); err != nil {
+		return fmt.Errorf("Failed to connect to peers: %s", err)
+	}
+
 	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger}, loggingOpts...)
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}
 	replicaServer := server.New(replica)
 
-	// We must start a replica server before attempting to connect
-	// to other replicas, because other replicas will do the same.
-	// Otherwise, all replicas will block forever waiting for each
-	// other to start serving incoming connections.
 	srvErrChan := make(chan error)
-	listenAddr := peerAddrs[id]
 	go func() {
 		defer replicaServer.Stop()
 		if err := replicaServer.ListenAndServe(listenAddr); err != nil {
@@ -142,16 +147,6 @@ func run() error {
 			srvErrChan <- err
 		}
 	}()
-
-	delete(peerAddrs, id) // avoid connecting back to this replica
-	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	if err := replicaConnector.ConnectManyReplicas(peerAddrs, dialOpts...); err != nil {
-		return fmt.Errorf("Failed to connect to peers: %s", err)
-	}
-
-	if err := replica.Start(); err != nil {
-		return fmt.Errorf("Failed to start replica: %s", err)
-	}
 
 	return <-srvErrChan
 }

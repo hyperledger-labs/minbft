@@ -75,11 +75,15 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
 	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
+	if err := replica.start(); err != nil {
+		return nil, fmt.Errorf("Failed to start replica: %s", err)
+	}
+
 	return replica, nil
 }
 
 // Start begins message exchange with peer replicas
-func (r *Replica) Start() error {
+func (r *Replica) start() error {
 	for i := uint32(0); i < r.n; i++ {
 		if i == r.id {
 			continue
@@ -94,10 +98,7 @@ func (r *Replica) Start() error {
 		// replica will establish connections to other peers
 		// the same way, so they all will be eventually fully
 		// connected.
-		_, err = sh.HandleMessageStream(out)
-		if err != nil {
-			return fmt.Errorf("Error establishing connection to peer replica %d: %s", i, err)
-		}
+		sh.HandleMessageStream(out)
 
 		go func() {
 			for msg := range r.log.Stream(nil) {
@@ -114,10 +115,10 @@ func (r *Replica) Start() error {
 
 // HandleMessageStream initiates handling of incoming messages and
 // supplies reply messages back, if any.
-func (r *Replica) HandleMessageStream(in <-chan []byte) (<-chan []byte, error) {
+func (r *Replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
 	go r.handleStream(in, out)
 
-	return out, nil
+	return out
 }
