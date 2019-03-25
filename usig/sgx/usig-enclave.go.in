@@ -200,7 +200,7 @@ func sgxSuccessOrPanic(sgxErr C.sgx_status_t) {
 }
 
 func sgxEC256SigToASN1(sgxSig *C.sgx_ec256_signature_t) []byte {
-	sgxR, sgxS := sgxSig.x[:], sgxSig.y[:] // nolint: gotype
+	sgxR, sgxS := sgxSig.x[:], sgxSig.y[:]
 	r := sgxUint32SliceToBigInt(sgxR)
 	s := sgxUint32SliceToBigInt(sgxS)
 
@@ -213,7 +213,7 @@ func sgxEC256SigToASN1(sgxSig *C.sgx_ec256_signature_t) []byte {
 }
 
 func sgxEC256PubKeyToGo(sgxPubKey *C.sgx_ec256_public_t) crypto.PublicKey {
-	sgxX, sgxY := sgxPubKey.gx[:], sgxPubKey.gy[:] // nolint: gotype
+	sgxX, sgxY := sgxPubKey.gx[:], sgxPubKey.gy[:]
 
 	return &ecdsa.PublicKey{
 		Curve: elliptic.P256(),
