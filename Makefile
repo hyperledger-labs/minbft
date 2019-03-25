@@ -51,7 +51,14 @@ check: usig-build usig-check
 	go test -short -race ./...
 
 lint: usig-go-wrapper
-	gometalinter --vendor --enable="gofmt" --enable="misspell" --exclude='.+[.]pb[.]go' --deadline=5m ./...
+	golangci-lint run --skip-files "_test\.go" \
+		--disable-all \
+		-E govet -E typecheck -E deadcode -E gocyclo -E golint \
+		-E varcheck -E structcheck -E maligned -E errcheck \
+		-E megacheck -E dupl -E ineffassign -E interfacer \
+		-E unconvert -E goconst -E gosec \
+		-E gofmt -E misspell \
+		./...
 
 generate:
 	go generate ./...
