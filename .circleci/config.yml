@@ -7,7 +7,8 @@ jobs:
     environment:
       GO_URL: https://dl.google.com/go/go1.11.4.linux-amd64.tar.gz
       SGX_SDK_URL: https://download.01.org/intel-sgx/linux-2.3.1/ubuntu18.04/sgx_linux_x64_sdk_2.3.101.46683.bin
-      GOMETALINTER_URL: https://github.com/alecthomas/gometalinter/releases/download/v2.0.12/gometalinter-2.0.12-linux-amd64.tar.gz
+      GOLANGCI_LINT_URL: https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
+      GOLANGCI_LINT_VERSION: v1.15.0
       SGX_MODE: SIM
     steps:
       - run:
@@ -27,9 +28,9 @@ jobs:
             rm sgx_linux_x64_sdk.bin
             echo ". /opt/intel/sgxsdk/environment" >> $BASH_ENV
       - run:
-          name: Install gometalinter
+          name: Install GolangCI-Lint
           command: |
-            curl -sL $GOMETALINTER_URL | sudo tar -xzf - --strip-components=1 -C /usr/local/bin
+            curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin $GOLANGCI_LINT_VERSION
       - checkout
       - run:
           name: Test
