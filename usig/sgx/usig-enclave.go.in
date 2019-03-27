@@ -63,7 +63,7 @@ func NewUSIGEnclave(enclaveFile string, sealedKey []byte) (*USIGEnclave, error) 
 
 	sealedDataSize := C.size_t(len(sealedKey))
 	var sealedData unsafe.Pointer
-	if sealedKey != nil && len(sealedKey) != 0 {
+	if len(sealedKey) != 0 {
 		// vet linter reports an error, but it's been recently fixed.
 		// So disable linting until gometalinter picks up this update
 		sealedData = C.CBytes(sealedKey) // nolint: vet
@@ -200,7 +200,7 @@ func sgxSuccessOrPanic(sgxErr C.sgx_status_t) {
 }
 
 func sgxEC256SigToASN1(sgxSig *C.sgx_ec256_signature_t) []byte {
-	sgxR, sgxS := sgxSig.x[:], sgxSig.y[:] // nolint: gotype
+	sgxR, sgxS := sgxSig.x[:], sgxSig.y[:]
 	r := sgxUint32SliceToBigInt(sgxR)
 	s := sgxUint32SliceToBigInt(sgxS)
 
@@ -213,7 +213,7 @@ func sgxEC256SigToASN1(sgxSig *C.sgx_ec256_signature_t) []byte {
 }
 
 func sgxEC256PubKeyToGo(sgxPubKey *C.sgx_ec256_public_t) crypto.PublicKey {
-	sgxX, sgxY := sgxPubKey.gx[:], sgxPubKey.gy[:] // nolint: gotype
+	sgxX, sgxY := sgxPubKey.gx[:], sgxPubKey.gy[:]
 
 	return &ecdsa.PublicKey{
 		Curve: elliptic.P256(),
