@@ -155,7 +155,7 @@ func (l *SimpleLedger) StateDigest() []byte {
 	l.RLock()
 	defer l.RUnlock()
 
-	if l.length <= 0 {
+	if l.length == 0 {
 		return nil
 	}
 	lastBlockBytes, err := l.blocks[l.length-1].MarshalBinary()

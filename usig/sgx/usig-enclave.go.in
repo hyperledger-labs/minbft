@@ -63,7 +63,7 @@ func NewUSIGEnclave(enclaveFile string, sealedKey []byte) (*USIGEnclave, error) 
 
 	sealedDataSize := C.size_t(len(sealedKey))
 	var sealedData unsafe.Pointer
-	if sealedKey != nil && len(sealedKey) != 0 {
+	if len(sealedKey) != 0 {
 		// vet linter reports an error, but it's been recently fixed.
 		// So disable linting until gometalinter picks up this update
 		sealedData = C.CBytes(sealedKey) // nolint: vet
