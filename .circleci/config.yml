@@ -1,7 +1,6 @@
 version: 2
 jobs:
   build:
-    working_directory: ~/go/src/github.com/hyperledger-labs/minbft
     docker:
       - image: circleci/buildpack-deps:bionic-curl
     environment:
