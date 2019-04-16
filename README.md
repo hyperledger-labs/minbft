@@ -15,6 +15,7 @@
   * [Getting Started](#getting-started)
       * [Building](#building)
       * [Running Example](#running-example)
+      * [Fault Tolerance](#fault-tolerance)
       * [Code Structure](#code-structure)
   * [Roadmap](#roadmap)
   * [Contributing](#contributing)
@@ -270,6 +271,55 @@ processes and release the occupied TCP ports:
 ```sh
 killall peer
 ```
+
+### Fault Tolerance ###
+
+The above example shows a simple normal case of the consensus network.
+Our next interest is how the system behaves when some replicas are faulty.
+
+#### Crash Fault on Backup ####
+
+The simplest faulty case is crash fault on backup replicas. Note that
+we don't tolerate any type of fault on primary replica until view change
+operation is implemented.
+
+Let's restart the network, and note the process IDs of each replica process.
+
+```sh
+$ bin/peer run 0 &
+[1] 16899
+$ bin/peer run 1 &
+[2] 16916
+$ bin/peer run 2 &
+[3] 16923
+```
+
+Make sure that all replicas are properly working by sending a request:
+
+```sh
+$ bin/peer request First request
+Reply: {"Height":1,"PrevBlockHash":null,"Payload":"Rmlyc3QgcmVxdWVzdA=="}
+```
+
+Now kill replica 1 and send another request:
+
+```sh
+$ kill 16916
+$ bin/peer request Second request
+Reply: {"Height":2,"PrevBlockHash":"DuAGbE1hVQCvgi+R0E5zWaKSlVYFEo3CjlRj9Eik5h4=","Payload":"U2Vjb25kIHJlcXVlc3Q="}
+```
+
+OK, we still get the reply messages with successfully agreed response.
+Next, kill another backup replica and send another request:
+
+```sh
+$ kill 16923
+$ bin/peer request Another request
+(no response)
+```
+
+We fail to reach consensus and get no response because more than
+`f` replicas are faulty.
 
 ### Code Structure ###
 
