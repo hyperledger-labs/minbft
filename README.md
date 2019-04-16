@@ -156,9 +156,12 @@ export SGX_MODE=SIM
 
 ## Getting Started ##
 
-The project source code should be placed in
-`$GOPATH/src/github.com/hyperledger-labs/minbft/` directory. All
-following commands are supposed to be run from that directory.
+This is a Go module and can be placed anywhere; no need to be in
+GOPATH. If this is placed in GOPATH, please make sure that the
+environment variable `GO111MODULE=on` has set to activate module mode.
+
+All following commands are supposed to be run in the root of the
+module's source tree.
 
 ### Building ###
 
@@ -181,6 +184,10 @@ options can be queried by invoking those binaries with `help`
 argument. Sample configuration files can be found in
 `sample/authentication/keytool/` and `sample/peer/` directories
 respectively.
+
+If this is placed outside GOPATH, a path of a USIG enclave file must be
+passed to the commands (e.g. `-u ../usig/sgx/enclave/libusig.signed.so`
+command line arguments).
 
 #### Generating Keys ####
 
