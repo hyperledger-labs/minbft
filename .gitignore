@@ -1,2 +1,6 @@
 *~
-bin
+/sample/build/
+
+# Default installation directories
+/sample/bin/
+/sample/lib/
