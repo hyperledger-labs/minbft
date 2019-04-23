@@ -19,4 +19,4 @@ client:
 # USIG options
 usig:
   # USIG enclave file (environment expansion is supported)
-  enclaveFile: "$GOPATH/src/github.com/hyperledger-labs/minbft/usig/sgx/enclave/libusig.signed.so"
+  enclaveFile: "lib/libusig.signed.so"

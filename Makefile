@@ -14,7 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: all build clean check test lint generate
+INSTALL := install
+INSTALL_PROGRAM := $(INSTALL)
+INSTALL_DATA := $(INSTALL) -m 644
+
+builddir := sample/build
+
+prefix := sample
+bindir := $(prefix)/bin
+libdir := $(prefix)/lib
+
+.PHONY: all build install uninstall clean check test lint generate
 
 all: build check
 test: check
@@ -31,6 +41,8 @@ help:
 	@echo 'Generic targets:'
 	@echo '  all (default)    - Build and test all'
 	@echo '  build            - Build all'
+	@echo '  install          - Install artifacts'
+	@echo '  uninstall        - Uninstall artifacts'
 	@echo '  clean            - Remove all build artifacts'
 	@echo '  check|test       - Run all tests'
 	@echo '  lint             - Run code quality checks'
@@ -40,12 +52,24 @@ help:
 	@echo '  usig-*           - Make USIG target, where target is one of:'
 	@echo '                     $(usig-target-list)'
 
-build: usig-build | bin
-	go build -o sample/bin/peer ./sample/peer
-	go build -o sample/bin/keytool ./sample/authentication/keytool
+build: usig-build
+	go build -o $(builddir)/keytool ./sample/authentication/keytool
+	go build -o $(builddir)/peer ./sample/peer
+
+install: build
+	@mkdir -p $(bindir)
+	$(INSTALL_PROGRAM) $(builddir)/keytool $(bindir)/keytool
+	$(INSTALL_PROGRAM) $(builddir)/peer $(bindir)/peer
+	@mkdir -p $(libdir)
+	$(INSTALL_DATA) usig/sgx/enclave/libusig.signed.so $(libdir)/libusig.signed.so
+
+uninstall:
+	rm $(bindir)/keytool
+	rm $(bindir)/peer
+	rm $(libdir)/libusig.signed.so
 
 clean: usig-clean
-	rm -rf bin
+	rm -rf $(builddir)
 
 check: usig-build usig-check
 	go test -short -race ./...
@@ -58,6 +82,3 @@ generate:
 
 $(usig-target-list):
 	$(MAKE) -C usig/sgx $(patsubst usig-%,%,$@)
-
-bin:
-	@mkdir -p bin

@@ -117,13 +117,7 @@ sudo apt-get install build-essential pkg-config
 ### Golang ###
 
 `go1.11` is used to build this project. For installation instructions
-please visit [this page](https://golang.org/doc/install). Please make
-sure to export `GOPATH` environment variable, e.g. by adding the
-following line to `~/.profile`:
-
-```sh
-export GOPATH="$HOME/go"
-```
+please visit [this page](https://golang.org/doc/install).
 
 ### Intel® SGX SDK ###
 
@@ -166,13 +160,13 @@ module's source tree.
 
 ### Building ###
 
-The project can be build by issuing the following command:
+The project can be build by issuing the following command. At the
+moment, the binaries are installed in `sample/bin/` directory; no root
+privileges are needed.
 
 ```sh
-make build
+make install
 ```
-
-The binaries produced are placed under `sample/bin/` directory.
 
 ### Running Example ###
 
@@ -185,10 +179,6 @@ options can be queried by invoking those binaries with `help`
 argument. Sample configuration files can be found in
 `sample/authentication/keytool/` and `sample/peer/` directories
 respectively.
-
-If this is placed outside GOPATH, a path of a USIG enclave file must be
-passed to the commands (e.g. `-u ../usig/sgx/enclave/libusig.signed.so`
-command line arguments).
 
 #### Generating Keys ####
 
@@ -203,7 +193,7 @@ command. This command produces a key set file suitable for running the
 example on a local machine:
 
 ```sh
-bin/keytool generate
+bin/keytool generate -u lib/libusig.signed.so
 ```
 
 This invocation will create a sample key set file named `keys.yaml`

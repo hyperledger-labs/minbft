@@ -37,8 +37,7 @@ const (
 	defClientKeySpec   = "ECDSA"
 	defClientSecParam  = 256
 
-	defUsigEnclaveFile = "$GOPATH/src/github.com/hyperledger-labs/minbft/" +
-		"usig/sgx/enclave/libusig.signed.so"
+	defUsigEnclaveFile = "libusig.signed.so"
 )
 
 // generateCmd represents the generate command

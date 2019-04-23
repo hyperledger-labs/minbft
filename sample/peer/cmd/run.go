@@ -39,8 +39,7 @@ import (
 const (
 	defConsensusCfgFile = "consensus.yaml"
 	defKeysFile         = "keys.yaml"
-	defUsigEnclaveFile  = "$GOPATH/src/github.com/hyperledger-labs/minbft/" +
-		"usig/sgx/enclave/libusig.signed.so"
+	defUsigEnclaveFile  = "libusig.signed.so"
 )
 
 // runCmd represents the run command
