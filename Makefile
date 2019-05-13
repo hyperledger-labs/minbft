@@ -41,7 +41,7 @@ help:
 	@echo 'Generic targets:'
 	@echo '  all (default)    - Build and test all'
 	@echo '  build            - Build all'
-	@echo '  install          - Install artifacts'
+	@echo '  install          - Build and install artifacts'
 	@echo '  uninstall        - Uninstall artifacts'
 	@echo '  clean            - Remove all build artifacts'
 	@echo '  check|test       - Run all tests'
