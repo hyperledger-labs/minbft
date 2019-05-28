@@ -144,18 +144,23 @@ func TestMakeCommitmentCollector(t *testing.T) {
 		args := mock.MethodCalled("requestSeqRetirer", request)
 		return args.Bool(0)
 	}
+	stopReqTimer := func(clientID uint32) {
+		mock.MethodCalled("requestTimerStopper", clientID)
+	}
 	executeRequest := func(request *messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	collect := makeCommitmentCollector(countCommitment, retireSeq, executeRequest)
+	collect := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
 
 	n := randN()
 	view := randView()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
+	clientID := rand.Uint32()
 	request := &messages.Request{
 		Msg: &messages.Request_M{
-			Seq: rand.Uint64(),
+			ClientId: clientID,
+			Seq:      rand.Uint64(),
 		},
 	}
 	prepare := &messages.Prepare{
@@ -180,6 +185,7 @@ func TestMakeCommitmentCollector(t *testing.T) {
 
 	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
 	mock.On("requestSeqRetirer", request).Return(true).Once()
+	mock.On("requestTimerStopper", clientID).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(id, prepare)
 	assert.NoError(t, err)
