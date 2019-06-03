@@ -123,20 +123,21 @@ please visit [this page](https://golang.org/doc/install).
 
 The Intel® SGX enclave implementation has been tested with Intel® SGX
 SDK for Linux version 2.3.1. For installation instuctions please visit
-[download page][sgx-downloads]. A conventional directory to install
+[download page][sgx-downloads].
+Please note that Intel SGX has two operation modes and required software
+components depend on operation mode.
+
+ - If we run in HW mode, we have to install all three components:
+   SGX driver, PSW, and SGX SDK.
+ - If we run in simulation mode, only SGX SDK is required.
+
+A conventional directory to install
 the SDK is `/opt/intel/`. Please do not forget to source
 `/opt/intel/sgxsdk/environment` file in your shell. Alternatively, one
 can add the following line to `~/.profile`:
 
 ```sh
 . /opt/intel/sgxsdk/environment
-```
-
-and create `/etc/ld.so.conf.d/sgx-sdk.conf` file with the following
-content:
-
-```
-/opt/intel/sgxsdk/sdk_libs
 ```
 
 When using a machine with no SGX support, only SGX simulation mode is
