@@ -156,8 +156,13 @@ func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessag
 		view := view()
 		primary := isPrimary(view, id, n)
 
-		// TODO: A new Request has arrived; the request timer
-		// should be re-/started at this point.
+		// The primary has to start request timer, as well.
+		// Suppose, the primary is correct, but its messages
+		// are delayed, and other replicas switch to a new
+		// view. In that case, other replicas might rely on
+		// this correct replica to trigger another view
+		// change, should the new primary be faulty.
+		startReqTimer(request.Msg.ClientId, view)
 
 		if primary {
 			prepare := &messages.Prepare{
@@ -169,8 +174,6 @@ func makeRequestApplier(id, n uint32, view viewProvider, handleGeneratedUIMessag
 			}
 
 			handleGeneratedUIMessage(prepare)
-		} else {
-			startReqTimer(request.Msg.ClientId, view)
 		}
 
 		return nil
