@@ -34,9 +34,6 @@ type replicaMessageSigner func(msg messages.MessageWithSignature)
 // message against the message data.
 type messageSignatureVerifier func(msg messages.MessageWithSignature) error
 
-// viewProvider returns the current view this replica operates on.
-type viewProvider func() (view uint64)
-
 // makeReplicaMessageSigner constructs an instance of messageSigner
 // using the supplied external interface for message authentication.
 func makeReplicaMessageSigner(authen api.Authenticator) replicaMessageSigner {
