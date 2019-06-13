@@ -189,6 +189,14 @@ argument. Sample configuration files can be found in
 `sample/authentication/keytool/` and `sample/peer/` directories
 respectively.
 
+Before running the example, the environment variable `$LD_LIBRARY_PATH`
+needs to include `sample/lib` where `libusig_shim.so` is installed by
+`make install`.
+
+```sh
+export LD_LIBRARY_PATH="${PWD}/sample/lib:${LD_LIBRARY_PATH}"
+```
+
 #### Generating Keys ####
 
 The following command are to be run from `sample` directory.

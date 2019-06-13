@@ -30,8 +30,7 @@ all: build check
 test: check
 
 usig-target-list := usig-help usig-all usig-build usig-clean		\
-                    usig-check usig-test usig-enclave usig-untrusted	\
-                    usig-go-wrapper
+                    usig-check usig-test usig-enclave usig-untrusted
 .PHONY: $(usig-target-list)
 
 .PHONY: help
@@ -59,6 +58,7 @@ build: usig-build
 install: build
 	$(INSTALL_PROGRAM) -D $(builddir)/keytool $(bindir)/keytool
 	$(INSTALL_PROGRAM) -D $(builddir)/peer $(bindir)/peer
+	$(INSTALL_DATA) -D usig/sgx/shim/libusig_shim.so $(libdir)/libusig_shim.so
 	$(INSTALL_DATA) -D usig/sgx/enclave/libusig.signed.so $(libdir)/libusig.signed.so
 
 uninstall:
@@ -72,7 +72,7 @@ clean: usig-clean
 check: usig-build usig-check
 	go test -short -race ./...
 
-lint: usig-go-wrapper
+lint:
 	golangci-lint run ./...
 
 generate:
