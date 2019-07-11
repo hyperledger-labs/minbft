@@ -22,6 +22,16 @@ import (
 	"time"
 )
 
+// ProtocolHandler handles incoming message according to the implemented protocol.
+//
+// Handle verifies and processes incoming messages according to the protocol.
+// If there is any message produced in reply, it will be send to reply
+// channel, otherwise nil channel is returned. The return value new
+// indicates that the message has not been processed before.
+type ProtocolHandler interface {
+	Handle(msg interface{}) (reply <-chan interface{}, new bool, err error)
+}
+
 //======= Interface for module 'config' =======
 
 // Configer defines the interface to obtain the protocol parameters from

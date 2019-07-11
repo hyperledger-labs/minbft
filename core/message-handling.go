@@ -37,13 +37,6 @@ import (
 // message, if any, to reply channel.
 type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 
-// incomingMessageHandler fully handles incoming message.
-//
-// If there is any message produced in reply, it will be send to reply
-// channel, otherwise nil channel is returned. The return value new
-// indicates that the message has not been processed before.
-type incomingMessageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
-
 // messageValidator validates a message.
 //
 // It authenticates and checks the supplied message for internal
@@ -135,10 +128,27 @@ type generatedMessageHandler func(msg messages.ReplicaMessage)
 // It is safe to invoke concurrently.
 type generatedMessageConsumer func(msg messages.ReplicaMessage)
 
-// defaultIncomingMessageHandler construct a standard
-// incomingMessageHandler using id as the current replica ID and the
+// protocolHandler represents an instance of protocolHandler
+type protocolHandler struct {
+	action func(msg interface{}) (replyChan <-chan interface{}, new bool, err error)
+}
+
+// Handle verifies and processes incoming messages
+func (h *protocolHandler) Handle(msg interface{}) (reply <-chan interface{}, new bool, err error) {
+
+	return h.action(msg)
+}
+
+// GetMinBFTHandler creates an instance of ProtocolHandler that abides to the MinBFT protocol
+func GetMinBFTHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) api.ProtocolHandler {
+
+	return defaultIncomingMessageHandler(id, log, config, stack, logger)
+}
+
+// defaultIncomingMessageHandler construct the default
+// ProtocolHandler using id as the current replica ID and the
 // supplied interfaces.
-func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) incomingMessageHandler {
+func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) api.ProtocolHandler {
 	n := config.N()
 	f := config.F()
 
@@ -225,8 +235,8 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 }
 
 // makeMessageStreamHandler construct an instance of
-// messageStreamHandler using the supplied abstract handler.
-func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Logger) messageStreamHandler {
+// messageStreamHandler using the supplied abstract protocol handler.
+func makeMessageStreamHandler(handler api.ProtocolHandler, logger *logging.Logger) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
 			wrappedMsg := &messages.Message{}
@@ -240,7 +250,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 
 			logger.Debugf("Received %s", msgStr)
 
-			if replyChan, new, err := handle(msg); err != nil {
+			if replyChan, new, err := handler.Handle(msg); err != nil {
 				logger.Warningf("Failed to handle %s: %s", msgStr, err)
 			} else if replyChan != nil {
 				m, more := <-replyChan
@@ -263,29 +273,33 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 }
 
 // makeIncomingMessageHandler constructs an instance of
-// incomingMessageHandler using id as the current replica ID, and the
+// protocolHandler using id as the current replica ID, and the
 // supplied abstractions.
-func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) incomingMessageHandler {
-	return func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
-		err = validate(msg)
-		if err != nil {
-			err = fmt.Errorf("Validation failed: %s", err)
-			return nil, false, err
-		}
+func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) api.ProtocolHandler {
 
-		new, err = process(msg)
-		if err != nil {
-			err = fmt.Errorf("Error processing message: %s", err)
-			return nil, false, err
-		}
+	return &protocolHandler{
 
-		replyChan, err = reply(msg)
-		if err != nil {
-			err = fmt.Errorf("Error replying message: %s", err)
-			return nil, false, err
-		}
+		action: func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+			err = validate(msg)
+			if err != nil {
+				err = fmt.Errorf("Validation failed: %s", err)
+				return nil, false, err
+			}
 
-		return replyChan, new, nil
+			new, err = process(msg)
+			if err != nil {
+				err = fmt.Errorf("Error processing message: %s", err)
+				return nil, false, err
+			}
+
+			replyChan, err = reply(msg)
+			if err != nil {
+				err = fmt.Errorf("Error replying message: %s", err)
+				return nil, false, err
+			}
+
+			return replyChan, new, nil
+		},
 	}
 }
 

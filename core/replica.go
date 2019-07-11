@@ -22,8 +22,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/hyperledger-labs/minbft/api"
+	api "github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
+	logging "github.com/op/go-logging"
 )
 
 const (
@@ -49,6 +50,33 @@ type Replica struct {
 
 	log          messagelog.MessageLog
 	handleStream messageStreamHandler
+}
+
+// GetReplica creates a new instance of replica node
+func GetReplica(id uint32, configer api.Configer, stack Stack, handler api.ProtocolHandler, logger *logging.Logger) (*Replica, error) {
+	n := configer.N()
+	f := configer.F()
+
+	if n < 2*f+1 {
+		return nil, fmt.Errorf("%d nodes is not enough to tolerate %d faulty", n, f)
+	}
+
+	replica := &Replica{
+		id: id,
+		n:  n,
+
+		stack: stack,
+
+		log: messagelog.New(),
+
+		handleStream: makeMessageStreamHandler(handler, logger),
+	}
+
+	if err := replica.start(); err != nil {
+		return nil, fmt.Errorf("Failed to start replica: %s", err)
+	}
+
+	return replica, nil
 }
 
 // New creates a new instance of replica node
