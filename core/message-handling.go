@@ -44,6 +44,12 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // indicates that the message has not been processed before.
 type incomingMessageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
 
+// peerConnector initiates message exchange with a peer replica.
+//
+// Given a channel of outgoing messages to supply to the replica, it
+// returns a channel of messages produced by the replica in reply.
+type peerConnector func(out <-chan []byte) (in <-chan []byte, err error)
+
 // messageValidator validates a message.
 //
 // It authenticates and checks the supplied message for internal
@@ -259,6 +265,18 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 				logger.Debugf("Handled %s", msgStr)
 			}
 		}
+	}
+}
+
+// makePeerConnector constructs a peerConnector using the supplied
+// peer replica ID and a general replica connector.
+func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnector {
+	return func(out <-chan []byte) (in <-chan []byte, err error) {
+		sh, err := connector.ReplicaMessageStreamHandler(peerID)
+		if err != nil {
+			return nil, err
+		}
+		return sh.HandleMessageStream(out), nil
 	}
 }
 

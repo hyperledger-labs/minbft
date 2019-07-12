@@ -86,17 +86,18 @@ func (r *replica) start() error {
 		if i == r.id {
 			continue
 		}
+
+		conn := makePeerConnector(i, r.stack)
 		out := make(chan []byte)
-		sh, err := r.stack.ReplicaMessageStreamHandler(i)
-		if err != nil {
-			return fmt.Errorf("Error getting peer replica %d message stream handler: %s", i, err)
-		}
+
 		// Reply stream is not used for replica-to-replica
 		// communication, thus return value is ignored. Each
 		// replica will establish connections to other peers
 		// the same way, so they all will be eventually fully
 		// connected.
-		sh.HandleMessageStream(out)
+		if _, err := conn(out); err != nil {
+			return fmt.Errorf("Cannot connect to replica %d: %s", i, err)
+		}
 
 		go func() {
 			for msg := range r.log.Stream(nil) {
