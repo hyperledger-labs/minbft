@@ -20,8 +20,6 @@ package minbft
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 )
@@ -82,6 +80,8 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 
 // Start begins message exchange with peer replicas
 func (r *replica) start() error {
+	supply := makePeerMessageSupplier(r.log)
+
 	for i := uint32(0); i < r.n; i++ {
 		if i == r.id {
 			continue
@@ -99,15 +99,7 @@ func (r *replica) start() error {
 			return fmt.Errorf("Cannot connect to replica %d: %s", i, err)
 		}
 
-		go func() {
-			for msg := range r.log.Stream(nil) {
-				msgBytes, err := proto.Marshal(msg)
-				if err != nil {
-					panic(err)
-				}
-				out <- msgBytes
-			}
-		}()
+		go supply(out)
 	}
 	return nil
 }

@@ -44,6 +44,12 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // indicates that the message has not been processed before.
 type incomingMessageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
 
+// peerMessageSupplier supplies messages for peer replica.
+//
+// Given a channel, it supplies the channel with messages to be
+// delivered to the peer replica.
+type peerMessageSupplier func(out chan<- []byte)
+
 // peerConnector initiates message exchange with a peer replica.
 //
 // Given a channel of outgoing messages to supply to the replica, it
@@ -264,6 +270,20 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 			} else {
 				logger.Debugf("Handled %s", msgStr)
 			}
+		}
+	}
+}
+
+// makePeerMessageSupplier construct a peerMessageSupplier using the
+// supplied message log.
+func makePeerMessageSupplier(log messagelog.MessageLog) peerMessageSupplier {
+	return func(out chan<- []byte) {
+		for msg := range log.Stream(nil) {
+			msgBytes, err := proto.Marshal(msg)
+			if err != nil {
+				panic(err)
+			}
+			out <- msgBytes
 		}
 	}
 }
