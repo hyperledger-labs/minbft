@@ -31,21 +31,58 @@ type ReplicaConnector interface {
 	AssignReplica(id uint32, replica api.ConnectionHandler)
 }
 
-type connector struct {
+type common struct {
 	replicas map[uint32]api.ConnectionHandler
 }
 
-// NewReplicaConnector creates a new instance of ReplicaConnector.
-func New() ReplicaConnector {
-	return &connector{
+type clientSide struct {
+	*common
+}
+
+type replicaSide struct {
+	*common
+}
+
+// NewClientSide creates a new instance of ReplicaConnector to use at
+// client side, i.e. initiate client-to-replica connections.
+func NewClientSide() ReplicaConnector {
+	return &clientSide{
+		common: newCommon(),
+	}
+}
+
+// NewReplicaSide creates a new instance of ReplicaConnector to use at
+// replica side, i.e. initiate replica-to-replica connections.
+func NewReplicaSide() ReplicaConnector {
+	return &replicaSide{
+		common: newCommon(),
+	}
+}
+
+func (c *clientSide) ReplicaMessageStreamHandler(id uint32) api.MessageStreamHandler {
+	replica := c.replicas[id]
+	if replica == nil {
+		return nil
+	}
+
+	return replica.ClientMessageStreamHandler()
+}
+
+func (c *replicaSide) ReplicaMessageStreamHandler(id uint32) api.MessageStreamHandler {
+	replica := c.replicas[id]
+	if replica == nil {
+		return nil
+	}
+
+	return replica.PeerMessageStreamHandler()
+}
+
+func newCommon() *common {
+	return &common{
 		replicas: make(map[uint32]api.ConnectionHandler),
 	}
 }
 
-func (c *connector) ReplicaMessageStreamHandler(id uint32) api.MessageStreamHandler {
-	return c.replicas[id]
-}
-
-func (c *connector) AssignReplica(id uint32, replica api.ConnectionHandler) {
+func (c *common) AssignReplica(id uint32, replica api.ConnectionHandler) {
 	c.replicas[id] = replica
 }

@@ -20,7 +20,8 @@ syntax = "proto3";
 package proto;
 
 service Channel {
-    rpc Chat (stream Message) returns (stream Message) {}
+    rpc ClientChat (stream Message) returns (stream Message) {}
+    rpc PeerChat (stream Message) returns (stream Message) {}
 }
 
 message Message {

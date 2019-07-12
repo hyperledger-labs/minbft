@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/hyperledger-labs/minbft/api"
 	pb "github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
 
@@ -29,13 +30,30 @@ type replica struct {
 	rpcClient pb.ChannelClient
 }
 
-func (r *replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
+func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
+	return &peerStreamHandler{r}
+}
+
+func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
+	return &clientStreamHandler{r}
+}
+
+type clientStreamHandler struct {
+	replica *replica
+}
+
+type peerStreamHandler struct {
+	replica *replica
+}
+
+func (sh *clientStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
 	go func() {
 		defer close(out)
 
-		stream, err := r.rpcClient.Chat(context.Background(), grpc.WaitForReady(true))
+		r := sh.replica
+		stream, err := r.rpcClient.ClientChat(context.Background(), grpc.WaitForReady(true))
 		if err != nil {
 			log.Printf("Error making RPC call to replica %d: %s\n", r.id, err)
 			return
@@ -49,7 +67,34 @@ func (r *replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	return out
 }
 
-func (r *replica) handleIn(stream pb.Channel_ChatClient, in <-chan []byte) {
+func (sh *peerStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
+	out := make(chan []byte)
+
+	go func() {
+		defer close(out)
+
+		r := sh.replica
+		stream, err := r.rpcClient.PeerChat(context.Background(), grpc.WaitForReady(true))
+		if err != nil {
+			log.Printf("Error making RPC call to replica %d: %s\n", r.id, err)
+			return
+		}
+
+		go r.handleIn(stream, in)
+
+		r.handleOut(stream, out)
+	}()
+
+	return out
+}
+
+type rpcStream interface {
+	Send(*pb.Message) error
+	Recv() (*pb.Message, error)
+	grpc.ClientStream
+}
+
+func (r *replica) handleIn(stream rpcStream, in <-chan []byte) {
 	for msg := range in {
 		m := &pb.Message{Payload: msg}
 		if err := stream.Send(m); err != nil {
@@ -63,7 +108,7 @@ func (r *replica) handleIn(stream pb.Channel_ChatClient, in <-chan []byte) {
 	}
 }
 
-func (r *replica) handleOut(stream pb.Channel_ChatClient, out chan<- []byte) {
+func (r *replica) handleOut(stream rpcStream, out chan<- []byte) {
 	for {
 		msg, err := stream.Recv()
 		if err == io.EOF {

@@ -65,12 +65,20 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	return &replica{handleStream}, nil
 }
 
-// HandleMessageStream initiates handling of incoming messages and
-// supplies reply messages back, if any.
-func (r *replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
+func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
+	// TODO: Handle peer/client connections differently
+	return r.handleStream
+}
+
+func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
+	// TODO: Handle peer/client connections differently
+	return r.handleStream
+}
+
+func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
-	go r.handleStream(in, out)
+	go handle(in, out)
 
 	return out
 }

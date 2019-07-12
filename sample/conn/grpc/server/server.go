@@ -85,11 +85,29 @@ func (s *server) Stop() {
 	}
 }
 
-// Chat implements a corresponding gRPC server interface method
-func (s *server) Chat(stream proto.Channel_ChatServer) error {
+func (s *server) ClientChat(stream proto.Channel_ClientChatServer) error {
 	in := make(chan []byte)
-	out := s.replica.HandleMessageStream(in)
+	sh := s.replica.ClientMessageStreamHandler()
+	out := sh.HandleMessageStream(in)
 
+	return handleStream(stream, in, out)
+}
+
+func (s *server) PeerChat(stream proto.Channel_PeerChatServer) error {
+	in := make(chan []byte)
+	sh := s.replica.PeerMessageStreamHandler()
+	out := sh.HandleMessageStream(in)
+
+	return handleStream(stream, in, out)
+}
+
+type rpcStream interface {
+	Send(*proto.Message) error
+	Recv() (*proto.Message, error)
+	grpc.ServerStream
+}
+
+func handleStream(stream rpcStream, in chan<- []byte, out <-chan []byte) error {
 	eg := new(errgroup.Group)
 
 	eg.Go(func() error {
@@ -99,7 +117,7 @@ func (s *server) Chat(stream proto.Channel_ChatServer) error {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				err = fmt.Errorf("error receiving from replica server stream: %s", err)
+				err = fmt.Errorf("Error receiving from server stream: %s", err)
 				log.Println(err)
 				return err
 			}
@@ -113,7 +131,7 @@ func (s *server) Chat(stream proto.Channel_ChatServer) error {
 		for msg := range out {
 			err := stream.Send(&proto.Message{Payload: msg})
 			if err != nil {
-				err = fmt.Errorf("error sending to replica server stream: %s", err)
+				err = fmt.Errorf("Error sending to server stream: %s", err)
 				log.Println(err)
 				return err
 			}

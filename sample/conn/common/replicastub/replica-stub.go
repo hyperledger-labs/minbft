@@ -40,14 +40,58 @@ func New() ReplicaStub {
 	}
 }
 
-func (s *replicaStub) HandleMessageStream(in <-chan []byte) <-chan []byte {
+func (s *replicaStub) PeerMessageStreamHandler() api.MessageStreamHandler {
+	sh := newMessageStreamHandlerStub()
+
+	go func() {
+		sh.assign(s.waitReplica().PeerMessageStreamHandler())
+	}()
+
+	return sh
+}
+
+func (s *replicaStub) ClientMessageStreamHandler() api.MessageStreamHandler {
+	sh := newMessageStreamHandlerStub()
+
+	go func() {
+		sh.assign(s.waitReplica().ClientMessageStreamHandler())
+	}()
+
+	return sh
+}
+
+func (s *replicaStub) AssignReplica(replica api.ConnectionHandler) {
+	s.replica = replica
+	close(s.ready)
+}
+
+func (s *replicaStub) waitReplica() api.ConnectionHandler {
+	<-s.ready
+	return s.replica
+}
+
+type messageStreamHandlerStub struct {
+	handler api.MessageStreamHandler
+	ready   chan struct{}
+}
+
+func newMessageStreamHandlerStub() *messageStreamHandlerStub {
+	return &messageStreamHandlerStub{
+		ready: make(chan struct{}),
+	}
+}
+
+func (s *messageStreamHandlerStub) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
 	go func() {
 		defer close(out)
 
 		<-s.ready
-		for msg := range s.replica.HandleMessageStream(in) {
+		if s.handler == nil {
+			return
+		}
+		for msg := range s.handler.HandleMessageStream(in) {
 			out <- msg
 		}
 	}()
@@ -55,7 +99,7 @@ func (s *replicaStub) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	return out
 }
 
-func (s *replicaStub) AssignReplica(replica api.ConnectionHandler) {
-	s.replica = replica
+func (s *messageStreamHandlerStub) assign(sh api.MessageStreamHandler) {
+	s.handler = sh
 	close(s.ready)
 }

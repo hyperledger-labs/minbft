@@ -88,7 +88,7 @@ func request(req []byte) ([]byte, error) {
 		peerAddrs[uint32(p.ID)] = p.Addr
 	}
 
-	conn := connector.New()
+	conn := connector.NewClientSide()
 
 	// XXX: The connection destination should be authenticated;
 	// grpc.WithInsecure() option is passed here for simplicity.

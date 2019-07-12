@@ -127,7 +127,7 @@ func run() error {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
 
-	conn := connector.New()
+	conn := connector.NewReplicaSide()
 
 	// XXX: The connection destination should be authenticated;
 	// grpc.WithInsecure() option is passed here for simplicity.

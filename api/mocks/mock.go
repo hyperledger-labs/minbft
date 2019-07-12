@@ -281,16 +281,30 @@ func (m *MockConnectionHandler) EXPECT() *MockConnectionHandlerMockRecorder {
 	return m.recorder
 }
 
-// HandleMessageStream mocks base method
-func (m *MockConnectionHandler) HandleMessageStream(arg0 <-chan []byte) <-chan []byte {
+// ClientMessageStreamHandler mocks base method
+func (m *MockConnectionHandler) ClientMessageStreamHandler() api.MessageStreamHandler {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleMessageStream", arg0)
-	ret0, _ := ret[0].(<-chan []byte)
+	ret := m.ctrl.Call(m, "ClientMessageStreamHandler")
+	ret0, _ := ret[0].(api.MessageStreamHandler)
 	return ret0
 }
 
-// HandleMessageStream indicates an expected call of HandleMessageStream
-func (mr *MockConnectionHandlerMockRecorder) HandleMessageStream(arg0 interface{}) *gomock.Call {
+// ClientMessageStreamHandler indicates an expected call of ClientMessageStreamHandler
+func (mr *MockConnectionHandlerMockRecorder) ClientMessageStreamHandler() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleMessageStream", reflect.TypeOf((*MockConnectionHandler)(nil).HandleMessageStream), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientMessageStreamHandler", reflect.TypeOf((*MockConnectionHandler)(nil).ClientMessageStreamHandler))
+}
+
+// PeerMessageStreamHandler mocks base method
+func (m *MockConnectionHandler) PeerMessageStreamHandler() api.MessageStreamHandler {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerMessageStreamHandler")
+	ret0, _ := ret[0].(api.MessageStreamHandler)
+	return ret0
+}
+
+// PeerMessageStreamHandler indicates an expected call of PeerMessageStreamHandler
+func (mr *MockConnectionHandlerMockRecorder) PeerMessageStreamHandler() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerMessageStreamHandler", reflect.TypeOf((*MockConnectionHandler)(nil).PeerMessageStreamHandler))
 }

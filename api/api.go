@@ -51,8 +51,15 @@ type Configer interface {
 //======= Interface for module 'network' =======
 
 // ConnectionHandler handles incoming connections.
+//
+// PeerMessageStreamHandler method provides a mechanism to initiate
+// message exchange with a peer replica.
+//
+// ClientMessageStreamHandler method provides a mechanism to initiate
+// message exchange with a client.
 type ConnectionHandler interface {
-	MessageStreamHandler
+	PeerMessageStreamHandler() MessageStreamHandler
+	ClientMessageStreamHandler() MessageStreamHandler
 }
 
 // ReplicaConnector establishes connections to replicas

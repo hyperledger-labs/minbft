@@ -39,16 +39,30 @@ const (
 	msgSize    = 32
 )
 
-func TestGRPCConnector(t *testing.T) {
+func TestClientSide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	conn := connector.New()
+	conn := connector.NewClientSide()
 
 	replicas, stop := setupConnector(ctrl, conn, nrReplicas)
 	defer stop()
 
-	testConnector(t, conn, replicas)
+	clientHandlers := setupClientHandlers(ctrl, replicas)
+	testConnector(t, conn, clientHandlers)
+}
+
+func TestReplicaSide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	conn := connector.NewReplicaSide()
+
+	replicas, stop := setupConnector(ctrl, conn, nrReplicas)
+	defer stop()
+
+	peerHandlers := setupPeerHandlers(ctrl, replicas)
+	testConnector(t, conn, peerHandlers)
 }
 
 func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n int) (replicas []*mock_api.MockConnectionHandler, stop func()) {
@@ -71,30 +85,50 @@ func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n 
 	return
 }
 
-func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mock_api.MockConnectionHandler) {
+func setupClientHandlers(ctrl *gomock.Controller, replicas []*mock_api.MockConnectionHandler) (handlers []*mock_api.MockMessageStreamHandler) {
+	for _, r := range replicas {
+		h := mock_api.NewMockMessageStreamHandler(ctrl)
+		handlers = append(handlers, h)
+		r.EXPECT().ClientMessageStreamHandler().Return(h).AnyTimes()
+	}
+
+	return
+}
+
+func setupPeerHandlers(ctrl *gomock.Controller, replicas []*mock_api.MockConnectionHandler) (handlers []*mock_api.MockMessageStreamHandler) {
+	for _, r := range replicas {
+		h := mock_api.NewMockMessageStreamHandler(ctrl)
+		handlers = append(handlers, h)
+		r.EXPECT().PeerMessageStreamHandler().Return(h).AnyTimes()
+	}
+
+	return
+}
+
+func testConnector(t *testing.T, conn connector.ReplicaConnector, handlers []*mock_api.MockMessageStreamHandler) {
 	wg := new(sync.WaitGroup)
 	defer wg.Wait()
 
-	wg.Add(len(replicas))
-	for i := range replicas {
+	wg.Add(len(handlers))
+	for i := range handlers {
 		i := i
 		go func() {
 			defer wg.Done()
 
 			sh := conn.ReplicaMessageStreamHandler(uint32(i))
-			testConnection(t, sh, replicas[i])
+			testConnection(t, sh, handlers[i])
 		}()
 	}
 }
 
-func testConnection(t *testing.T, sh api.MessageStreamHandler, mockReplica *mock_api.MockConnectionHandler) {
+func testConnection(t *testing.T, sh api.MessageStreamHandler, mockHandler *mock_api.MockMessageStreamHandler) {
 	wg := new(sync.WaitGroup)
 	defer wg.Wait()
 
 	mockIn := make(chan []byte)
 	mockOut := make(chan []byte)
 
-	mockReplica.EXPECT().HandleMessageStream(gomock.Any()).DoAndReturn(
+	mockHandler.EXPECT().HandleMessageStream(gomock.Any()).DoAndReturn(
 		func(in <-chan []byte) <-chan []byte {
 			go func() {
 				for m := range in {

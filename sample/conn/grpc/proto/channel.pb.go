@@ -3,13 +3,14 @@
 
 package proto
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
-
 import (
-	context "golang.org/x/net/context"
+	context "context"
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -21,7 +22,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Message struct {
 	Payload              []byte   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
@@ -34,16 +35,17 @@ func (m *Message) Reset()         { *m = Message{} }
 func (m *Message) String() string { return proto.CompactTextString(m) }
 func (*Message) ProtoMessage()    {}
 func (*Message) Descriptor() ([]byte, []int) {
-	return fileDescriptor_channel_4dc8e85b211f39c6, []int{0}
+	return fileDescriptor_c8f385724121f37b, []int{0}
 }
+
 func (m *Message) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Message.Unmarshal(m, b)
 }
 func (m *Message) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Message.Marshal(b, m, deterministic)
 }
-func (dst *Message) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Message.Merge(dst, src)
+func (m *Message) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Message.Merge(m, src)
 }
 func (m *Message) XXX_Size() int {
 	return xxx_messageInfo_Message.Size(m)
@@ -65,6 +67,20 @@ func init() {
 	proto.RegisterType((*Message)(nil), "proto.Message")
 }
 
+func init() { proto.RegisterFile("channel.proto", fileDescriptor_c8f385724121f37b) }
+
+var fileDescriptor_c8f385724121f37b = []byte{
+	// 126 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4d, 0xce, 0x48, 0xcc,
+	0xcb, 0x4b, 0xcd, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x05, 0x53, 0x4a, 0xca, 0x5c,
+	0xec, 0xbe, 0xa9, 0xc5, 0xc5, 0x89, 0xe9, 0xa9, 0x42, 0x12, 0x5c, 0xec, 0x05, 0x89, 0x95, 0x39,
+	0xf9, 0x89, 0x29, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x3c, 0x41, 0x30, 0xae, 0x51, 0x3e, 0x17, 0xbb,
+	0x33, 0x44, 0xb3, 0x90, 0x11, 0x17, 0x97, 0x73, 0x4e, 0x66, 0x6a, 0x5e, 0x89, 0x73, 0x46, 0x62,
+	0x89, 0x10, 0x1f, 0xc4, 0x30, 0x3d, 0xa8, 0x11, 0x52, 0x68, 0x7c, 0x25, 0x06, 0x0d, 0x46, 0x03,
+	0x46, 0x21, 0x03, 0x2e, 0x8e, 0x80, 0xd4, 0xd4, 0x22, 0xe2, 0x75, 0x24, 0xb1, 0x81, 0x05, 0x8d,
+	0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0xca, 0xac, 0x81, 0xb6, 0xb4, 0x00, 0x00, 0x00,
+}
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn
@@ -77,7 +93,8 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ChannelClient interface {
-	Chat(ctx context.Context, opts ...grpc.CallOption) (Channel_ChatClient, error)
+	ClientChat(ctx context.Context, opts ...grpc.CallOption) (Channel_ClientChatClient, error)
+	PeerChat(ctx context.Context, opts ...grpc.CallOption) (Channel_PeerChatClient, error)
 }
 
 type channelClient struct {
@@ -88,30 +105,61 @@ func NewChannelClient(cc *grpc.ClientConn) ChannelClient {
 	return &channelClient{cc}
 }
 
-func (c *channelClient) Chat(ctx context.Context, opts ...grpc.CallOption) (Channel_ChatClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Channel_serviceDesc.Streams[0], "/proto.Channel/Chat", opts...)
+func (c *channelClient) ClientChat(ctx context.Context, opts ...grpc.CallOption) (Channel_ClientChatClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_Channel_serviceDesc.Streams[0], "/proto.Channel/ClientChat", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &channelChatClient{stream}
+	x := &channelClientChatClient{stream}
 	return x, nil
 }
 
-type Channel_ChatClient interface {
+type Channel_ClientChatClient interface {
 	Send(*Message) error
 	Recv() (*Message, error)
 	grpc.ClientStream
 }
 
-type channelChatClient struct {
+type channelClientChatClient struct {
 	grpc.ClientStream
 }
 
-func (x *channelChatClient) Send(m *Message) error {
+func (x *channelClientChatClient) Send(m *Message) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *channelChatClient) Recv() (*Message, error) {
+func (x *channelClientChatClient) Recv() (*Message, error) {
+	m := new(Message)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *channelClient) PeerChat(ctx context.Context, opts ...grpc.CallOption) (Channel_PeerChatClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_Channel_serviceDesc.Streams[1], "/proto.Channel/PeerChat", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &channelPeerChatClient{stream}
+	return x, nil
+}
+
+type Channel_PeerChatClient interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+	grpc.ClientStream
+}
+
+type channelPeerChatClient struct {
+	grpc.ClientStream
+}
+
+func (x *channelPeerChatClient) Send(m *Message) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *channelPeerChatClient) Recv() (*Message, error) {
 	m := new(Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -121,32 +169,70 @@ func (x *channelChatClient) Recv() (*Message, error) {
 
 // ChannelServer is the server API for Channel service.
 type ChannelServer interface {
-	Chat(Channel_ChatServer) error
+	ClientChat(Channel_ClientChatServer) error
+	PeerChat(Channel_PeerChatServer) error
+}
+
+// UnimplementedChannelServer can be embedded to have forward compatible implementations.
+type UnimplementedChannelServer struct {
+}
+
+func (*UnimplementedChannelServer) ClientChat(srv Channel_ClientChatServer) error {
+	return status.Errorf(codes.Unimplemented, "method ClientChat not implemented")
+}
+func (*UnimplementedChannelServer) PeerChat(srv Channel_PeerChatServer) error {
+	return status.Errorf(codes.Unimplemented, "method PeerChat not implemented")
 }
 
 func RegisterChannelServer(s *grpc.Server, srv ChannelServer) {
 	s.RegisterService(&_Channel_serviceDesc, srv)
 }
 
-func _Channel_Chat_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ChannelServer).Chat(&channelChatServer{stream})
+func _Channel_ClientChat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChannelServer).ClientChat(&channelClientChatServer{stream})
 }
 
-type Channel_ChatServer interface {
+type Channel_ClientChatServer interface {
 	Send(*Message) error
 	Recv() (*Message, error)
 	grpc.ServerStream
 }
 
-type channelChatServer struct {
+type channelClientChatServer struct {
 	grpc.ServerStream
 }
 
-func (x *channelChatServer) Send(m *Message) error {
+func (x *channelClientChatServer) Send(m *Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *channelChatServer) Recv() (*Message, error) {
+func (x *channelClientChatServer) Recv() (*Message, error) {
+	m := new(Message)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Channel_PeerChat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChannelServer).PeerChat(&channelPeerChatServer{stream})
+}
+
+type Channel_PeerChatServer interface {
+	Send(*Message) error
+	Recv() (*Message, error)
+	grpc.ServerStream
+}
+
+type channelPeerChatServer struct {
+	grpc.ServerStream
+}
+
+func (x *channelPeerChatServer) Send(m *Message) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *channelPeerChatServer) Recv() (*Message, error) {
 	m := new(Message)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -160,24 +246,17 @@ var _Channel_serviceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Chat",
-			Handler:       _Channel_Chat_Handler,
+			StreamName:    "ClientChat",
+			Handler:       _Channel_ClientChat_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "PeerChat",
+			Handler:       _Channel_PeerChat_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
 	Metadata: "channel.proto",
-}
-
-func init() { proto.RegisterFile("channel.proto", fileDescriptor_channel_4dc8e85b211f39c6) }
-
-var fileDescriptor_channel_4dc8e85b211f39c6 = []byte{
-	// 109 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4d, 0xce, 0x48, 0xcc,
-	0xcb, 0x4b, 0xcd, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x05, 0x53, 0x4a, 0xca, 0x5c,
-	0xec, 0xbe, 0xa9, 0xc5, 0xc5, 0x89, 0xe9, 0xa9, 0x42, 0x12, 0x5c, 0xec, 0x05, 0x89, 0x95, 0x39,
-	0xf9, 0x89, 0x29, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x3c, 0x41, 0x30, 0xae, 0x91, 0x39, 0x17, 0xbb,
-	0x33, 0x44, 0xb3, 0x90, 0x0e, 0x17, 0x8b, 0x73, 0x46, 0x62, 0x89, 0x10, 0x1f, 0xc4, 0x18, 0x3d,
-	0xa8, 0x66, 0x29, 0x34, 0xbe, 0x12, 0x83, 0x06, 0xa3, 0x01, 0x63, 0x12, 0x1b, 0x58, 0xd0, 0x18,
-	0x10, 0x00, 0x00, 0xff, 0xff, 0x2b, 0x0b, 0xe5, 0x99, 0x7c, 0x00, 0x00, 0x00,
 }

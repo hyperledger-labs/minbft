@@ -39,8 +39,16 @@ type connector struct {
 	common.ReplicaConnector
 }
 
-func New() ReplicaConnector {
-	return &connector{common.New()}
+// NewClientSide creates a new instance of ReplicaConnector to use at
+// client side, i.e. initiate client-to-replica connections.
+func NewClientSide() ReplicaConnector {
+	return &connector{common.NewClientSide()}
+}
+
+// NewReplicaSide creates a new instance of ReplicaConnector to use at
+// replica side, i.e. initiate replica-to-replica connections.
+func NewReplicaSide() ReplicaConnector {
+	return &connector{common.NewReplicaSide()}
 }
 
 func (c *connector) AssignReplicaStub(id uint32, stub replicastub.ReplicaStub) {
