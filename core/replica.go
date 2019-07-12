@@ -38,10 +38,8 @@ type Stack interface {
 	api.RequestConsumer
 }
 
-var _ api.MessageStreamHandler = (*Replica)(nil)
-
 // Replica represents an instance of replica peer
-type Replica struct {
+type replica struct {
 	id uint32 // replica ID, unique in range [0,n)
 	n  uint32 // total number of nodes
 
@@ -52,7 +50,7 @@ type Replica struct {
 }
 
 // New creates a new instance of replica node
-func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replica, error) {
+func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Replica, error) {
 	n := configer.N()
 	f := configer.F()
 
@@ -62,7 +60,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 
 	logOpts := newOptions(opts...)
 
-	replica := &Replica{
+	replica := &replica{
 		id: id,
 		n:  n,
 
@@ -83,7 +81,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 }
 
 // Start begins message exchange with peer replicas
-func (r *Replica) start() error {
+func (r *replica) start() error {
 	for i := uint32(0); i < r.n; i++ {
 		if i == r.id {
 			continue
@@ -115,7 +113,7 @@ func (r *Replica) start() error {
 
 // HandleMessageStream initiates handling of incoming messages and
 // supplies reply messages back, if any.
-func (r *Replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
+func (r *replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
 	go r.handleStream(in, out)

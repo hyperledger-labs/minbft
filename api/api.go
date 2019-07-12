@@ -22,6 +22,11 @@ import (
 	"time"
 )
 
+// Replica represents an instance of MinBFT replica.
+type Replica interface {
+	MessageStreamHandler
+}
+
 //======= Interface for module 'config' =======
 
 // Configer defines the interface to obtain the protocol parameters from
@@ -47,12 +52,12 @@ type Configer interface {
 
 // ReplicaConnector establishes connections to replicas
 //
-// ReplicaMessageStreamHandler method provides a local representation
-// of the specified replica for the purpose of message exchange. The
-// connection guarantees authenticated destination, eventual delivery,
-// preserving integrity and the original order of messages.
-// Confidentiality may also be provided. ReplicaMessageStreamHandler
-// never fails, except when incorrect replica ID is passed.
+// ReplicaMessageStreamHandler method provides a mechanism to
+// communicate with the specified destination replica. The connection
+// guarantees authenticated destination, eventual delivery, preserving
+// integrity and the original order of messages. Confidentiality may
+// also be provided. ReplicaMessageStreamHandler never fails, except
+// when incorrect replica ID is passed.
 type ReplicaConnector interface {
 	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
 }

@@ -54,7 +54,7 @@ type testClientStack struct {
 }
 
 var (
-	replicas          []*minbft.Replica
+	replicas          []api.Replica
 	replicaConnectors []dummyConnector.ReplicaConnector
 	replicaStacks     []*testReplicaStack
 	clients           []cl.Client
@@ -168,7 +168,7 @@ func createReplicaConnectors(numReplica int, n int) []dummyConnector.ReplicaConn
 	return connectors
 }
 
-func connectReplicas(connectors []dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
+func connectReplicas(connectors []dummyConnector.ReplicaConnector, replicas []api.Replica) {
 	for i, connector := range connectors {
 		peers := makeReplicaMap(replicas)
 		delete(peers, uint32(i)) // avoid connecting replica to itself
@@ -176,14 +176,14 @@ func connectReplicas(connectors []dummyConnector.ReplicaConnector, replicas []*m
 	}
 }
 
-func connectClients(connectors []dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
+func connectClients(connectors []dummyConnector.ReplicaConnector, replicas []api.Replica) {
 	peers := makeReplicaMap(replicas)
 	for _, connector := range connectors {
 		dummyConnector.ConnectManyReplicas(connector, peers)
 	}
 }
 
-func makeReplicaMap(replicas []*minbft.Replica) map[uint32]api.MessageStreamHandler {
+func makeReplicaMap(replicas []api.Replica) map[uint32]api.MessageStreamHandler {
 	replicaMap := make(map[uint32]api.MessageStreamHandler)
 	for i, r := range replicas {
 		replicaMap[uint32(i)] = r
