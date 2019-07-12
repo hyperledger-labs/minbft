@@ -126,7 +126,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
+
 	replicaConnector := connector.New()
+
+	// XXX: The connection destination should be authenticated;
+	// grpc.WithInsecure() option is passed here for simplicity.
 	if err = replicaConnector.ConnectManyReplicas(peerAddrs, grpc.WithInsecure()); err != nil {
 		return fmt.Errorf("Failed to connect to peers: %s", err)
 	}
@@ -140,6 +144,10 @@ func run() error {
 	srvErrChan := make(chan error)
 	go func() {
 		defer replicaServer.Stop()
+
+		// XXX: The replica server should authenticate itself;
+		// appropriate gRPC server options are omitted here
+		// for simplicity.
 		if err := replicaServer.ListenAndServe(listenAddr); err != nil {
 			err = fmt.Errorf("Network server failed: %s", err)
 			fmt.Println(err)

@@ -90,6 +90,8 @@ func request(req []byte) ([]byte, error) {
 
 	rc := connector.New()
 
+	// XXX: The connection destination should be authenticated;
+	// grpc.WithInsecure() option is passed here for simplicity.
 	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
