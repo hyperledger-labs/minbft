@@ -19,15 +19,13 @@
 package connector
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"log"
 
 	"google.golang.org/grpc"
 
 	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
+	common "github.com/hyperledger-labs/minbft/sample/conn/common/connector"
+	pb "github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
 
 // ReplicaConnector implements connectivity API using gRPC as a
@@ -55,31 +53,12 @@ func ConnectManyReplicas(conn ReplicaConnector, targets map[uint32]string, dialO
 }
 
 type connector struct {
-	clients map[uint32]proto.ChannelClient
+	common.ReplicaConnector
 }
 
 // New creates a new instance of ReplicaConnector.
 func New() ReplicaConnector {
-	return &connector{
-		clients: make(map[uint32]proto.ChannelClient),
-	}
-}
-
-// ReplicaMessageStreamHandler returns MessageStreamHandler interface
-// to connect to gRPC stream established with the specified replica.
-func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) api.MessageStreamHandler {
-	client, ok := c.clients[replicaID]
-	if !ok {
-		return nil
-	}
-
-	return &messageStreamHandler{replicaID, client}
-}
-
-// SetReplicaClient assigns an instance of gRPC client to use for
-// establishing message stream with the specified replica.
-func (c *connector) SetReplicaClient(replicaID uint32, client proto.ChannelClient) {
-	c.clients[replicaID] = client
+	return &connector{common.New()}
 }
 
 // ConnectReplica establishes a connection to a replica by its gRPC
@@ -90,68 +69,12 @@ func (c *connector) ConnectReplica(replicaID uint32, target string, dialOpts ...
 		return fmt.Errorf("Failed to dial replica: %s", err)
 	}
 
-	client := proto.NewChannelClient(connection)
-	c.SetReplicaClient(replicaID, client)
+	replica := &replica{
+		rpcClient: pb.NewChannelClient(connection),
+		id:        replicaID,
+	}
+
+	c.AssignReplica(replicaID, replica)
+
 	return nil
-}
-
-// messageStramHandler is a local representation of the replica for
-// the purpose of message exchange.
-type messageStreamHandler struct {
-	replicaID uint32
-	client    proto.ChannelClient
-}
-
-// HandleMessageStream implements actual communication with remote
-// replica by means of the gRPC connection established to the replica.
-func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
-	var stream proto.Channel_ChatClient
-	ready := make(chan struct{})
-	out := make(chan []byte)
-
-	go func() {
-		defer close(ready)
-		var err error
-		stream, err = h.client.Chat(context.Background(), grpc.WaitForReady(true))
-		if err != nil {
-			log.Printf("Error initializing client stream to replica %d: %s\n",
-				h.replicaID, err)
-		}
-	}()
-
-	go func() {
-		<-ready
-		for msg := range in {
-			err := stream.Send(&proto.Message{Payload: msg})
-			if err != nil {
-				log.Printf("Error sending to replica %d's client stream: %s\n",
-					h.replicaID, err)
-				break
-			}
-		}
-		err := stream.CloseSend()
-		if err != nil {
-			log.Printf("Error closing replica %d's client stream: %s\n",
-				h.replicaID, err)
-		}
-	}()
-
-	go func() {
-		defer close(out)
-		<-ready
-		for {
-			msg, err := stream.Recv()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				log.Printf("Error receiving from replica %d's client stream: %s\n",
-					h.replicaID, err)
-				break
-			}
-			out <- msg.Payload
-
-		}
-	}()
-
-	return out
 }
