@@ -50,12 +50,12 @@ func New(replica api.MessageStreamHandler) *ReplicaServer {
 
 // ListenAndServe listens on the TCP network address and then serves
 // incoming connections.
-func (s *ReplicaServer) ListenAndServe(addr string) error {
+func (s *ReplicaServer) ListenAndServe(addr string, serverOpts ...grpc.ServerOption) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("Error listing on %s: %s", addr, err)
 	}
-	s.grpcServer = grpc.NewServer()
+	s.grpcServer = grpc.NewServer(serverOpts...)
 	proto.RegisterChannelServer(s.grpcServer, s)
 
 	err = s.grpcServer.Serve(lis)
