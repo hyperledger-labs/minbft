@@ -49,10 +49,10 @@ type Configer interface {
 //
 // ReplicaMessageStreamHandler method provides a local representation
 // of the specified replica for the purpose of message exchange. The
-// connection guarantees eventual delivery, preserving integrity and
-// the original order of messages. Confidentiality may also be
-// provided. ReplicaMessageStreamHandler never fails, except when
-// incorrect replica ID is passed.
+// connection guarantees authenticated destination, eventual delivery,
+// preserving integrity and the original order of messages.
+// Confidentiality may also be provided. ReplicaMessageStreamHandler
+// never fails, except when incorrect replica ID is passed.
 type ReplicaConnector interface {
 	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
 }
