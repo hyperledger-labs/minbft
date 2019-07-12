@@ -26,20 +26,34 @@ import (
 
 // ReplicaConnector allows to connect replica instances in the same
 // process directly. It is useful for testing.
-type ReplicaConnector struct {
+//
+// ConnectReplica method assigns a replica instance, given its ID.
+type ReplicaConnector interface {
+	api.ReplicaConnector
+	ConnectReplica(id uint32, replica api.MessageStreamHandler)
+}
+
+// ConnectManyReplicas helps to assign multiple replica instances. It
+// invokes ConnectReplica on the specified connector for each replica
+// in the supplied map indexed by replica ID.
+func ConnectManyReplicas(conn ReplicaConnector, replicas map[uint32]api.MessageStreamHandler) {
+	for id, r := range replicas {
+		conn.ConnectReplica(id, r)
+	}
+}
+
+type connector struct {
 	replicas []api.MessageStreamHandler
 	ready    []chan bool
 }
 
-var _ api.ReplicaConnector = (*ReplicaConnector)(nil)
-
 // New creates an instance of ReplicaConnector
-func New(n int) *ReplicaConnector {
+func New(n int) ReplicaConnector {
 	ready := make([]chan bool, n)
 	for i := 0; i < n; i++ {
 		ready[uint32(i)] = make(chan bool)
 	}
-	return &ReplicaConnector{
+	return &connector{
 		replicas: make([]api.MessageStreamHandler, n),
 		ready:    ready,
 	}
@@ -47,32 +61,23 @@ func New(n int) *ReplicaConnector {
 
 // ReplicaMessageStreamHandler returns the instance previously
 // assigned to replica ID.
-func (c *ReplicaConnector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
+func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
 	if replicaID >= uint32(len(c.replicas)) {
 		return nil, fmt.Errorf("invalid replicaID")
 	}
 	return &messageStreamHandler{replicaID, c}, nil
 }
 
-// ConnectReplica assigns a replica instance to replica ID.
-func (c *ReplicaConnector) ConnectReplica(replicaID uint32, replica api.MessageStreamHandler) {
+func (c *connector) ConnectReplica(replicaID uint32, replica api.MessageStreamHandler) {
 	c.replicas[replicaID] = replica
 	close(c.ready[replicaID])
-}
-
-// ConnectManyReplicas assigns replica instances to replica IDs
-// according to the supplied map indexed by replica ID.
-func (c *ReplicaConnector) ConnectManyReplicas(replicas map[uint32]api.MessageStreamHandler) {
-	for id, r := range replicas {
-		c.ConnectReplica(id, r)
-	}
 }
 
 // messageStreamHandler is a local representation of the replica for
 // the purpose of message exchange.
 type messageStreamHandler struct {
 	replicaID uint32
-	connector *ReplicaConnector
+	connector *connector
 }
 
 // HandleMessageStream implements actual communication with other replica.

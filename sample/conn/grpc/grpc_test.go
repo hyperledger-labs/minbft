@@ -28,7 +28,6 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
-	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/server"
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
@@ -52,7 +51,7 @@ func TestGRPCConnector(t *testing.T) {
 	testConnector(t, conn, replicas)
 }
 
-func setupConnector(ctrl *gomock.Controller, conn *connector.ReplicaConnector, n int) (replicas []*mock_api.MockMessageStreamHandler, stop func()) {
+func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n int) (replicas []*mock_api.MockMessageStreamHandler, stop func()) {
 	done := make(chan struct{})
 	stop = func() { close(done) }
 
@@ -65,14 +64,14 @@ func setupConnector(ctrl *gomock.Controller, conn *connector.ReplicaConnector, n
 		addrs[uint32(i)] = startNewServer(r, done)
 	}
 
-	if err := conn.ConnectManyReplicas(addrs, grpc.WithInsecure()); err != nil {
+	if err := connector.ConnectManyReplicas(conn, addrs, grpc.WithInsecure()); err != nil {
 		panic(err)
 	}
 
 	return
 }
 
-func testConnector(t *testing.T, conn *connector.ReplicaConnector, replicas []*mock_api.MockMessageStreamHandler) {
+func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mock_api.MockMessageStreamHandler) {
 	wg := new(sync.WaitGroup)
 	defer wg.Wait()
 
@@ -163,18 +162,15 @@ func makeMessages(n int) (msgs [][]byte) {
 func startNewServer(replica api.MessageStreamHandler, done chan struct{}) (addr string) {
 	srv := server.New(replica)
 
-	grpcServer := grpc.NewServer()
-	proto.RegisterChannelServer(grpcServer, srv)
-
 	go func() {
 		<-done
-		grpcServer.Stop()
+		srv.Stop()
 	}()
 
-	return listenAndServe(grpcServer)
+	return listenAndServe(srv)
 }
 
-func listenAndServe(srv *grpc.Server) (addr string) {
+func listenAndServe(srv server.ReplicaServer) (addr string) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)

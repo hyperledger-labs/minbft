@@ -34,40 +34,51 @@ import (
 )
 
 // ReplicaServer implements a gRPC server to serve incoming
-// connections from ReplicaConnector of this package
-type ReplicaServer struct {
+// connections from ReplicaConnector of this package.
+//
+// Server method serves incoming connection on the supplied listener.
+// It blocks and returns either on error or if Stop method is called.
+//
+// Stop method gracefully stops the server. It immediately closes all
+// open connections and listeners.
+type ReplicaServer interface {
+	Serve(lis net.Listener, serverOpts ...grpc.ServerOption) error
+	Stop()
+}
+
+// ListenAndServe helps to start a server on a TCP address. It starts
+// listening on a given TCP address and serving incoming connections.
+func ListenAndServe(s ReplicaServer, addr string, serverOpts ...grpc.ServerOption) error {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("Error listening on %s: %s", addr, err)
+	}
+	return s.Serve(lis)
+}
+
+type server struct {
 	replica    api.MessageStreamHandler
 	grpcServer *grpc.Server
 }
 
-var _ proto.ChannelServer = (*ReplicaServer)(nil)
-
 // New creates a new instance of ReplicaServer using the specified
-// instance of MessageStreamHandler to connect incoming requests with.
-func New(replica api.MessageStreamHandler) *ReplicaServer {
-	return &ReplicaServer{replica: replica}
+// replica instance to connect incoming requests with.
+func New(replica api.MessageStreamHandler) ReplicaServer {
+	return &server{replica: replica}
 }
 
-// ListenAndServe listens on the TCP network address and then serves
-// incoming connections.
-func (s *ReplicaServer) ListenAndServe(addr string, serverOpts ...grpc.ServerOption) error {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("Error listing on %s: %s", addr, err)
-	}
+func (s *server) Serve(lis net.Listener, serverOpts ...grpc.ServerOption) error {
 	s.grpcServer = grpc.NewServer(serverOpts...)
 	proto.RegisterChannelServer(s.grpcServer, s)
 
-	err = s.grpcServer.Serve(lis)
+	err := s.grpcServer.Serve(lis)
 	if err != nil {
 		return fmt.Errorf("Error serving: %s", err)
 	}
 	return nil
 }
 
-// Stop stops the server. It immediately closes all open connections
-// and listeners.
-func (s *ReplicaServer) Stop() {
+func (s *server) Stop() {
 	if s.grpcServer != nil {
 		s.grpcServer.Stop()
 		s.grpcServer = nil
@@ -75,7 +86,7 @@ func (s *ReplicaServer) Stop() {
 }
 
 // Chat implements a corresponding gRPC server interface method
-func (s *ReplicaServer) Chat(stream proto.Channel_ChatServer) error {
+func (s *server) Chat(stream proto.Channel_ChatServer) error {
 	in := make(chan []byte)
 	out := s.replica.HandleMessageStream(in)
 

@@ -88,16 +88,16 @@ func request(req []byte) ([]byte, error) {
 		peerAddrs[uint32(p.ID)] = p.Addr
 	}
 
-	rc := connector.New()
+	conn := connector.New()
 
 	// XXX: The connection destination should be authenticated;
 	// grpc.WithInsecure() option is passed here for simplicity.
-	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure())
+	err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
 	}
 
-	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, rc})
+	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create client instance: %s", err)
 	}

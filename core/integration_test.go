@@ -43,22 +43,22 @@ const (
 )
 
 type testReplicaStack struct {
-	*dummyConnector.ReplicaConnector
+	api.ReplicaConnector
 	api.Authenticator
 	*requestconsumer.SimpleLedger
 }
 
 type testClientStack struct {
-	*dummyConnector.ReplicaConnector
+	api.ReplicaConnector
 	api.Authenticator
 }
 
 var (
 	replicas          []*minbft.Replica
-	replicaConnectors []*dummyConnector.ReplicaConnector
+	replicaConnectors []dummyConnector.ReplicaConnector
 	replicaStacks     []*testReplicaStack
 	clients           []cl.Client
-	clientConnectors  []*dummyConnector.ReplicaConnector
+	clientConnectors  []dummyConnector.ReplicaConnector
 	clientStacks      []*testClientStack
 
 	testRequestMessage = []byte("test request message")
@@ -160,26 +160,26 @@ func initTestnetPeers(numReplica int, numClient int) {
 	connectClients(clientConnectors, replicas)
 }
 
-func createReplicaConnectors(numReplica int, n int) []*dummyConnector.ReplicaConnector {
-	connectors := make([]*dummyConnector.ReplicaConnector, n)
+func createReplicaConnectors(numReplica int, n int) []dummyConnector.ReplicaConnector {
+	connectors := make([]dummyConnector.ReplicaConnector, n)
 	for i := range connectors {
 		connectors[i] = dummyConnector.New(numReplica)
 	}
 	return connectors
 }
 
-func connectReplicas(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
+func connectReplicas(connectors []dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
 	for i, connector := range connectors {
 		peers := makeReplicaMap(replicas)
 		delete(peers, uint32(i)) // avoid connecting replica to itself
-		connector.ConnectManyReplicas(peers)
+		dummyConnector.ConnectManyReplicas(connector, peers)
 	}
 }
 
-func connectClients(connectors []*dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
+func connectClients(connectors []dummyConnector.ReplicaConnector, replicas []*minbft.Replica) {
 	peers := makeReplicaMap(replicas)
 	for _, connector := range connectors {
-		connector.ConnectManyReplicas(peers)
+		dummyConnector.ConnectManyReplicas(connector, peers)
 	}
 }
 

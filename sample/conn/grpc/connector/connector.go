@@ -30,24 +30,44 @@ import (
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
 
-// ReplicaConnector implements api.ReplicaConnector interface using
-// gRPC as a network communication mechanism.
-type ReplicaConnector struct {
+// ReplicaConnector implements connectivity API using gRPC as a
+// network communication mechanism.
+//
+// ConnectReplica method establishes a connection to a replica by its
+// gRPC target address.
+type ReplicaConnector interface {
+	api.ReplicaConnector
+	ConnectReplica(replicaID uint32, target string, dialOpts ...grpc.DialOption) error
+}
+
+// ConnectManyReplicas helps to establish connections to multiple
+// replicas. It invokes ConnectReplica on the specified connector for
+// each replica in the supplied map. The map holds gRPC target
+// addresses indexed by replica ID.
+func ConnectManyReplicas(conn ReplicaConnector, targets map[uint32]string, dialOpts ...grpc.DialOption) error {
+	for id, target := range targets {
+		err := conn.ConnectReplica(id, target, dialOpts...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type connector struct {
 	clients map[uint32]proto.ChannelClient
 }
 
-var _ api.ReplicaConnector = (*ReplicaConnector)(nil)
-
 // New creates a new instance of ReplicaConnector.
-func New() *ReplicaConnector {
-	return &ReplicaConnector{
+func New() ReplicaConnector {
+	return &connector{
 		clients: make(map[uint32]proto.ChannelClient),
 	}
 }
 
 // ReplicaMessageStreamHandler returns MessageStreamHandler interface
 // to connect to gRPC stream established with the specified replica.
-func (c *ReplicaConnector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
+func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
 	client, ok := c.clients[replicaID]
 	if !ok {
 		return nil, fmt.Errorf("No client connection to replica %d", replicaID)
@@ -58,13 +78,13 @@ func (c *ReplicaConnector) ReplicaMessageStreamHandler(replicaID uint32) (api.Me
 
 // SetReplicaClient assigns an instance of gRPC client to use for
 // establishing message stream with the specified replica.
-func (c *ReplicaConnector) SetReplicaClient(replicaID uint32, client proto.ChannelClient) {
+func (c *connector) SetReplicaClient(replicaID uint32, client proto.ChannelClient) {
 	c.clients[replicaID] = client
 }
 
 // ConnectReplica establishes a connection to a replica by its gRPC
 // target (address).
-func (c *ReplicaConnector) ConnectReplica(replicaID uint32, target string, dialOpts ...grpc.DialOption) error {
+func (c *connector) ConnectReplica(replicaID uint32, target string, dialOpts ...grpc.DialOption) error {
 	connection, err := grpc.Dial(target, dialOpts...)
 	if err != nil {
 		return fmt.Errorf("Failed to dial replica: %s", err)
@@ -72,18 +92,6 @@ func (c *ReplicaConnector) ConnectReplica(replicaID uint32, target string, dialO
 
 	client := proto.NewChannelClient(connection)
 	c.SetReplicaClient(replicaID, client)
-	return nil
-}
-
-// ConnectManyReplicas establishes a connection to many replicas given
-// a map from a replica ID to its gRPC target (address).
-func (c *ReplicaConnector) ConnectManyReplicas(targets map[uint32]string, dialOpts ...grpc.DialOption) error {
-	for id, target := range targets {
-		err := c.ConnectReplica(id, target, dialOpts...)
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
