@@ -163,7 +163,7 @@ func initTestnetPeers(numReplica int, numClient int) {
 }
 
 func newReplicaSideConnector(replicaID uint32) api.ReplicaConnector {
-	conn := dummyConnector.NewReplicaSide()
+	conn := dummyConnector.NewReplicaSide(replicaID)
 	for i, stub := range replicaStubs {
 		id := uint32(i)
 		if id == replicaID {

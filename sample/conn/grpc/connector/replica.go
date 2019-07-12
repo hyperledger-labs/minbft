@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/minbft/api"
 	pb "github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
@@ -30,8 +31,8 @@ type replica struct {
 	rpcClient pb.ChannelClient
 }
 
-func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
-	return &peerStreamHandler{r}
+func (r *replica) PeerMessageStreamHandler(id uint32) api.MessageStreamHandler {
+	return &peerStreamHandler{r, id}
 }
 
 func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
@@ -44,6 +45,7 @@ type clientStreamHandler struct {
 
 type peerStreamHandler struct {
 	replica *replica
+	peerID  uint32
 }
 
 func (sh *clientStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
@@ -77,6 +79,17 @@ func (sh *peerStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte
 		stream, err := r.rpcClient.PeerChat(context.Background(), grpc.WaitForReady(true))
 		if err != nil {
 			log.Printf("Error making RPC call to replica %d: %s\n", r.id, err)
+			return
+		}
+
+		hello, err := proto.Marshal(&pb.Hello{ReplicaId: sh.peerID})
+		if err != nil {
+			panic(err)
+		}
+
+		m := &pb.Message{Payload: hello}
+		if err := stream.Send(m); err != nil {
+			log.Printf("Error greeting replica %d: %s\n", r.id, err)
 			return
 		}
 

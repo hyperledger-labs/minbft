@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	nrReplicas = 3
+	nrReplicas = 13
 	nrMessages = 5
 	msgSize    = 32
 )
@@ -56,12 +56,13 @@ func TestReplicaSide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	conn := connector.NewReplicaSide()
+	id := uint32(rand.Intn(nrReplicas))
+	conn := connector.NewReplicaSide(id)
 
 	replicas, stop := setupConnector(ctrl, conn, nrReplicas)
 	defer stop()
 
-	peerHandlers := setupPeerHandlers(ctrl, replicas)
+	peerHandlers := setupPeerHandlers(ctrl, replicas, id)
 	testConnector(t, conn, peerHandlers)
 }
 
@@ -95,11 +96,11 @@ func setupClientHandlers(ctrl *gomock.Controller, replicas []*mock_api.MockConne
 	return
 }
 
-func setupPeerHandlers(ctrl *gomock.Controller, replicas []*mock_api.MockConnectionHandler) (handlers []*mock_api.MockMessageStreamHandler) {
+func setupPeerHandlers(ctrl *gomock.Controller, replicas []*mock_api.MockConnectionHandler, id uint32) (handlers []*mock_api.MockMessageStreamHandler) {
 	for _, r := range replicas {
 		h := mock_api.NewMockMessageStreamHandler(ctrl)
 		handlers = append(handlers, h)
-		r.EXPECT().PeerMessageStreamHandler().Return(h).AnyTimes()
+		r.EXPECT().PeerMessageStreamHandler(id).Return(h).AnyTimes()
 	}
 
 	return

@@ -64,8 +64,8 @@ func NewClientSide() ReplicaConnector {
 
 // NewReplicaSide creates a new instance of ReplicaConnector to use at
 // replica side, i.e. initiate replica-to-replica connections.
-func NewReplicaSide() ReplicaConnector {
-	return &connector{common.NewReplicaSide()}
+func NewReplicaSide(replicaID uint32) ReplicaConnector {
+	return &connector{common.NewReplicaSide(replicaID)}
 }
 
 // ConnectReplica establishes a connection to a replica by its gRPC

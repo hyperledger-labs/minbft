@@ -40,11 +40,11 @@ func New() ReplicaStub {
 	}
 }
 
-func (s *replicaStub) PeerMessageStreamHandler() api.MessageStreamHandler {
+func (s *replicaStub) PeerMessageStreamHandler(id uint32) api.MessageStreamHandler {
 	sh := newMessageStreamHandlerStub()
 
 	go func() {
-		sh.assign(s.waitReplica().PeerMessageStreamHandler())
+		sh.assign(s.waitReplica().PeerMessageStreamHandler(id))
 	}()
 
 	return sh

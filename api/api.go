@@ -53,12 +53,13 @@ type Configer interface {
 // ConnectionHandler handles incoming connections.
 //
 // PeerMessageStreamHandler method provides a mechanism to initiate
-// message exchange with a peer replica.
+// message exchange with the specified peer replica. It must only be
+// used to handle authentic connections from the peer replica.
 //
 // ClientMessageStreamHandler method provides a mechanism to initiate
 // message exchange with a client.
 type ConnectionHandler interface {
-	PeerMessageStreamHandler() MessageStreamHandler
+	PeerMessageStreamHandler(id uint32) MessageStreamHandler
 	ClientMessageStreamHandler() MessageStreamHandler
 }
 

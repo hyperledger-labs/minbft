@@ -65,7 +65,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	return &replica{handleStream}, nil
 }
 
-func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
+func (r *replica) PeerMessageStreamHandler(id uint32) api.MessageStreamHandler {
 	// TODO: Handle peer/client connections differently
 	return r.handleStream
 }

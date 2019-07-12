@@ -127,7 +127,7 @@ func run() error {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
 
-	conn := connector.NewReplicaSide()
+	conn := connector.NewReplicaSide(id)
 
 	// XXX: The connection destination should be authenticated;
 	// grpc.WithInsecure() option is passed here for simplicity.
@@ -139,6 +139,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}
+
+	// XXX: Incoming peer connections should be authenticated.
+	// This is not yet supported by the server package.
 	replicaServer := server.New(replica)
 
 	srvErrChan := make(chan error)

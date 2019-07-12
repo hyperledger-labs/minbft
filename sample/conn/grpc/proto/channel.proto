@@ -24,6 +24,11 @@ service Channel {
     rpc PeerChat (stream Message) returns (stream Message) {}
 }
 
+// The first message to send over PeerChat.
+message Hello {
+    uint32 replica_id = 1;
+}
+
 message Message {
     bytes payload = 1;
 }

@@ -41,6 +41,7 @@ type clientSide struct {
 
 type replicaSide struct {
 	*common
+	replicaID uint32
 }
 
 // NewClientSide creates a new instance of ReplicaConnector to use at
@@ -53,9 +54,10 @@ func NewClientSide() ReplicaConnector {
 
 // NewReplicaSide creates a new instance of ReplicaConnector to use at
 // replica side, i.e. initiate replica-to-replica connections.
-func NewReplicaSide() ReplicaConnector {
+func NewReplicaSide(replicaID uint32) ReplicaConnector {
 	return &replicaSide{
-		common: newCommon(),
+		common:    newCommon(),
+		replicaID: replicaID,
 	}
 }
 
@@ -74,7 +76,7 @@ func (c *replicaSide) ReplicaMessageStreamHandler(id uint32) api.MessageStreamHa
 		return nil
 	}
 
-	return replica.PeerMessageStreamHandler()
+	return replica.PeerMessageStreamHandler(c.replicaID)
 }
 
 func newCommon() *common {

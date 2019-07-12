@@ -25,12 +25,12 @@ import (
 	"log"
 	"net"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/sync/errgroup"
-
 	"google.golang.org/grpc"
 
 	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
+	pb "github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
 
 // ReplicaServer implements a gRPC server to serve incoming
@@ -69,7 +69,7 @@ func New(replica api.ConnectionHandler) ReplicaServer {
 
 func (s *server) Serve(lis net.Listener, serverOpts ...grpc.ServerOption) error {
 	s.grpcServer = grpc.NewServer(serverOpts...)
-	proto.RegisterChannelServer(s.grpcServer, s)
+	pb.RegisterChannelServer(s.grpcServer, s)
 
 	err := s.grpcServer.Serve(lis)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *server) Stop() {
 	}
 }
 
-func (s *server) ClientChat(stream proto.Channel_ClientChatServer) error {
+func (s *server) ClientChat(stream pb.Channel_ClientChatServer) error {
 	in := make(chan []byte)
 	sh := s.replica.ClientMessageStreamHandler()
 	out := sh.HandleMessageStream(in)
@@ -93,17 +93,33 @@ func (s *server) ClientChat(stream proto.Channel_ClientChatServer) error {
 	return handleStream(stream, in, out)
 }
 
-func (s *server) PeerChat(stream proto.Channel_PeerChatServer) error {
+func (s *server) PeerChat(stream pb.Channel_PeerChatServer) error {
+	msg, err := stream.Recv()
+	if err != nil {
+		return fmt.Errorf("Failed to receive Hello message: %s", err)
+	}
+
+	hello := &pb.Hello{}
+	if err := proto.Unmarshal(msg.Payload, hello); err != nil {
+		return fmt.Errorf("Cannot unmarshal Hello message: %s", err)
+	}
+
+	// XXX: Authentication of the gRPC client is not implemented.
+	// The received Hello message needs to be verified against the
+	// authentication information of the transport, e.g. by using
+	// information obtained from stream.Context() with
+	// "google.golang.org/grpc/peer" package.
+	sh := s.replica.PeerMessageStreamHandler(hello.ReplicaId)
+
 	in := make(chan []byte)
-	sh := s.replica.PeerMessageStreamHandler()
 	out := sh.HandleMessageStream(in)
 
 	return handleStream(stream, in, out)
 }
 
 type rpcStream interface {
-	Send(*proto.Message) error
-	Recv() (*proto.Message, error)
+	Send(*pb.Message) error
+	Recv() (*pb.Message, error)
 	grpc.ServerStream
 }
 
@@ -129,7 +145,7 @@ func handleStream(stream rpcStream, in chan<- []byte, out <-chan []byte) error {
 
 	eg.Go(func() error {
 		for msg := range out {
-			err := stream.Send(&proto.Message{Payload: msg})
+			err := stream.Send(&pb.Message{Payload: msg})
 			if err != nil {
 				err = fmt.Errorf("Error sending to server stream: %s", err)
 				log.Println(err)
