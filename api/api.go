@@ -61,10 +61,9 @@ type ConnectionHandler interface {
 // communicate with the specified destination replica. The connection
 // guarantees authenticated destination, eventual delivery, preserving
 // integrity and the original order of messages. Confidentiality may
-// also be provided. ReplicaMessageStreamHandler never fails, except
-// when incorrect replica ID is passed.
+// also be provided. It returns nil if the destination is not valid.
 type ReplicaConnector interface {
-	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
+	ReplicaMessageStreamHandler(replicaID uint32) MessageStreamHandler
 }
 
 // MessageStreamHandler handles streams of messages

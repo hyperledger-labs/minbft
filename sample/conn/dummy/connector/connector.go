@@ -19,8 +19,6 @@
 package connector
 
 import (
-	"fmt"
-
 	"github.com/hyperledger-labs/minbft/api"
 )
 
@@ -61,11 +59,11 @@ func New(n int) ReplicaConnector {
 
 // ReplicaMessageStreamHandler returns the instance previously
 // assigned to replica ID.
-func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
+func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) api.MessageStreamHandler {
 	if replicaID >= uint32(len(c.replicas)) {
-		return nil, fmt.Errorf("invalid replicaID")
+		return nil
 	}
-	return &messageStreamHandler{replicaID, c}, nil
+	return &messageStreamHandler{replicaID, c}
 }
 
 func (c *connector) ConnectReplica(replicaID uint32, replica api.ConnectionHandler) {

@@ -81,8 +81,7 @@ func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mo
 		go func() {
 			defer wg.Done()
 
-			sh, err := conn.ReplicaMessageStreamHandler(uint32(i))
-			assert.NoError(t, err)
+			sh := conn.ReplicaMessageStreamHandler(uint32(i))
 			testConnection(t, sh, replicas[i])
 		}()
 	}

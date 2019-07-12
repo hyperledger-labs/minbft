@@ -329,9 +329,9 @@ func makePeerMessageSupplier(log messagelog.MessageLog) peerMessageSupplier {
 // peer replica ID and a general replica connector.
 func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnector {
 	return func(out <-chan []byte) (in <-chan []byte, err error) {
-		sh, err := connector.ReplicaMessageStreamHandler(peerID)
-		if err != nil {
-			return nil, err
+		sh := connector.ReplicaMessageStreamHandler(peerID)
+		if sh == nil {
+			return nil, fmt.Errorf("Connection not possible")
 		}
 		return sh.HandleMessageStream(out), nil
 	}

@@ -67,13 +67,13 @@ func New() ReplicaConnector {
 
 // ReplicaMessageStreamHandler returns MessageStreamHandler interface
 // to connect to gRPC stream established with the specified replica.
-func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageStreamHandler, error) {
+func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) api.MessageStreamHandler {
 	client, ok := c.clients[replicaID]
 	if !ok {
-		return nil, fmt.Errorf("No client connection to replica %d", replicaID)
+		return nil
 	}
 
-	return &messageStreamHandler{replicaID, client}, nil
+	return &messageStreamHandler{replicaID, client}
 }
 
 // SetReplicaClient assigns an instance of gRPC client to use for
