@@ -17,197 +17,174 @@
 package grpc
 
 import (
-	"fmt"
-	"io"
+	"math/rand"
 	"net"
+	"sync"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/server"
+
+	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
 )
 
 const (
-	nrReplicas uint32 = 3
-	nrMessages        = 5
+	nrReplicas = 3
+	nrMessages = 5
+	msgSize    = 32
 )
 
-func TestReplicaMessageStreamHandler(t *testing.T) {
-	msgs := makeTestMessages(nrReplicas, nrMessages)
-	servers, addrs := startLoopServers(nrReplicas)
-	defer stopLoopServers(servers)
+func TestGRPCConnector(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	replicaConnector := connector.New()
-	err := replicaConnector.ConnectManyReplicas(addrs, grpc.WithInsecure())
-	require.NoError(t, err)
+	conn := connector.New()
 
-	inChannels := prepareInChannels(msgs)
-	outChannels := startMessageStreams(t, replicaConnector, inChannels)
+	replicas, stop := setupConnector(ctrl, conn, nrReplicas)
+	defer stop()
 
-	_, err = replicaConnector.ReplicaMessageStreamHandler(nrReplicas)
-	assert.Error(t, err, "ReplicaMessageStreamHandler must fail with unassigned replica ID")
-
-	checkOutChannels(t, msgs, outChannels)
+	testConnector(t, conn, replicas)
 }
 
-func TestReplicaServer(t *testing.T) {
-	replica := new(loopReplica)
-	addr := replica.start()
-	defer replica.stop()
+func setupConnector(ctrl *gomock.Controller, conn *connector.ReplicaConnector, n int) (replicas []*mock_api.MockMessageStreamHandler, stop func()) {
+	done := make(chan struct{})
+	stop = func() { close(done) }
 
-	msgs := makeTestMessages(1, nrMessages)
-	replicaConnector := connector.New()
-	err := replicaConnector.ConnectReplica(uint32(0), addr, grpc.WithInsecure(), grpc.WithBlock())
-	require.NoError(t, err)
+	addrs := make(map[uint32]string)
 
-	inChannels := prepareInChannels(msgs)
-	outChannels := startMessageStreams(t, replicaConnector, inChannels)
+	for i := 0; i < n; i++ {
+		r := mock_api.NewMockMessageStreamHandler(ctrl)
+		replicas = append(replicas, r)
 
-	checkOutChannels(t, msgs, outChannels)
-}
-
-func makeTestMessages(nrReplicas uint32, nrMessages int) (msgs map[uint32][]string) {
-	msgs = make(map[uint32][]string)
-	for i := uint32(0); i < nrReplicas; i++ {
-		msgs[i] = make([]string, nrMessages)
-		for j := range msgs[i] {
-			msgs[i][j] = fmt.Sprintf("Message %d for replica %d", j, i)
-		}
+		addrs[uint32(i)] = startNewServer(r, done)
 	}
+
+	if err := conn.ConnectManyReplicas(addrs, grpc.WithInsecure()); err != nil {
+		panic(err)
+	}
+
 	return
 }
 
-func prepareInChannels(msgs map[uint32][]string) (inChannels map[uint32]chan []byte) {
-	inChannels = make(map[uint32]chan []byte)
+func testConnector(t *testing.T, conn *connector.ReplicaConnector, replicas []*mock_api.MockMessageStreamHandler) {
+	wg := new(sync.WaitGroup)
+	defer wg.Wait()
 
-	for i, msgList := range msgs {
-		in := make(chan []byte, len(msgList))
-		for _, msg := range msgList {
-			in <- []byte(msg)
-		}
-		close(in)
-		inChannels[i] = in
-	}
-	return
-}
+	wg.Add(len(replicas))
+	for i := range replicas {
+		i := i
+		go func() {
+			defer wg.Done()
 
-func checkOutChannels(t *testing.T, msgs map[uint32][]string, outChannels map[uint32]<-chan []byte) {
-	for i, out := range outChannels {
-		for _, msg := range msgs[i] {
-			assert.Equal(t, msg, string(<-out))
-		}
-		_, more := <-out
-		assert.False(t, more)
+			sh, err := conn.ReplicaMessageStreamHandler(uint32(i))
+			assert.NoError(t, err)
+			testConnection(t, sh, replicas[i])
+		}()
 	}
 }
 
-func startMessageStreams(t *testing.T, replicaConnector *connector.ReplicaConnector, inChannels map[uint32]chan []byte) (outChannels map[uint32]<-chan []byte) {
-	outChannels = make(map[uint32]<-chan []byte)
+func testConnection(t *testing.T, sh api.MessageStreamHandler, mockReplica *mock_api.MockMessageStreamHandler) {
+	wg := new(sync.WaitGroup)
+	defer wg.Wait()
 
-	for i, in := range inChannels {
-		streamHandler, err := replicaConnector.ReplicaMessageStreamHandler(i)
-		require.NoError(t, err)
-		require.NotNil(t, streamHandler)
+	mockIn := make(chan []byte)
+	mockOut := make(chan []byte)
 
-		out := streamHandler.HandleMessageStream(in)
-		require.NotNil(t, out)
-		outChannels[i] = out
-	}
-	return
-}
+	mockReplica.EXPECT().HandleMessageStream(gomock.Any()).DoAndReturn(
+		func(in <-chan []byte) <-chan []byte {
+			go func() {
+				for m := range in {
+					mockIn <- m
+				}
+			}()
 
-func startLoopServers(nrReplicas uint32) (servers map[uint32]*loopChatServer, addrs map[uint32]string) {
-	addrs = make(map[uint32]string)
-	servers = make(map[uint32]*loopChatServer)
-	for i := uint32(0); i < nrReplicas; i++ {
-		servers[i] = &loopChatServer{}
-		addrs[i] = servers[i].start()
-	}
-	return
-}
+			return mockOut
+		},
+	)
 
-func stopLoopServers(servers map[uint32]*loopChatServer) {
-	for _, srv := range servers {
-		srv.stop()
-	}
-}
+	out := make(chan []byte)
+	in := sh.HandleMessageStream(out)
 
-type loopChatServer struct {
-	grpcServer *grpc.Server
-}
-
-func (s *loopChatServer) Chat(stream proto.Channel_ChatServer) error {
-	for {
-		msg, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		if err := stream.Send(msg); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *loopChatServer) start() (addr string) {
-	s.grpcServer, addr = startServer(s)
-	return
-}
-
-func (s *loopChatServer) stop() {
-	if s.grpcServer != nil {
-		s.grpcServer.Stop()
-		s.grpcServer = nil
-	}
-}
-
-type loopReplica struct {
-	grpcServer *grpc.Server
-}
-
-func (r *loopReplica) HandleMessageStream(in <-chan []byte) <-chan []byte {
-	// Buffer a couple of messages to create a bit of concurrency
-	out := make(chan []byte, 2)
+	wg.Add(1)
 	go func() {
-		for msg := range in {
-			out <- msg
-		}
-		close(out)
+		defer wg.Done()
+		testStream(t, out, mockIn)
 	}()
-	return out
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		testStream(t, mockOut, in)
+	}()
 }
 
-func (r *loopReplica) start() (addr string) {
-	r.grpcServer, addr = startServer(server.New(r))
+func testStream(t *testing.T, out chan<- []byte, in <-chan []byte) {
+	wg := new(sync.WaitGroup)
+	defer wg.Wait()
+
+	msgs := makeMessages(nrMessages)
+
+	wg.Add(1)
+	go func() {
+		defer close(out)
+		defer wg.Done()
+
+		for _, m := range msgs {
+			out <- m
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for _, m := range msgs {
+			assert.Equal(t, m, <-in)
+		}
+	}()
+}
+
+func makeMessages(n int) (msgs [][]byte) {
+	for i := 0; i < n; i++ {
+		m := make([]byte, msgSize)
+		rand.Read(m)
+		msgs = append(msgs, m)
+	}
+
 	return
 }
 
-func (r *loopReplica) stop() {
-	if r.grpcServer != nil {
-		r.grpcServer.Stop()
-		r.grpcServer = nil
-	}
+func startNewServer(replica api.MessageStreamHandler, done chan struct{}) (addr string) {
+	srv := server.New(replica)
+
+	grpcServer := grpc.NewServer()
+	proto.RegisterChannelServer(grpcServer, srv)
+
+	go func() {
+		<-done
+		grpcServer.Stop()
+	}()
+
+	return listenAndServe(grpcServer)
 }
 
-func startServer(channelServer proto.ChannelServer) (grpcServer *grpc.Server, addr string) {
+func listenAndServe(srv *grpc.Server) (addr string) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
 	}
-	addr = lis.Addr().String()
-	grpcServer = grpc.NewServer()
-	proto.RegisterChannelServer(grpcServer, channelServer)
+
 	go func() {
-		err := grpcServer.Serve(lis)
-		if err != nil {
+		if err := srv.Serve(lis); err != nil {
 			panic(err)
 		}
 	}()
-	return
+
+	return lis.Addr().String()
 }
