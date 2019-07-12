@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/proto"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
 )
 
 // ReplicaServer implements a gRPC server to serve incoming

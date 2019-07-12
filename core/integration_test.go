@@ -30,7 +30,7 @@ import (
 	minbft "github.com/hyperledger-labs/minbft/core"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
-	dummyConnector "github.com/hyperledger-labs/minbft/sample/net/dummy/connector"
+	dummyConnector "github.com/hyperledger-labs/minbft/sample/conn/dummy/connector"
 	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 
 	"github.com/stretchr/testify/assert"

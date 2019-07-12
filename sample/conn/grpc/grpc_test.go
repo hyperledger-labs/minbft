@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/proto"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/server"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/proto"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/server"
 )
 
 const (

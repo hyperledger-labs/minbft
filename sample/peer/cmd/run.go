@@ -31,8 +31,8 @@ import (
 	minbft "github.com/hyperledger-labs/minbft/core"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/server"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/server"
 	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 )
 
