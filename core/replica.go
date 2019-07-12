@@ -38,12 +38,6 @@ type Stack interface {
 
 // Replica represents an instance of replica peer
 type replica struct {
-	id uint32 // replica ID, unique in range [0,n)
-	n  uint32 // total number of nodes
-
-	stack Stack
-
-	log          messagelog.MessageLog
 	handleStream messageStreamHandler
 }
 
@@ -58,50 +52,17 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 
 	logOpts := newOptions(opts...)
 
-	replica := &replica{
-		id: id,
-		n:  n,
-
-		stack: stack,
-
-		log: messagelog.New(),
-	}
-
+	messageLog := messagelog.New()
 	logger := makeLogger(id, logOpts)
-	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
-	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
-	if err := replica.start(); err != nil {
-		return nil, fmt.Errorf("Failed to start replica: %s", err)
+	if err := startPeerConnections(id, n, stack, messageLog, logger); err != nil {
+		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
 
-	return replica, nil
-}
+	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger)
+	handleStream := makeMessageStreamHandler(handle, logger)
 
-// Start begins message exchange with peer replicas
-func (r *replica) start() error {
-	supply := makePeerMessageSupplier(r.log)
-
-	for i := uint32(0); i < r.n; i++ {
-		if i == r.id {
-			continue
-		}
-
-		conn := makePeerConnector(i, r.stack)
-		out := make(chan []byte)
-
-		// Reply stream is not used for replica-to-replica
-		// communication, thus return value is ignored. Each
-		// replica will establish connections to other peers
-		// the same way, so they all will be eventually fully
-		// connected.
-		if _, err := conn(out); err != nil {
-			return fmt.Errorf("Cannot connect to replica %d: %s", i, err)
-		}
-
-		go supply(out)
-	}
-	return nil
+	return &replica{handleStream}, nil
 }
 
 // HandleMessageStream initiates handling of incoming messages and

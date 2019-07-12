@@ -274,6 +274,43 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 	}
 }
 
+// startPeerConnections initiates asynchronous message exchange with
+// peer replicas.
+func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger) error {
+	supply := makePeerMessageSupplier(log)
+
+	for peerID := uint32(0); peerID < n; peerID++ {
+		if peerID == replicaID {
+			continue
+		}
+
+		connect := makePeerConnector(peerID, connector)
+		if err := startPeerConnection(connect, supply); err != nil {
+			return fmt.Errorf("Cannot connect to replica %d: %s", peerID, err)
+		}
+	}
+
+	return nil
+}
+
+// startPeerConnection initiates asynchronous message exchange with a
+// peer replica.
+func startPeerConnection(connect peerConnector, supply peerMessageSupplier) error {
+	out := make(chan []byte)
+
+	// So far, reply stream is not used for replica-to-replica
+	// communication, thus return value is ignored. Each replica
+	// will establish connections to other peers the same way, so
+	// they all will be eventually fully connected.
+	if _, err := connect(out); err != nil {
+		return err
+	}
+
+	go supply(out)
+
+	return nil
+}
+
 // makePeerMessageSupplier construct a peerMessageSupplier using the
 // supplied message log.
 func makePeerMessageSupplier(log messagelog.MessageLog) peerMessageSupplier {
