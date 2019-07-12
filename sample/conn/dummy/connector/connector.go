@@ -14,81 +14,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package connector implements ReplicaConnector interface to connect
-// replica instances in the same processes. Useful for testing.
+// Package connector provides a mechanism for connecting replica
+// instances in the same process. Useful for testing.
 package connector
 
 import (
 	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/sample/conn/common/replicastub"
+
+	common "github.com/hyperledger-labs/minbft/sample/conn/common/connector"
 )
 
-// ReplicaConnector allows to connect replica instances in the same
-// process directly. It is useful for testing.
+// ReplicaConnector allows to connect replica instances within the
+// same process directly.
 //
-// ConnectReplica method assigns a replica instance, given its ID.
+// AssignReplicaStub method associates the supplied replica ID with
+// the replica stub.
 type ReplicaConnector interface {
 	api.ReplicaConnector
-	ConnectReplica(id uint32, replica api.ConnectionHandler)
-}
-
-// ConnectManyReplicas helps to assign multiple replica instances. It
-// invokes ConnectReplica on the specified connector for each replica
-// in the supplied map indexed by replica ID.
-func ConnectManyReplicas(conn ReplicaConnector, replicas map[uint32]api.ConnectionHandler) {
-	for id, r := range replicas {
-		conn.ConnectReplica(id, r)
-	}
+	AssignReplicaStub(id uint32, stub replicastub.ReplicaStub)
 }
 
 type connector struct {
-	replicas []api.ConnectionHandler
-	ready    []chan bool
+	common.ReplicaConnector
 }
 
-// New creates an instance of ReplicaConnector
-func New(n int) ReplicaConnector {
-	ready := make([]chan bool, n)
-	for i := 0; i < n; i++ {
-		ready[uint32(i)] = make(chan bool)
-	}
-	return &connector{
-		replicas: make([]api.ConnectionHandler, n),
-		ready:    ready,
-	}
+func New() ReplicaConnector {
+	return &connector{common.New()}
 }
 
-// ReplicaMessageStreamHandler returns the instance previously
-// assigned to replica ID.
-func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) api.MessageStreamHandler {
-	if replicaID >= uint32(len(c.replicas)) {
-		return nil
-	}
-	return &messageStreamHandler{replicaID, c}
-}
-
-func (c *connector) ConnectReplica(replicaID uint32, replica api.ConnectionHandler) {
-	c.replicas[replicaID] = replica
-	close(c.ready[replicaID])
-}
-
-// messageStreamHandler is a local representation of the replica for
-// the purpose of message exchange.
-type messageStreamHandler struct {
-	replicaID uint32
-	connector *connector
-}
-
-// HandleMessageStream implements actual communication with other replica.
-func (h *messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
-	out := make(chan []byte)
-
-	go func() {
-		<-h.connector.ready[h.replicaID]
-		replica := h.connector.replicas[h.replicaID]
-		for msg := range replica.HandleMessageStream(in) {
-			out <- msg
-		}
-	}()
-
-	return out
+func (c *connector) AssignReplicaStub(id uint32, stub replicastub.ReplicaStub) {
+	c.AssignReplica(id, stub)
 }

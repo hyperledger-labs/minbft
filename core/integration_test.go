@@ -30,6 +30,7 @@ import (
 	minbft "github.com/hyperledger-labs/minbft/core"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
+	"github.com/hyperledger-labs/minbft/sample/conn/common/replicastub"
 	dummyConnector "github.com/hyperledger-labs/minbft/sample/conn/dummy/connector"
 	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 
@@ -54,12 +55,13 @@ type testClientStack struct {
 }
 
 var (
-	replicas          []api.Replica
-	replicaConnectors []dummyConnector.ReplicaConnector
-	replicaStacks     []*testReplicaStack
-	clients           []cl.Client
-	clientConnectors  []dummyConnector.ReplicaConnector
-	clientStacks      []*testClientStack
+	replicas      []api.Replica
+	replicaStacks []*testReplicaStack
+
+	clients      []cl.Client
+	clientStacks []*testClientStack
+
+	replicaStubs []replicastub.ReplicaStub
 
 	testRequestMessage = []byte("test request message")
 )
@@ -111,12 +113,10 @@ func createTestnetCfg(numReplica int, numClient int) ([]byte, []byte) {
 
 func resetFixture() {
 	replicas = nil
-	replicaConnectors = nil
-	replicaStacks = nil
 	replicaStacks = nil
 	clients = nil
-	clientConnectors = nil
 	clientStacks = nil
+	replicaStubs = nil
 }
 
 func initTestnetPeers(numReplica int, numClient int) {
@@ -131,64 +131,55 @@ func initTestnetPeers(numReplica int, numClient int) {
 		panic(err)
 	}
 
-	replicaConnectors = createReplicaConnectors(numReplica, numReplica)
-	clientConnectors = createReplicaConnectors(numReplica, numClient)
+	// replica stubs
+	for i := 0; i < numReplica; i++ {
+		replicaStubs = append(replicaStubs, replicastub.New())
+	}
 
 	// replicas
 	for i := 0; i < numReplica; i++ {
 		id := uint32(i)
 		sigAuth, _ := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, bytes.NewBuffer(testKeys), usigEnclaveFile)
 		ledger := requestconsumer.NewSimpleLedger()
+		conn := newReplicaSideConnector(id)
+		stack := &testReplicaStack{conn, sigAuth, ledger}
+		replicaStacks = append(replicaStacks, stack)
 
-		replicaStacks = append(replicaStacks, &testReplicaStack{replicaConnectors[i], sigAuth, ledger})
-
-		replica, _ := minbft.New(id, cfg, replicaStacks[i])
+		replica, _ := minbft.New(id, cfg, stack)
 		replicas = append(replicas, replica)
+		replicaStubs[i].AssignReplica(replica)
 	}
 
 	// clients
 	for i := 0; i < numClient; i++ {
 		au, _ := authen.New([]api.AuthenticationRole{api.ClientAuthen}, testClientID, bytes.NewBuffer(testKeys))
+		conn := newClientSideConnector()
+		stack := &testClientStack{conn, au}
+		clientStacks = append(clientStacks, stack)
 
-		clientStacks = append(clientStacks, &testClientStack{clientConnectors[i], au})
-
-		client, _ := cl.New(testClientID, cfg.N(), cfg.F(), clientStacks[i])
+		client, _ := cl.New(testClientID, cfg.N(), cfg.F(), stack)
 		clients = append(clients, client)
 	}
-
-	connectReplicas(replicaConnectors, replicas)
-	connectClients(clientConnectors, replicas)
 }
 
-func createReplicaConnectors(numReplica int, n int) []dummyConnector.ReplicaConnector {
-	connectors := make([]dummyConnector.ReplicaConnector, n)
-	for i := range connectors {
-		connectors[i] = dummyConnector.New(numReplica)
+func newReplicaSideConnector(replicaID uint32) api.ReplicaConnector {
+	conn := dummyConnector.New()
+	for i, stub := range replicaStubs {
+		id := uint32(i)
+		if id == replicaID {
+			continue
+		}
+		conn.AssignReplicaStub(id, stub)
 	}
-	return connectors
+	return conn
 }
 
-func connectReplicas(connectors []dummyConnector.ReplicaConnector, replicas []api.Replica) {
-	for i, connector := range connectors {
-		peers := makeReplicaMap(replicas)
-		delete(peers, uint32(i)) // avoid connecting replica to itself
-		dummyConnector.ConnectManyReplicas(connector, peers)
+func newClientSideConnector() api.ReplicaConnector {
+	conn := dummyConnector.New()
+	for i, stub := range replicaStubs {
+		conn.AssignReplicaStub(uint32(i), stub)
 	}
-}
-
-func connectClients(connectors []dummyConnector.ReplicaConnector, replicas []api.Replica) {
-	peers := makeReplicaMap(replicas)
-	for _, connector := range connectors {
-		dummyConnector.ConnectManyReplicas(connector, peers)
-	}
-}
-
-func makeReplicaMap(replicas []api.Replica) map[uint32]api.ConnectionHandler {
-	replicaMap := make(map[uint32]api.ConnectionHandler)
-	for i, r := range replicas {
-		replicaMap[uint32(i)] = r
-	}
-	return replicaMap
+	return conn
 }
 
 func testAcceptOneRequest(t *testing.T) {
