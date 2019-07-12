@@ -47,27 +47,25 @@ type Configer interface {
 
 // ReplicaConnector establishes connections to replicas
 //
-// ReplicaMessageStreamHandler provides a local representation of the
-// specified replica for the purpose of message exchange. The local
-// representation is returned as MessageStreamHandler interface. It
-// guarantees reliable and secure message delivery to the replica.
-// Message delivery delay is assumed not to grow indefinitely. This
-// assumption has to be satisfied to ensure the liveness of the system.
-// ReplicaMessageStreamHandler never fails, except when incorrect replica
-// ID is passed.
+// ReplicaMessageStreamHandler method provides a local representation
+// of the specified replica for the purpose of message exchange. The
+// connection guarantees eventual delivery, preserving integrity and
+// the original order of messages. Confidentiality may also be
+// provided. ReplicaMessageStreamHandler never fails, except when
+// incorrect replica ID is passed.
 type ReplicaConnector interface {
 	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
 }
 
 // MessageStreamHandler handles streams of messages
 //
-// HandleMessageStream initiates asynchronous handling of an incoming
-// message stream and returns another stream of messages that might be
-// produced in reply. Each value sent/received through a channel is a
-// single complete serialized message. Once a message is received from
-// any of the channels, it is the receiver's responsibility to finish
-// handling of the message. This method should never fail or block the
-// caller.
+// HandleMessageStream method initiates asynchronous handling of
+// messages. Given a stream of incoming messages, it returns another
+// stream of messages that might be produced in reply. Each value
+// sent/received through a channel is a single complete serialized
+// message. Once a message is received from any of the channels, it is
+// the receiver's responsibility to finish handling of the message.
+// This method should never fail or block the caller.
 type MessageStreamHandler interface {
 	HandleMessageStream(in <-chan []byte) (out <-chan []byte)
 }
