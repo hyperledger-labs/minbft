@@ -24,7 +24,7 @@ import (
 
 // Replica represents an instance of MinBFT replica.
 type Replica interface {
-	MessageStreamHandler
+	ConnectionHandler
 }
 
 //======= Interface for module 'config' =======
@@ -49,6 +49,11 @@ type Configer interface {
 }
 
 //======= Interface for module 'network' =======
+
+// ConnectionHandler handles incoming connections.
+type ConnectionHandler interface {
+	MessageStreamHandler
+}
 
 // ReplicaConnector establishes connections to replicas
 //

@@ -30,20 +30,20 @@ import (
 // ConnectReplica method assigns a replica instance, given its ID.
 type ReplicaConnector interface {
 	api.ReplicaConnector
-	ConnectReplica(id uint32, replica api.MessageStreamHandler)
+	ConnectReplica(id uint32, replica api.ConnectionHandler)
 }
 
 // ConnectManyReplicas helps to assign multiple replica instances. It
 // invokes ConnectReplica on the specified connector for each replica
 // in the supplied map indexed by replica ID.
-func ConnectManyReplicas(conn ReplicaConnector, replicas map[uint32]api.MessageStreamHandler) {
+func ConnectManyReplicas(conn ReplicaConnector, replicas map[uint32]api.ConnectionHandler) {
 	for id, r := range replicas {
 		conn.ConnectReplica(id, r)
 	}
 }
 
 type connector struct {
-	replicas []api.MessageStreamHandler
+	replicas []api.ConnectionHandler
 	ready    []chan bool
 }
 
@@ -54,7 +54,7 @@ func New(n int) ReplicaConnector {
 		ready[uint32(i)] = make(chan bool)
 	}
 	return &connector{
-		replicas: make([]api.MessageStreamHandler, n),
+		replicas: make([]api.ConnectionHandler, n),
 		ready:    ready,
 	}
 }
@@ -68,7 +68,7 @@ func (c *connector) ReplicaMessageStreamHandler(replicaID uint32) (api.MessageSt
 	return &messageStreamHandler{replicaID, c}, nil
 }
 
-func (c *connector) ConnectReplica(replicaID uint32, replica api.MessageStreamHandler) {
+func (c *connector) ConnectReplica(replicaID uint32, replica api.ConnectionHandler) {
 	c.replicas[replicaID] = replica
 	close(c.ready[replicaID])
 }

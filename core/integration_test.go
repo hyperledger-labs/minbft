@@ -183,8 +183,8 @@ func connectClients(connectors []dummyConnector.ReplicaConnector, replicas []api
 	}
 }
 
-func makeReplicaMap(replicas []api.Replica) map[uint32]api.MessageStreamHandler {
-	replicaMap := make(map[uint32]api.MessageStreamHandler)
+func makeReplicaMap(replicas []api.Replica) map[uint32]api.ConnectionHandler {
+	replicaMap := make(map[uint32]api.ConnectionHandler)
 	for i, r := range replicas {
 		replicaMap[uint32(i)] = r
 	}

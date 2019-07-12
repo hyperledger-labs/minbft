@@ -51,14 +51,14 @@ func TestGRPCConnector(t *testing.T) {
 	testConnector(t, conn, replicas)
 }
 
-func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n int) (replicas []*mock_api.MockMessageStreamHandler, stop func()) {
+func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n int) (replicas []*mock_api.MockConnectionHandler, stop func()) {
 	done := make(chan struct{})
 	stop = func() { close(done) }
 
 	addrs := make(map[uint32]string)
 
 	for i := 0; i < n; i++ {
-		r := mock_api.NewMockMessageStreamHandler(ctrl)
+		r := mock_api.NewMockConnectionHandler(ctrl)
 		replicas = append(replicas, r)
 
 		addrs[uint32(i)] = startNewServer(r, done)
@@ -71,7 +71,7 @@ func setupConnector(ctrl *gomock.Controller, conn connector.ReplicaConnector, n 
 	return
 }
 
-func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mock_api.MockMessageStreamHandler) {
+func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mock_api.MockConnectionHandler) {
 	wg := new(sync.WaitGroup)
 	defer wg.Wait()
 
@@ -88,7 +88,7 @@ func testConnector(t *testing.T, conn connector.ReplicaConnector, replicas []*mo
 	}
 }
 
-func testConnection(t *testing.T, sh api.MessageStreamHandler, mockReplica *mock_api.MockMessageStreamHandler) {
+func testConnection(t *testing.T, sh api.MessageStreamHandler, mockReplica *mock_api.MockConnectionHandler) {
 	wg := new(sync.WaitGroup)
 	defer wg.Wait()
 
@@ -159,7 +159,7 @@ func makeMessages(n int) (msgs [][]byte) {
 	return
 }
 
-func startNewServer(replica api.MessageStreamHandler, done chan struct{}) (addr string) {
+func startNewServer(replica api.ConnectionHandler, done chan struct{}) (addr string) {
 	srv := server.New(replica)
 
 	go func() {

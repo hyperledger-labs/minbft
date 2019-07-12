@@ -57,13 +57,13 @@ func ListenAndServe(s ReplicaServer, addr string, serverOpts ...grpc.ServerOptio
 }
 
 type server struct {
-	replica    api.MessageStreamHandler
+	replica    api.ConnectionHandler
 	grpcServer *grpc.Server
 }
 
 // New creates a new instance of ReplicaServer using the specified
 // replica instance to connect incoming requests with.
-func New(replica api.MessageStreamHandler) ReplicaServer {
+func New(replica api.ConnectionHandler) ReplicaServer {
 	return &server{replica: replica}
 }
 
