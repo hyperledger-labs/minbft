@@ -35,12 +35,11 @@ type requestHandler func(operation []byte) <-chan []byte
 // makeRequestHandler constructs a requestHandler uisng the supplied
 // clientID, sequence number generator, authenticator, request buffer,
 // and number of tolerated faulty replicas.
-func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, collector ReplyCollector, buf *requestbuffer.T, f uint32) requestHandler {
+func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, f uint32) requestHandler {
 	submitter := makeRequestSubmitter(clientID, seq, authen, buf)
-	remover := makeRequestRemover(buf)
-
+	collector := makeReplyCollector(f, buf)
 	return func(operation []byte) <-chan []byte {
-		return handleRequest(operation, submitter, collector, remover)
+		return handleRequest(operation, submitter, collector)
 	}
 }
 
@@ -49,44 +48,34 @@ func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authe
 // fetch corresponding Reply messages from.
 type requestSubmitter func(operation []byte) <-chan *messages.Reply
 
-// requestRemover removes and stops further processing of the request
-// given its sequence number.
-type requestRemover func(seq uint64)
+// replyCollector collects f+1 matching Reply messages received from
+// the passed channel, finishes the request processing, and sends the
+// result of request execution to the passed channel.
+type replyCollector func(in <-chan *messages.Reply, out chan<- []byte)
 
 // handleRequest initiates the specified operation to execute on the
 // replicated state machine using the passed request submitter and
 // returns a channel to receive the result of execution from.
-func handleRequest(operation []byte, submitter requestSubmitter, collector ReplyCollector, remover requestRemover) <-chan []byte {
+func handleRequest(operation []byte, submitter requestSubmitter, collector replyCollector) <-chan []byte {
 	resultChan := make(chan []byte, 1)
 	replyChan := submitter(operation)
-	go collector.Collect(replyChan, resultChan, remover)
+	go collector(replyChan, resultChan)
 	return resultChan
 }
 
 // makeReplyCollector constructs a replyCollector using the supplied
-// tolerance to remove the request from when its processing is finished.
-func makeReplyCollector(f uint32) ReplyCollector {
-
-	return &replyCollector{
-
-		faults: f,
-		action: collectReplies,
+// tolerance and request buffer to remove the request from when its
+// processing is finished.
+func makeReplyCollector(f uint32, buf *requestbuffer.T) replyCollector {
+	remover := makeRequestRemover(buf)
+	return func(in <-chan *messages.Reply, out chan<- []byte) {
+		collectReplies(f, in, remover, out)
 	}
-
 }
 
-// replyCollector represents an instance of ReplyCollector
-type replyCollector struct {
-	faults uint32
-	action func(f uint32, replyChan <-chan *messages.Reply, remover requestRemover, resultChan chan<- []byte)
-}
-
-// Collect gathers Reply messages received from
-// the passed channel, finishes the request processing, and sends the
-// result of request execution to the passed channel.
-func (r *replyCollector) Collect(in <-chan *messages.Reply, out chan<- []byte, remover requestRemover) {
-	r.action(r.faults, in, remover, out)
-}
+// requestRemover removes and stops further processing of the request
+// given its sequence number.
+type requestRemover func(seq uint64)
 
 // collectReplies collects f+1 matching Reply messages fetched from
 // the supplied channel, removes the corresponding request using the
