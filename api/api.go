@@ -31,9 +31,11 @@ type ProtocolHandler interface {
 	// indicates that the message has not been processed before.
 	Handle(msg interface{}) (reply <-chan interface{}, new bool, err error)
 
+	// Wrap serializes a message into a byte array. An error is returned if the
+	// serialization failed.
 	Wrap(msg interface{}) (msgBytes []byte, err error)
 
-	// Unwrap deserializes messages into an interface compatible with the ordering
+	// Unwrap deserializes a message into an interface compatible with the ordering
 	// protocol, alongside a string describing the message type. An error is
 	// returned if deserialization fails.
 	Unwrap(msgBytes []byte) (msg interface{}, msgStr string, err error)

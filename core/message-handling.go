@@ -141,6 +141,7 @@ func (h *protocolHandler) Handle(msg interface{}) (reply <-chan interface{}, new
 	return h.handler(msg)
 }
 
+//Wrap serializes a message into a byte array
 func (h *protocolHandler) Wrap(msg interface{}) (msgBytes []byte, err error) {
 	return h.wrapper(msg)
 }
