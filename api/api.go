@@ -23,13 +23,20 @@ import (
 )
 
 // ProtocolHandler handles incoming message according to the implemented protocol.
-//
-// Handle verifies and processes incoming messages according to the protocol.
-// If there is any message produced in reply, it will be send to reply
-// channel, otherwise nil channel is returned. The return value new
-// indicates that the message has not been processed before.
 type ProtocolHandler interface {
+
+	// Handle verifies and processes incoming messages according to the protocol.
+	// If there is any message produced in reply, it will be send to reply
+	// channel, otherwise nil channel is returned. The return value new
+	// indicates that the message has not been processed before.
 	Handle(msg interface{}) (reply <-chan interface{}, new bool, err error)
+
+	Wrap(msg interface{}) (msgBytes []byte, err error)
+
+	// Unwrap deserializes messages into an interface compatible with the ordering
+	// protocol, alongside a string describing the message type. An error is
+	// returned if deserialization fails.
+	Unwrap(msgBytes []byte) (msg interface{}, msgStr string, err error)
 }
 
 //======= Interface for module 'config' =======

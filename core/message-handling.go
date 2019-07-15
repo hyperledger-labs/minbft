@@ -130,13 +130,26 @@ type generatedMessageConsumer func(msg messages.ReplicaMessage)
 
 // protocolHandler represents an instance of protocolHandler
 type protocolHandler struct {
-	action func(msg interface{}) (replyChan <-chan interface{}, new bool, err error)
+	handler   func(msg interface{}) (replyChan <-chan interface{}, new bool, err error)
+	wrapper   func(msg interface{}) (msgBytes []byte, err error)
+	unwrapper func(msgBytes []byte) (msg interface{}, msgStr string, err error)
 }
 
 // Handle verifies and processes incoming messages
 func (h *protocolHandler) Handle(msg interface{}) (reply <-chan interface{}, new bool, err error) {
 
-	return h.action(msg)
+	return h.handler(msg)
+}
+
+func (h *protocolHandler) Wrap(msg interface{}) (msgBytes []byte, err error) {
+	return h.wrapper(msg)
+}
+
+// Unwrap deserializes messages into an interface compatible with the ordering protocol
+func (h *protocolHandler) Unwrap(msgBytes []byte) (msg interface{}, msgStr string, err error) {
+
+	return h.unwrapper(msgBytes)
+
 }
 
 // GetMinBFTHandler creates an instance of ProtocolHandler that abides to the MinBFT protocol
@@ -239,14 +252,13 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 func makeMessageStreamHandler(handler api.ProtocolHandler, logger *logging.Logger) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
-			wrappedMsg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
+
+			msg, msgStr, err := handler.Unwrap(msgBytes)
+			if err != nil {
+
 				logger.Warningf("Failed to unmarshal message: %s", err)
 				continue
 			}
-
-			msg := messages.UnwrapMessage(wrappedMsg)
-			msgStr := messageString(msg)
 
 			logger.Debugf("Received %s", msgStr)
 
@@ -257,8 +269,9 @@ func makeMessageStreamHandler(handler api.ProtocolHandler, logger *logging.Logge
 				if !more {
 					continue
 				}
-				replyMsg := messages.WrapMessage(m)
-				replyBytes, err := proto.Marshal(replyMsg)
+
+				replyBytes, err := handler.Wrap(m)
+
 				if err != nil {
 					panic(err)
 				}
@@ -279,7 +292,7 @@ func makeIncomingMessageHandler(validate messageValidator, process messageProces
 
 	return &protocolHandler{
 
-		action: func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+		handler: func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
 			err = validate(msg)
 			if err != nil {
 				err = fmt.Errorf("Validation failed: %s", err)
@@ -299,6 +312,26 @@ func makeIncomingMessageHandler(validate messageValidator, process messageProces
 			}
 
 			return replyChan, new, nil
+		},
+
+		wrapper: func(msg interface{}) (msgBytes []byte, err error) {
+
+			replyMsg := messages.WrapMessage(msg)
+			replyBytes, err := proto.Marshal(replyMsg)
+			return replyBytes, err
+		},
+
+		unwrapper: func(msgBytes []byte) (msg interface{}, msgStr string, err error) {
+
+			wrappedMsg := &messages.Message{}
+			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
+				return nil, "", err
+			}
+
+			msg = messages.UnwrapMessage(wrappedMsg)
+			msgStr = messageString(msg)
+
+			return msg, msgStr, nil
 		},
 	}
 }
