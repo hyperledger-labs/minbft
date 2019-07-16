@@ -143,7 +143,7 @@ func initTestnetPeers(numReplica int, numClient int) {
 		id := uint32(i)
 		sigAuth, _ := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, bytes.NewBuffer(testKeys), usigEnclaveFile)
 		ledger := requestconsumer.NewSimpleLedger()
-		handler := minbft.NewMinBFTHandler(0, cfg, replicaConnectors[i], sigAuth, ledger, logger)
+		handler := minbft.NewMinBFTHandler(id, cfg, replicaConnectors[i], sigAuth, ledger, logger)
 
 		replicaStacks = append(replicaStacks, &testReplicaStack{replicaConnectors[i], sigAuth, handler, ledger})
 
