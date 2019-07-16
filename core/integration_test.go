@@ -32,6 +32,7 @@ import (
 	"github.com/hyperledger-labs/minbft/sample/config"
 	dummyConnector "github.com/hyperledger-labs/minbft/sample/net/dummy/connector"
 	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
+	logging "github.com/op/go-logging"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -45,6 +46,7 @@ const (
 type testReplicaStack struct {
 	*dummyConnector.ReplicaConnector
 	api.Authenticator
+	api.ProtocolHandler
 	*requestconsumer.SimpleLedger
 }
 
@@ -134,15 +136,18 @@ func initTestnetPeers(numReplica int, numClient int) {
 	replicaConnectors = createReplicaConnectors(numReplica, numReplica)
 	clientConnectors = createReplicaConnectors(numReplica, numClient)
 
+	logger := logging.MustGetLogger("minbft")
+
 	// replicas
 	for i := 0; i < numReplica; i++ {
 		id := uint32(i)
 		sigAuth, _ := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, bytes.NewBuffer(testKeys), usigEnclaveFile)
 		ledger := requestconsumer.NewSimpleLedger()
+		handler := minbft.NewMinBFTHandler(0, cfg, replicaConnectors[i], sigAuth, ledger, logger)
 
-		replicaStacks = append(replicaStacks, &testReplicaStack{replicaConnectors[i], sigAuth, ledger})
+		replicaStacks = append(replicaStacks, &testReplicaStack{replicaConnectors[i], sigAuth, handler, ledger})
 
-		replica, _ := minbft.New(id, cfg, replicaStacks[i])
+		replica, _ := minbft.NewReplica(cfg, replicaStacks[i], logger)
 		replicas = append(replicas, replica)
 	}
 

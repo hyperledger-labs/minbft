@@ -5,9 +5,10 @@
 package mock_messagelog
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	messages "github.com/hyperledger-labs/minbft/messages"
-	reflect "reflect"
 )
 
 // MockMessageLog is a mock of MessageLog interface

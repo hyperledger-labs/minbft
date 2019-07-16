@@ -22,6 +22,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hyperledger-labs/minbft/sample/net/dummy/connector"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,32 +56,38 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 		args := mock.MethodCalled("messageReplier", msg)
 		return args.Get(0).(chan interface{}), args.Error(1)
 	}
-	handle := makeIncomingMessageHandler(validateMessage, processMessage, replyMessage)
+
+	connector := connector.New(0)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	log := mock_messagelog.NewMockMessageLog(ctrl)
+
+	handle := makeIncomingMessageHandler(0, 4, connector, log, validateMessage, processMessage, replyMessage)
 
 	msg := fmt.Sprint("message ", rand.Int())
 	reply := fmt.Sprint("reply ", rand.Int())
 
 	mock.On("messageValidator", msg).Return(fmt.Errorf("Error")).Once()
-	_, _, err := handle(msg)
+	_, _, err := handle.Handle(msg)
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
-	_, _, err = handle(msg)
+	_, _, err = handle.Handle(msg)
 	assert.Error(t, err)
 
 	nilRelyChan := (chan interface{})(nil)
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, fmt.Errorf("Error")).Once()
-	_, new, err := handle(msg)
+	_, new, err := handle.Handle(msg)
 	assert.Error(t, err)
 	assert.False(t, new)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err := handle(msg)
+	ch, new, err := handle.Handle(msg)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Nil(t, ch)
@@ -87,7 +95,7 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle.Handle(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
 	assert.Nil(t, ch)
@@ -97,7 +105,7 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle.Handle(msg)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Equal(t, reply, <-ch)
@@ -107,7 +115,7 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle.Handle(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
 	assert.Equal(t, reply, <-ch)
