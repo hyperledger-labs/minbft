@@ -25,6 +25,9 @@ import (
 // ProtocolHandler handles incoming message according to the implemented protocol.
 type ProtocolHandler interface {
 
+	// Start begins message exchange with peers.
+	Start() error
+
 	// Handle verifies and processes incoming messages according to the protocol.
 	// If there is any message produced in reply, it will be send to reply
 	// channel, otherwise nil channel is returned. The return value new

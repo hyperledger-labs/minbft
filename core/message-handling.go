@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-
 	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -130,51 +129,114 @@ type generatedMessageConsumer func(msg messages.ReplicaMessage)
 
 // protocolHandler represents an instance of protocolHandler
 type protocolHandler struct {
-	handler   func(msg interface{}) (replyChan <-chan interface{}, new bool, err error)
-	wrapper   func(msg interface{}) (msgBytes []byte, err error)
-	unwrapper func(msgBytes []byte) (msg interface{}, msgStr string, err error)
+	id        uint32
+	n         uint32
+	connector api.ReplicaConnector
+	log       messagelog.MessageLog
+	validate  messageValidator
+	process   messageProcessor
+	reply     messageReplier
 }
 
-// Handle verifies and processes incoming messages
-func (h *protocolHandler) Handle(msg interface{}) (reply <-chan interface{}, new bool, err error) {
+// Start begins message exchange with peer replicas
+func (handler *protocolHandler) Start() error {
+	for i := uint32(0); i < handler.n; i++ {
+		if i == handler.id {
+			continue
+		}
+		out := make(chan []byte)
+		sh, err := handler.connector.ReplicaMessageStreamHandler(i)
+		if err != nil {
+			return fmt.Errorf("Error getting peer replica %d message stream handler: %s", i, err)
+		}
+		// Reply stream is not used for replica-to-replica
+		// communication, thus return value is ignored. Each
+		// replica will establish connections to other peers
+		// the same way, so they all will be eventually fully
+		// connected.
+		sh.HandleMessageStream(out)
 
-	return h.handler(msg)
+		go func() {
+			for msg := range handler.log.Stream(nil) {
+				msgBytes, err := proto.Marshal(msg)
+				if err != nil {
+					panic(err)
+				}
+				out <- msgBytes
+			}
+		}()
+	}
+	return nil
 }
 
-//Wrap serializes a message into a byte array
-func (h *protocolHandler) Wrap(msg interface{}) (msgBytes []byte, err error) {
-	return h.wrapper(msg)
+// Handle verifies and processes incoming messages according to the protocol.
+func (handler *protocolHandler) Handle(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+	err = handler.validate(msg)
+	if err != nil {
+		err = fmt.Errorf("Validation failed: %s", err)
+		return nil, false, err
+	}
+
+	new, err = handler.process(msg)
+	if err != nil {
+		err = fmt.Errorf("Error processing message: %s", err)
+		return nil, false, err
+	}
+
+	replyChan, err = handler.reply(msg)
+	if err != nil {
+		err = fmt.Errorf("Error replying message: %s", err)
+		return nil, false, err
+	}
+
+	return replyChan, new, nil
 }
 
-// Unwrap deserializes messages into an interface compatible with the ordering protocol
-func (h *protocolHandler) Unwrap(msgBytes []byte) (msg interface{}, msgStr string, err error) {
-
-	return h.unwrapper(msgBytes)
-
+// Wrap serializes a message into a byte array.
+func (handler *protocolHandler) Wrap(msg interface{}) (msgBytes []byte, err error) {
+	replyMsg := messages.WrapMessage(msg)
+	replyBytes, err := proto.Marshal(replyMsg)
+	return replyBytes, err
 }
 
-// GetMinBFTHandler creates an instance of ProtocolHandler that abides to the MinBFT protocol
-func GetMinBFTHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) api.ProtocolHandler {
+// Unwrap deserializes a message into an interface compatible with the ordering
+// protocol, alongside a string describing the message type.
+func (handler *protocolHandler) Unwrap(msgBytes []byte) (msg interface{}, msgStr string, err error) {
+	wrappedMsg := &messages.Message{}
+	if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
+		return nil, "", err
+	}
 
-	return defaultIncomingMessageHandler(id, log, config, stack, logger)
+	msg = messages.UnwrapMessage(wrappedMsg)
+	msgStr = messageString(msg)
+
+	return msg, msgStr, nil
+}
+
+// NewMinBFTHandler creates an instance of ProtocolHandler that abides to the MinBFT protocol
+func NewMinBFTHandler(id uint32, config api.Configer, connector api.ReplicaConnector, auth api.Authenticator, exec api.RequestConsumer, logger *logging.Logger) api.ProtocolHandler {
+
+	return defaultIncomingMessageHandler(id, config, connector, auth, exec, logger)
 }
 
 // defaultIncomingMessageHandler construct the default
 // ProtocolHandler using id as the current replica ID and the
 // supplied interfaces.
-func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) api.ProtocolHandler {
+func defaultIncomingMessageHandler(id uint32, config api.Configer, connector api.ReplicaConnector, auth api.Authenticator, exec api.RequestConsumer, logger *logging.Logger) api.ProtocolHandler {
 	n := config.N()
 	f := config.F()
+
+	log := messagelog.New()
 
 	reqTimeout := makeRequestTimeoutProvider(config)
 	handleReqTimeout := func(view uint64) {
 		logger.Panic("Request timed out, but view change not implemented")
 	}
 
-	verifyMessageSignature := makeMessageSignatureVerifier(stack)
-	signMessage := makeReplicaMessageSigner(stack)
-	verifyUI := makeUIVerifier(stack)
-	assignUI := makeUIAssigner(stack)
+	verifyMessageSignature := makeMessageSignatureVerifier(auth)
+	signMessage := makeReplicaMessageSigner(auth)
+	verifyUI := makeUIVerifier(auth)
+	assignUI := makeUIAssigner(auth)
 
 	clientStateOpts := []clientstate.Option{
 		clientstate.WithRequestTimeout(reqTimeout),
@@ -209,7 +271,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
 
 	countCommitment := makeCommitmentCounter(f)
-	executeOperation := makeOperationExecutor(stack)
+	executeOperation := makeOperationExecutor(exec)
 	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
 	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
 
@@ -245,7 +307,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	replyRequest := makeRequestReplier(clientStates)
 	replyMessage := makeMessageReplier(replyRequest)
 
-	return makeIncomingMessageHandler(validateMessage, processMessage, replyMessage)
+	return makeIncomingMessageHandler(id, n, connector, log, validateMessage, processMessage, replyMessage)
 }
 
 // makeMessageStreamHandler construct an instance of
@@ -289,51 +351,17 @@ func makeMessageStreamHandler(handler api.ProtocolHandler, logger *logging.Logge
 // makeIncomingMessageHandler constructs an instance of
 // protocolHandler using id as the current replica ID, and the
 // supplied abstractions.
-func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) api.ProtocolHandler {
+func makeIncomingMessageHandler(id, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, validate messageValidator, process messageProcessor, reply messageReplier) api.ProtocolHandler {
 
 	return &protocolHandler{
 
-		handler: func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
-			err = validate(msg)
-			if err != nil {
-				err = fmt.Errorf("Validation failed: %s", err)
-				return nil, false, err
-			}
-
-			new, err = process(msg)
-			if err != nil {
-				err = fmt.Errorf("Error processing message: %s", err)
-				return nil, false, err
-			}
-
-			replyChan, err = reply(msg)
-			if err != nil {
-				err = fmt.Errorf("Error replying message: %s", err)
-				return nil, false, err
-			}
-
-			return replyChan, new, nil
-		},
-
-		wrapper: func(msg interface{}) (msgBytes []byte, err error) {
-
-			replyMsg := messages.WrapMessage(msg)
-			replyBytes, err := proto.Marshal(replyMsg)
-			return replyBytes, err
-		},
-
-		unwrapper: func(msgBytes []byte) (msg interface{}, msgStr string, err error) {
-
-			wrappedMsg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
-				return nil, "", err
-			}
-
-			msg = messages.UnwrapMessage(wrappedMsg)
-			msgStr = messageString(msg)
-
-			return msg, msgStr, nil
-		},
+		n:         n,
+		id:        id,
+		log:       log,
+		connector: connector,
+		validate:  validate,
+		process:   process,
+		reply:     reply,
 	}
 }
 

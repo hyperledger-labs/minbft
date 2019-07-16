@@ -123,8 +123,8 @@ func makeLogger(id uint32, opts options) *logging.Logger {
 	return logger
 }
 
-//GetLogger creates an instance of a logger
-func GetLogger(id uint32, opts ...Option) *logging.Logger {
+//NewLogger creates an instance of a logger
+func NewLogger(id uint32, opts ...Option) *logging.Logger {
 
 	return makeLogger(id, newOptions(opts...))
 }

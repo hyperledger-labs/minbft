@@ -20,10 +20,7 @@ package minbft
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
-
 	api "github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	logging "github.com/op/go-logging"
 )
 
@@ -36,6 +33,7 @@ const (
 type Stack interface {
 	api.ReplicaConnector
 	api.Authenticator
+	api.ProtocolHandler
 	api.RequestConsumer
 }
 
@@ -43,17 +41,12 @@ var _ api.MessageStreamHandler = (*Replica)(nil)
 
 // Replica represents an instance of replica peer
 type Replica struct {
-	id uint32 // replica ID, unique in range [0,n)
-	n  uint32 // total number of nodes
-
-	stack Stack
-
-	log          messagelog.MessageLog
 	handleStream messageStreamHandler
+	stack        Stack
 }
 
-// GetReplica creates a new instance of replica node
-func GetReplica(id uint32, configer api.Configer, stack Stack, handler api.ProtocolHandler, logger *logging.Logger) (*Replica, error) {
+// NewReplica creates a new instance of replica node
+func NewReplica(configer api.Configer, stack Stack, logger *logging.Logger) (*Replica, error) {
 	n := configer.N()
 	f := configer.F()
 
@@ -62,83 +55,15 @@ func GetReplica(id uint32, configer api.Configer, stack Stack, handler api.Proto
 	}
 
 	replica := &Replica{
-		id: id,
-		n:  n,
-
-		stack: stack,
-
-		log: messagelog.New(),
-
-		handleStream: makeMessageStreamHandler(handler, logger),
+		handleStream: makeMessageStreamHandler(stack, logger),
+		stack:        stack,
 	}
 
-	if err := replica.start(); err != nil {
+	if err := replica.stack.Start(); err != nil {
 		return nil, fmt.Errorf("Failed to start replica: %s", err)
 	}
 
 	return replica, nil
-}
-
-// New creates a new instance of replica node
-func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replica, error) {
-	n := configer.N()
-	f := configer.F()
-
-	if n < 2*f+1 {
-		return nil, fmt.Errorf("%d nodes is not enough to tolerate %d faulty", n, f)
-	}
-
-	logOpts := newOptions(opts...)
-
-	replica := &Replica{
-		id: id,
-		n:  n,
-
-		stack: stack,
-
-		log: messagelog.New(),
-	}
-
-	logger := makeLogger(id, logOpts)
-	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
-	replica.handleStream = makeMessageStreamHandler(handle, logger)
-
-	if err := replica.start(); err != nil {
-		return nil, fmt.Errorf("Failed to start replica: %s", err)
-	}
-
-	return replica, nil
-}
-
-// Start begins message exchange with peer replicas
-func (r *Replica) start() error {
-	for i := uint32(0); i < r.n; i++ {
-		if i == r.id {
-			continue
-		}
-		out := make(chan []byte)
-		sh, err := r.stack.ReplicaMessageStreamHandler(i)
-		if err != nil {
-			return fmt.Errorf("Error getting peer replica %d message stream handler: %s", i, err)
-		}
-		// Reply stream is not used for replica-to-replica
-		// communication, thus return value is ignored. Each
-		// replica will establish connections to other peers
-		// the same way, so they all will be eventually fully
-		// connected.
-		sh.HandleMessageStream(out)
-
-		go func() {
-			for msg := range r.log.Stream(nil) {
-				msgBytes, err := proto.Marshal(msg)
-				if err != nil {
-					panic(err)
-				}
-				out <- msgBytes
-			}
-		}()
-	}
-	return nil
 }
 
 // HandleMessageStream initiates handling of incoming messages and

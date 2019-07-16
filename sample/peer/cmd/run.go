@@ -85,6 +85,7 @@ func init() {
 type replicaStack struct {
 	api.ReplicaConnector
 	api.Authenticator
+	api.ProtocolHandler
 	api.RequestConsumer
 }
 
@@ -101,15 +102,8 @@ func run() error {
 		return fmt.Errorf("Failed to open keyset file: %s", err)
 	}
 
-	auth, err := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, keysFile, usigEnclaveFile)
-	if err != nil {
-		return fmt.Errorf("Failed to create authenticator: %s", err)
-	}
-
 	cfg := config.New()
 	cfg.LoadConfig(viper.GetString("consensusConf"))
-
-	ledger := requestconsumer.NewSimpleLedger()
 
 	peerAddrs := make(map[uint32]string)
 	var listenAddr string
@@ -126,12 +120,20 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
+
 	replicaConnector := connector.New()
 	if err = replicaConnector.ConnectManyReplicas(peerAddrs, grpc.WithInsecure()); err != nil {
 		return fmt.Errorf("Failed to connect to peers: %s", err)
 	}
+	auth, err := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, keysFile, usigEnclaveFile)
+	if err != nil {
+		return fmt.Errorf("Failed to create authenticator: %s", err)
+	}
+	logger := minbft.NewLogger(id, loggingOpts...)
+	ledger := requestconsumer.NewSimpleLedger()
+	handler := minbft.NewMinBFTHandler(id, cfg, replicaConnector, auth, ledger, logger)
 
-	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger}, loggingOpts...)
+	replica, err := minbft.NewReplica(cfg, &replicaStack{replicaConnector, auth, handler, ledger}, logger)
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}
