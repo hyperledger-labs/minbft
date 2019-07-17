@@ -379,11 +379,9 @@ The following features are considered to be implemented:
 
 ## Contributing ##
 
-Any kind of feedback is highly appreciated. Questions, suggestions,
-bug reports, change requests etc are welcome. Please [file a GitHub
-issue](https://github.com/hyperledger-labs/minbft/issues/new) or [submit
-a pull request](https://github.com/hyperledger-labs/minbft/compare), as
-appropriate.
+Everyone is welcome to contribute! There are many ways to make useful
+contribution. Please look at [Contribution Guideline](CONTRIBUTING.md)
+for more details.
 
 ## License ##
 
