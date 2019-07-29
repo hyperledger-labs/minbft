@@ -245,7 +245,7 @@ $(ENCLAVE_PUB): %.pub: %.key
 enclave: $(ENCLAVE_SIGNED)
 
 UNTRUSTED_NAME         := usig_shim
-UNTRUSTED_TARGET       := shim/lib$(UNTRUSTED_NAME).a
+UNTRUSTED_TARGET       := shim/lib$(UNTRUSTED_NAME).so
 UNTRUSTED_PROXY_SOURCE := shim/$(ENCLAVE_NAME)_u.c
 UNTRUSTED_PROXY_HEADER := $(UNTRUSTED_PROXY_SOURCE:.c=.h)
 
@@ -275,10 +275,12 @@ endif
 $(UNTRUSTED_OBJECTS): CFLAGS   := $(UNTRUSTED_CFLAGS)
 $(UNTRUSTED_OBJECTS): CPPFLAGS := $(UNTRUSTED_CPPFLAGS)
 
+$(UNTRUSTED_TARGET): LDFLAGS := $(UNTRUSTED_LDFLAGS) -shared
+$(UNTRUSTED_TARGET): LDLIBS  := $(UNTRUSTED_LDLIBS)
 $(UNTRUSTED_TARGET): $(UNTRUSTED_OBJECTS)
 	$(call abbrev-cmd, \
-	       $(AR) rcs $@ $^, \
-	       "AR     $@")
+	       $(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS), \
+	       "LINK   $@")
 
 $(UNTRUSTED_PROXY_SOURCE) $(UNTRUSTED_PROXY_HEADER): $(ENCLAVE_EDL)
 	$(call abbrev-cmd, \
