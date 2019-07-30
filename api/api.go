@@ -22,6 +22,11 @@ import (
 	"time"
 )
 
+// Replica represents an instance of MinBFT replica.
+type Replica interface {
+	ConnectionHandler
+}
+
 //======= Interface for module 'config' =======
 
 // Configer defines the interface to obtain the protocol parameters from
@@ -45,29 +50,38 @@ type Configer interface {
 
 //======= Interface for module 'network' =======
 
+// ConnectionHandler handles incoming connections.
+//
+// PeerMessageStreamHandler method provides a mechanism to initiate
+// message exchange with a peer replica.
+//
+// ClientMessageStreamHandler method provides a mechanism to initiate
+// message exchange with a client.
+type ConnectionHandler interface {
+	PeerMessageStreamHandler() MessageStreamHandler
+	ClientMessageStreamHandler() MessageStreamHandler
+}
+
 // ReplicaConnector establishes connections to replicas
 //
-// ReplicaMessageStreamHandler provides a local representation of the
-// specified replica for the purpose of message exchange. The local
-// representation is returned as MessageStreamHandler interface. It
-// guarantees reliable and secure message delivery to the replica.
-// Message delivery delay is assumed not to grow indefinitely. This
-// assumption has to be satisfied to ensure the liveness of the system.
-// ReplicaMessageStreamHandler never fails, except when incorrect replica
-// ID is passed.
+// ReplicaMessageStreamHandler method provides a mechanism to
+// communicate with the specified destination replica. The connection
+// guarantees authenticated destination, eventual delivery, preserving
+// integrity and the original order of messages. Confidentiality may
+// also be provided. It returns nil if the destination is not valid.
 type ReplicaConnector interface {
-	ReplicaMessageStreamHandler(replicaID uint32) (MessageStreamHandler, error)
+	ReplicaMessageStreamHandler(replicaID uint32) MessageStreamHandler
 }
 
 // MessageStreamHandler handles streams of messages
 //
-// HandleMessageStream initiates asynchronous handling of an incoming
-// message stream and returns another stream of messages that might be
-// produced in reply. Each value sent/received through a channel is a
-// single complete serialized message. Once a message is received from
-// any of the channels, it is the receiver's responsibility to finish
-// handling of the message. This method should never fail or block the
-// caller.
+// HandleMessageStream method initiates asynchronous handling of
+// messages. Given a stream of incoming messages, it returns another
+// stream of messages that might be produced in reply. Each value
+// sent/received through a channel is a single complete serialized
+// message. Once a message is received from any of the channels, it is
+// the receiver's responsibility to finish handling of the message.
+// This method should never fail or block the caller.
 type MessageStreamHandler interface {
 	HandleMessageStream(in <-chan []byte) (out <-chan []byte)
 }

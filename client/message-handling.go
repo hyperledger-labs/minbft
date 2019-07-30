@@ -115,9 +115,9 @@ func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandle
 // specified replica using the supplied general replica connector.
 func makeReplicaConnector(replicaID uint32, connector api.ReplicaConnector) replicaConnector {
 	return func(out <-chan []byte) (<-chan []byte, error) {
-		streamHandler, err := connector.ReplicaMessageStreamHandler(replicaID)
-		if err != nil {
-			return nil, fmt.Errorf("Error getting message stream handler: %s", err)
+		streamHandler := connector.ReplicaMessageStreamHandler(replicaID)
+		if streamHandler == nil {
+			return nil, fmt.Errorf("Connection not possible")
 		}
 		in := streamHandler.HandleMessageStream(out)
 		return in, nil

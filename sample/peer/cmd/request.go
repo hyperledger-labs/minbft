@@ -26,7 +26,7 @@ import (
 	"github.com/hyperledger-labs/minbft/client"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -88,14 +88,16 @@ func request(req []byte) ([]byte, error) {
 		peerAddrs[uint32(p.ID)] = p.Addr
 	}
 
-	rc := connector.New()
+	conn := connector.NewClientSide()
 
-	err = rc.ConnectManyReplicas(peerAddrs, grpc.WithInsecure())
+	// XXX: The connection destination should be authenticated;
+	// grpc.WithInsecure() option is passed here for simplicity.
+	err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
 	}
 
-	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, rc})
+	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create client instance: %s", err)
 	}

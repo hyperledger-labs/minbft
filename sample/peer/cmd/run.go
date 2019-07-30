@@ -31,8 +31,8 @@ import (
 	minbft "github.com/hyperledger-labs/minbft/core"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/connector"
-	"github.com/hyperledger-labs/minbft/sample/net/grpc/server"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
+	"github.com/hyperledger-labs/minbft/sample/conn/grpc/server"
 	"github.com/hyperledger-labs/minbft/sample/requestconsumer"
 )
 
@@ -126,12 +126,16 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Failed to create logging options: %s", err)
 	}
-	replicaConnector := connector.New()
-	if err = replicaConnector.ConnectManyReplicas(peerAddrs, grpc.WithInsecure()); err != nil {
+
+	conn := connector.NewReplicaSide()
+
+	// XXX: The connection destination should be authenticated;
+	// grpc.WithInsecure() option is passed here for simplicity.
+	if err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure()); err != nil {
 		return fmt.Errorf("Failed to connect to peers: %s", err)
 	}
 
-	replica, err := minbft.New(id, cfg, &replicaStack{replicaConnector, auth, ledger}, loggingOpts...)
+	replica, err := minbft.New(id, cfg, &replicaStack{conn, auth, ledger}, loggingOpts...)
 	if err != nil {
 		return fmt.Errorf("Failed to create replica instance: %s", err)
 	}
@@ -140,7 +144,11 @@ func run() error {
 	srvErrChan := make(chan error)
 	go func() {
 		defer replicaServer.Stop()
-		if err := replicaServer.ListenAndServe(listenAddr); err != nil {
+
+		// XXX: The replica server should authenticate itself;
+		// appropriate gRPC server options are omitted here
+		// for simplicity.
+		if err := server.ListenAndServe(replicaServer, listenAddr); err != nil {
 			err = fmt.Errorf("Network server failed: %s", err)
 			fmt.Println(err)
 			srvErrChan <- err

@@ -342,7 +342,7 @@ the core. The following directories contain the code:
     * `authentication/` - generation and verification of
                           authentication tags
       * `keytool/` - tool to generate sample key set file
-    * `net/` - network connectivity
+    * `conn/` - network connectivity
     * `config/` - consensus configuration provider
     * `requestconsumer/` - service executing ordered requests
     * `peer/` - CLI application to run a replica/client instance

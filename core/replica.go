@@ -20,8 +20,6 @@ package minbft
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 )
@@ -38,21 +36,13 @@ type Stack interface {
 	api.RequestConsumer
 }
 
-var _ api.MessageStreamHandler = (*Replica)(nil)
-
 // Replica represents an instance of replica peer
-type Replica struct {
-	id uint32 // replica ID, unique in range [0,n)
-	n  uint32 // total number of nodes
-
-	stack Stack
-
-	log          messagelog.MessageLog
+type replica struct {
 	handleStream messageStreamHandler
 }
 
 // New creates a new instance of replica node
-func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replica, error) {
+func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Replica, error) {
 	n := configer.N()
 	f := configer.F()
 
@@ -62,63 +52,33 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (*Replic
 
 	logOpts := newOptions(opts...)
 
-	replica := &Replica{
-		id: id,
-		n:  n,
-
-		stack: stack,
-
-		log: messagelog.New(),
-	}
-
+	messageLog := messagelog.New()
 	logger := makeLogger(id, logOpts)
-	handle := defaultIncomingMessageHandler(id, replica.log, configer, stack, logger)
-	replica.handleStream = makeMessageStreamHandler(handle, logger)
 
-	if err := replica.start(); err != nil {
-		return nil, fmt.Errorf("Failed to start replica: %s", err)
+	if err := startPeerConnections(id, n, stack, messageLog, logger); err != nil {
+		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
 
-	return replica, nil
+	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger)
+	handleStream := makeMessageStreamHandler(handle, logger)
+
+	return &replica{handleStream}, nil
 }
 
-// Start begins message exchange with peer replicas
-func (r *Replica) start() error {
-	for i := uint32(0); i < r.n; i++ {
-		if i == r.id {
-			continue
-		}
-		out := make(chan []byte)
-		sh, err := r.stack.ReplicaMessageStreamHandler(i)
-		if err != nil {
-			return fmt.Errorf("Error getting peer replica %d message stream handler: %s", i, err)
-		}
-		// Reply stream is not used for replica-to-replica
-		// communication, thus return value is ignored. Each
-		// replica will establish connections to other peers
-		// the same way, so they all will be eventually fully
-		// connected.
-		sh.HandleMessageStream(out)
-
-		go func() {
-			for msg := range r.log.Stream(nil) {
-				msgBytes, err := proto.Marshal(msg)
-				if err != nil {
-					panic(err)
-				}
-				out <- msgBytes
-			}
-		}()
-	}
-	return nil
+func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
+	// TODO: Handle peer/client connections differently
+	return r.handleStream
 }
 
-// HandleMessageStream initiates handling of incoming messages and
-// supplies reply messages back, if any.
-func (r *Replica) HandleMessageStream(in <-chan []byte) <-chan []byte {
+func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
+	// TODO: Handle peer/client connections differently
+	return r.handleStream
+}
+
+func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
 
-	go r.handleStream(in, out)
+	go handle(in, out)
 
 	return out
 }
