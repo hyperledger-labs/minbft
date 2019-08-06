@@ -250,12 +250,10 @@ for convenience. It is better to issue the following commands in
 another terminal so that the output messages do not intermix:
 
 ```sh
-bin/peer request First request
-bin/peer request Second request
-bin/peer request Another request
+bin/peer request "First request" "Second request" "Another request"
 ```
 
-These commands should produce the following output showing the result
+This command should produce the following output showing the result
 of ordering and execution of the submitted requests:
 
 ```
