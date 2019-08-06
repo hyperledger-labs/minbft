@@ -18,9 +18,9 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client"
@@ -35,21 +35,18 @@ import (
 
 // requestCmd represents the request command
 var requestCmd = &cobra.Command{
-	Use:   "request [request]",
-	Short: "Submit request to replicas",
+	Use:   "request [request...]",
+	Short: "Submit requests to replicas",
 	Long: `
-Submit a request to the consensus network, wait for it to be processed
-and output the result. The request is a simple text string.`,
+Submit a series of requests to the consensus network, wait for it to be processed
+and output the result. The requests are one or more string arguments.
+If no string argument is given, requests are constructed from standard input, where
+each line is passed to a separate request.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req := []byte(strings.Join(args, " "))
-
-		res, err := request(req)
+		_, err := requests(args)
 		if err != nil {
 			return err
 		}
-
-		fmt.Println("Reply:", string(res))
-
 		return nil
 	},
 }
@@ -67,7 +64,13 @@ type clientStack struct {
 	api.ReplicaConnector
 }
 
-func request(req []byte) ([]byte, error) {
+func request(client client.Client, arg string) {
+	req := []byte(arg)
+	res := <-client.Request(req)
+	fmt.Println("Reply:", string(res))
+}
+
+func requests(args []string) ([]byte, error) {
 	id := uint32(viper.GetInt("client.id"))
 
 	keysFile, err := os.Open(viper.GetString("keys"))
@@ -102,5 +105,16 @@ func request(req []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Failed to create client instance: %s", err)
 	}
 
-	return <-client.Request(req), nil
+	if len(args) > 0 {
+		for _, arg := range args {
+			request(client, arg)
+		}
+	} else {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			request(client, scanner.Text())
+		}
+	}
+
+	return nil, nil
 }
