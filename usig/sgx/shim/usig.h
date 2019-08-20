@@ -49,7 +49,7 @@ extern "C" {
  *
  * Return: SGX_SUCCESS if no error; SGX error status, otherwise
  */
-sgx_status_t usig_init(const char *enalave_file, sgx_enclave_id_t *enclave_id,
+sgx_status_t usig_init(const char *enclave_file, sgx_enclave_id_t *enclave_id,
                        void *sealed_data, size_t sealed_data_size);
 
 /**
