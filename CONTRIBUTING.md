@@ -37,8 +37,7 @@ pass and all the review comments are resolved.
 #### Creating pull requests
 
 A new pull request should originate from a branch (e.g. some-feature)
-in a forked repository. Once the pull request is submitted, the branch
-head should *not* be changed (no ~~`git push`~~).
+in a forked repository.
 
 Pull requests need to maintain good quality of the code base. Thus,
 they need to pass automated tests, as well as code analysis (linting).
@@ -55,18 +54,12 @@ smaller, consistent steps.
 
 #### Addressing review comments
 
-After review comments are collected, they should be addressed in a
-*separate branch*, preferably by _directly changing the corresponding
-commits_ (using `git rebase`).
-
-The updated revision of proposed changes should be pushed to the
-forked repository as a new branch (e.g. some-feature-v2).
-
-After that, a new pull request should be submitted using that branch.
-The pull request should have a revision number indicated in its title,
-like "Add some feature v2". It should also reference the previous pull
-request, and preferably have a short summary of changes made since the
-previous revision.
+After review comments are collected, they should be addressed,
+preferably by _directly changing the corresponding commits_ (using
+`git rebase`). The updated revision of proposed changes should
+normally be force-pushed to the original branch of the pull request.
+The pull request update should be followed by a comment shortly
+summarising the changes.
 
 ### Code of conduct
 
