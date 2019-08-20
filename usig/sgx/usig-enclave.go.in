@@ -68,8 +68,10 @@ func NewUSIGEnclave(enclaveFile string, sealedKey []byte) (*USIGEnclave, error) 
 		defer C.free(sealedData)
 	}
 
+	file := C.CString(enclaveFile)
+	defer C.free(unsafe.Pointer(file))
 	sgxErr := C.usig_init(
-		C.CString(enclaveFile), &enclave.enclaveID,
+		file, &enclave.enclaveID,
 		sealedData, sealedDataSize,
 	)
 	if err := sgxError(sgxErr); err != nil {
