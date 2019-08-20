@@ -75,6 +75,13 @@ func isPrimary(view uint64, id uint32, n uint32) bool {
 	return uint64(id) == view%uint64(n)
 }
 
+func shortString(msg string, max int) string {
+	if len(msg) > max {
+		return msg[0:max-1] + "..."
+	}
+	return msg
+}
+
 func messageString(msg interface{}) string {
 	var cv uint64
 	if msg, ok := msg.(messages.MessageWithUI); ok {
@@ -87,11 +94,11 @@ func messageString(msg interface{}) string {
 	case *messages.Request:
 		m := msg.GetMsg()
 		return fmt.Sprintf("REQUEST<client=%d seq=%d payload=%s>",
-			m.GetClientId(), m.GetSeq(), m.GetPayload())
+			m.GetClientId(), m.GetSeq(), shortString(string(m.GetPayload()), logMaxStringWidth))
 	case *messages.Reply:
 		m := msg.GetMsg()
 		return fmt.Sprintf("REPLY<replica=%d seq=%d result=%s>",
-			m.GetReplicaId(), m.GetSeq(), m.GetResult())
+			m.GetReplicaId(), m.GetSeq(), shortString(string(m.GetResult()), logMaxStringWidth))
 	case *messages.Prepare:
 		m := msg.GetMsg()
 		req := m.GetRequest().GetMsg()
