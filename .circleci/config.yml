@@ -34,6 +34,7 @@ jobs:
       - run:
           name: Test
           command: |
+            LD_LIBRARY_PATH="$PWD/usig/sgx/shim:$LD_LIBRARY_PATH" \
             make build check
       - run:
           name: Lint

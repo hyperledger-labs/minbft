@@ -15,10 +15,10 @@
 # limitations under the License.
 
 .DEFAULT_GOAL := all
-.PHONY: all build enclave untrusted go-wrapper check test clean help
+.PHONY: all build enclave untrusted check test clean help
 
 all: build check
-build: enclave untrusted go-wrapper
+build: enclave untrusted
 test: check
 
 help:
@@ -29,7 +29,6 @@ help:
 	@echo '  build               - Build all'
 	@echo '  enclave             - Build enclave'
 	@echo '  untrusted           - Build untrusted code'
-	@echo '  go-wrapper          - Build Golang wrapper'
 	@echo '  check|test          - Run all tests'
 	@echo '  clean               - Remove all build artifacts'
 	@echo ''
@@ -245,7 +244,7 @@ $(ENCLAVE_PUB): %.pub: %.key
 enclave: $(ENCLAVE_SIGNED)
 
 UNTRUSTED_NAME         := usig_shim
-UNTRUSTED_TARGET       := shim/lib$(UNTRUSTED_NAME).a
+UNTRUSTED_TARGET       := shim/lib$(UNTRUSTED_NAME).so
 UNTRUSTED_PROXY_SOURCE := shim/$(ENCLAVE_NAME)_u.c
 UNTRUSTED_PROXY_HEADER := $(UNTRUSTED_PROXY_SOURCE:.c=.h)
 
@@ -263,10 +262,8 @@ UNTRUSTED_LDFLAGS  := $(COMMON_LDFLAGS) -fPIC -pthread
 UNTRUSTED_LDLIBS   := -lpthread
 
 ifneq ($(SGX_MODE), HW)
-  SGX_URTS_PACKAGE := libsgx_urts_sim
   UNTRUSTED_LDLIBS += -lsgx_urts_sim
 else
-  SGX_URTS_PACKAGE := libsgx_urts
   UNTRUSTED_LDLIBS += -lsgx_urts
 endif
 
@@ -275,10 +272,12 @@ endif
 $(UNTRUSTED_OBJECTS): CFLAGS   := $(UNTRUSTED_CFLAGS)
 $(UNTRUSTED_OBJECTS): CPPFLAGS := $(UNTRUSTED_CPPFLAGS)
 
+$(UNTRUSTED_TARGET): LDFLAGS := $(UNTRUSTED_LDFLAGS) -shared
+$(UNTRUSTED_TARGET): LDLIBS  := $(UNTRUSTED_LDLIBS)
 $(UNTRUSTED_TARGET): $(UNTRUSTED_OBJECTS)
 	$(call abbrev-cmd, \
-	       $(AR) rcs $@ $^, \
-	       "AR     $@")
+	       $(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS), \
+	       "LINK   $@")
 
 $(UNTRUSTED_PROXY_SOURCE) $(UNTRUSTED_PROXY_HEADER): $(ENCLAVE_EDL)
 	$(call abbrev-cmd, \
@@ -314,19 +313,8 @@ check: usig-test enclave
 	       ./$(TEST_TARGET) $(ENCLAVE_SIGNED), \
 	       "RUN    $(TEST_TARGET)")
 
-GO_WRAPPER_FILES := usig-enclave.go
-
-GO_WRAPPER_ARTIFACTS := $(GO_WRAPPER_FILES)
-
-%.go: %.go.in
-	$(call abbrev-cmd, \
-	       sed -e 's@\$$SGX_URTS_PACKAGE@$(SGX_URTS_PACKAGE)@' $< >$@, \
-	       "GEN    $@")
-
-go-wrapper: untrusted $(GO_WRAPPER_FILES)
-
 ARTIFACTS := $(ENCLAVE_ARTIFACTS) $(UNTRUSTED_ARTIFACTS) \
-             $(TEST_ARTIFACTS) $(GO_WRAPPER_ARTIFACTS)
+             $(TEST_ARTIFACTS)
 
 clean:
 	$(call abbrev-cmd, \
