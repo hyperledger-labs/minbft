@@ -125,6 +125,13 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 	var (
 		lock sync.Mutex
 
+		// Current view number
+		view uint64
+
+		// UI counter of the first Prepare in the view
+		firstCV uint64 = 1
+
+		// Primary UI counter of the last quorum
 		lastDoneCV uint64
 
 		// Primary UI counter -> replicasCommittedMap
@@ -133,6 +140,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 
 	return func(replicaID uint32, prepare *messages.Prepare) (done bool, err error) {
 		primaryID := prepare.ReplicaID()
+		prepareView := prepare.View()
 		prepareUI, err := parseMessageUI(prepare)
 		if err != nil {
 			panic(err)
@@ -141,6 +149,15 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 
 		lock.Lock()
 		defer lock.Unlock()
+
+		if prepareView < view {
+			return false, nil
+		} else if prepareView > view {
+			view = prepareView
+			firstCV = prepareCV
+			lastDoneCV = 0
+			prepareStates = make(map[uint64]replicasCommittedMap)
+		}
 
 		if prepareCV <= lastDoneCV {
 			return true, nil
@@ -155,9 +172,11 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 		}
 
 		if replicaID != primaryID {
-			for cv := lastDoneCV + 1; cv < prepareCV; cv++ {
+			for cv := prepareCV - 1; cv >= firstCV; cv-- {
 				s := prepareStates[cv]
-				if s != nil && !s[replicaID] {
+				if s[replicaID] {
+					break
+				} else if s != nil {
 					return false, fmt.Errorf("Skipped commitment")
 				}
 			}
