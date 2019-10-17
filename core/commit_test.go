@@ -303,7 +303,7 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}
 }
 
-func TestMakeCommitCounterConcurrent(t *testing.T) {
+func TestMakeCommitmentCounterConcurrent(t *testing.T) {
 	const nrFaulty = 2
 	const nrReplicas = 2*nrFaulty + 1
 	const nrPrepares = 100
@@ -311,7 +311,7 @@ func TestMakeCommitCounterConcurrent(t *testing.T) {
 	wg := new(sync.WaitGroup)
 
 	counter := makeCommitmentCounter(nrFaulty)
-	for id := 1; id < nrReplicas; id++ { // replica 0 is primary
+	for id := 0; id < nrReplicas; id++ {
 		wg.Add(1)
 		go func(replicaID int) {
 			defer wg.Done()
