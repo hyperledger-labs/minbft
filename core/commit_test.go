@@ -219,6 +219,24 @@ func TestMakeCommitmentCounter(t *testing.T) {
 			replicaID: 2,
 			ok:        true,
 			done:      true,
+		}, {
+			desc:      "Second commitment from primary",
+			prepareCV: 2,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Third commitment from primary",
+			prepareCV: 3,
+			replicaID: 0,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Non-sequential commitment from backup replica",
+			prepareCV: 3,
+			replicaID: 2,
+			ok:        false,
+			done:      false,
 		}},
 
 		// f=2

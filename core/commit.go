@@ -132,6 +132,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 	)
 
 	return func(replicaID uint32, prepare *messages.Prepare) (done bool, err error) {
+		primaryID := prepare.ReplicaID()
 		prepareUI, err := parseMessageUI(prepare)
 		if err != nil {
 			panic(err)
@@ -147,22 +148,34 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 
 		replicasCommitted := prepareStates[prepareCV]
 		if replicasCommitted == nil {
-			replicasCommitted = make(replicasCommittedMap)
+			replicasCommitted = replicasCommittedMap{
+				primaryID: true,
+			}
 			prepareStates[prepareCV] = replicasCommitted
 		}
 
-		if replicasCommitted[replicaID] {
-			return false, fmt.Errorf("Duplicated commitment")
+		if replicaID != primaryID {
+			for cv := lastDoneCV + 1; cv < prepareCV; cv++ {
+				s := prepareStates[cv]
+				if s != nil && !s[replicaID] {
+					return false, fmt.Errorf("Skipped commitment")
+				}
+			}
+
+			if replicasCommitted[replicaID] {
+				return false, fmt.Errorf("Duplicated commitment")
+			}
+
+			replicasCommitted[replicaID] = true
 		}
-		replicasCommitted[replicaID] = true
 
-		if len(replicasCommitted) == int(f+1) {
-			delete(prepareStates, prepareCV)
-			lastDoneCV++
-
-			return true, nil
+		if len(replicasCommitted) <= int(f) {
+			return false, nil
 		}
 
-		return false, nil
+		lastDoneCV = prepareCV
+		delete(prepareStates, prepareCV)
+
+		return true, nil
 	}
 }
