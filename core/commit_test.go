@@ -193,8 +193,9 @@ func TestMakeCommitmentCollector(t *testing.T) {
 
 func TestMakeCommitmentCounter(t *testing.T) {
 	// fault tolerance -> list of cases
-	cases := map[uint32][]struct {
+	cases := map[int][]struct {
 		desc      string
+		view      int
 		prepareCV int
 		replicaID int
 		ok        bool
@@ -237,6 +238,40 @@ func TestMakeCommitmentCounter(t *testing.T) {
 			replicaID: 2,
 			ok:        false,
 			done:      false,
+		}, {
+			desc:      "First commitment in a new view",
+			view:      1,
+			prepareCV: 2,
+			replicaID: 1,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Second commitment in a new view",
+			view:      1,
+			prepareCV: 3,
+			replicaID: 1,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Commitment for old view",
+			view:      0,
+			prepareCV: 2,
+			replicaID: 2,
+			ok:        true,
+			done:      false,
+		}, {
+			desc:      "Non-sequential commitment in a new view",
+			view:      1,
+			prepareCV: 3,
+			replicaID: 0,
+			ok:        false,
+		}, {
+			desc:      "First valid commitment from backup in a new view",
+			view:      1,
+			prepareCV: 2,
+			replicaID: 2,
+			ok:        true,
+			done:      true,
 		}},
 
 		// f=2
@@ -289,10 +324,14 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}
 
 	for f, caseList := range cases {
-		counter := makeCommitmentCounter(f)
+		n := 2*f + 1
+		counter := makeCommitmentCounter(uint32(f))
 		for _, c := range caseList {
 			desc := fmt.Sprintf("f=%d: %s", f, c.desc)
-			done, err := counter(uint32(c.replicaID), makePrepare(c.prepareCV))
+			v := c.view
+			p := v % n
+			cv := c.prepareCV
+			done, err := counter(uint32(c.replicaID), makePrepare(p, v, cv))
 			if c.ok {
 				require.NoError(t, err, desc)
 			} else {
@@ -303,43 +342,54 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}
 }
 
-func TestMakeCommitCounterConcurrent(t *testing.T) {
+func TestMakeCommitmentCounterConcurrent(t *testing.T) {
 	const nrFaulty = 2
 	const nrReplicas = 2*nrFaulty + 1
 	const nrPrepares = 100
-
-	wg := new(sync.WaitGroup)
+	const nrViews = 10
 
 	counter := makeCommitmentCounter(nrFaulty)
-	for id := 1; id < nrReplicas; id++ { // replica 0 is primary
-		wg.Add(1)
-		go func(replicaID int) {
-			defer wg.Done()
 
-			for prepareCV := 1; prepareCV <= nrPrepares; prepareCV++ {
-				// We can't check how many times the
-				// counter was invoked before
-				// signaling done and still invoke it
-				// concurrently. So we only check for
-				// data races here.
-				_, err := counter(uint32(replicaID), makePrepare(prepareCV))
-				assert.NoError(t, err,
-					"Replica %d, Prepare %d", replicaID, prepareCV)
-			}
-		}(id)
+	wg := new(sync.WaitGroup)
+	for v := 0; v < nrViews; v++ {
+		v := v
+		firstCV := 1 + v*rand.Intn(nrPrepares)
+		primary := v % nrReplicas
+
+		for id := 0; id < nrReplicas; id++ {
+			id := id
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				for i := 0; i <= nrPrepares; i++ {
+					// We can't check how many times the
+					// counter was invoked before
+					// signaling done and still invoke it
+					// concurrently. So we only check for
+					// data races here.
+					cv := firstCV + i
+					_, err := counter(uint32(id), makePrepare(primary, v, cv))
+					assert.NoError(t, err, "Replica %d, Prepare %d", id, cv)
+				}
+			}()
+		}
 	}
-
 	wg.Wait()
 }
 
-func makePrepare(cv int) *messages.Prepare {
+func makePrepare(p, v, cv int) *messages.Prepare {
 	prepareUI := &usig.UI{
 		Counter: uint64(cv),
 	}
 	prepareUIBytes, _ := prepareUI.MarshalBinary()
 
 	return &messages.Prepare{
-		Msg:       &messages.Prepare_M{},
+		Msg: &messages.Prepare_M{
+			ReplicaId: uint32(p),
+			View:      uint64(v),
+		},
 		ReplicaUi: prepareUIBytes,
 	}
 }
