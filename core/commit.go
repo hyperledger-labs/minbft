@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -95,7 +96,7 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 
 // makeCommitmentCollector constructs an instance of
 // commitmentCollector using the supplied abstractions.
-func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
+func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, pendingReq requestlist.List, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
 	var lock sync.Mutex
 
 	return func(replicaID uint32, prepare *messages.Prepare) error {
@@ -114,6 +115,7 @@ func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq reques
 			return nil // request already accepted for execution
 		}
 
+		pendingReq.Remove(request.Msg.ClientId)
 		stopReqTimer(request.Msg.ClientId)
 		executeRequest(request)
 

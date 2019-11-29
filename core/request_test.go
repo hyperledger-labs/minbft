@@ -34,11 +34,15 @@ import (
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
+	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 )
 
 func TestMakeRequestProcessor(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	captureSeq := func(request *messages.Request) (new bool, release func()) {
 		args := mock.MethodCalled("requestSeqCapturer", request)
@@ -50,7 +54,8 @@ func TestMakeRequestProcessor(t *testing.T) {
 		args := mock.MethodCalled("requestApplier", request)
 		return args.Error(0)
 	}
-	process := makeRequestProcessor(captureSeq, applyRequest)
+	pendingReq := mock_requestlist.NewMockList(ctrl)
+	process := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
 
 	request := &messages.Request{
 		Msg: &messages.Request_M{
@@ -64,12 +69,14 @@ func TestMakeRequestProcessor(t *testing.T) {
 	assert.False(t, new)
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
+	pendingReq.EXPECT().Add(request)
 	mock.On("requestApplier", request).Return(fmt.Errorf("Failed")).Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
 	assert.Error(t, err, "Failed to apply Request")
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
+	pendingReq.EXPECT().Add(request)
 	mock.On("requestApplier", request).Return(nil).Once()
 	mock.On("requestSeqReleaser", request).Once()
 	new, err = process(request)

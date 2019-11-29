@@ -28,6 +28,7 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
+	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -174,6 +175,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
+	pendingReq := requestlist.New()
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	captureUI := makeUICapturer(peerStates)
@@ -199,7 +201,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
 	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, handleGeneratedMessage)
-	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
+	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
@@ -223,7 +225,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 		return processMessage(msg)
 	}
 
-	processRequest := makeRequestProcessor(captureSeq, applyRequest)
+	processRequest := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
 	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(processMessageThunk, applyReplicaMessage)
 	processViewMessage := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
