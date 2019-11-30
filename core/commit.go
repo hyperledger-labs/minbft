@@ -55,7 +55,7 @@ type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
 // commitments from different replicas are counted for the supplied
 // Prepare, such that the threshold to execute the prepared operation
 // has been reached. An error is returned if any inconsistency is
-// detected. It is safe to invoke concurrently.
+// detected.
 type commitmentCounter func(replicaID uint32, prepare *messages.Prepare) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
@@ -128,8 +128,6 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 	type replicasCommittedMap map[uint32]bool
 
 	var (
-		lock sync.Mutex
-
 		// Current view number
 		view uint64
 
@@ -151,9 +149,6 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 			panic(err)
 		}
 		prepareCV := prepareUI.Counter
-
-		lock.Lock()
-		defer lock.Unlock()
 
 		if prepareView < view {
 			return false, nil

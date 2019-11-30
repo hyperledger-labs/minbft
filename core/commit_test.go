@@ -409,43 +409,6 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}
 }
 
-func TestMakeCommitmentCounterConcurrent(t *testing.T) {
-	const nrFaulty = 2
-	const nrReplicas = 2*nrFaulty + 1
-	const nrPrepares = 100
-	const nrViews = 10
-
-	counter := makeCommitmentCounter(nrFaulty)
-
-	wg := new(sync.WaitGroup)
-	for v := 0; v < nrViews; v++ {
-		v := v
-		firstCV := 1 + v*rand.Intn(nrPrepares)
-		primary := v % nrReplicas
-
-		for id := 0; id < nrReplicas; id++ {
-			id := id
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				for i := 0; i <= nrPrepares; i++ {
-					// We can't check how many times the
-					// counter was invoked before
-					// signaling done and still invoke it
-					// concurrently. So we only check for
-					// data races here.
-					cv := firstCV + i
-					_, err := counter(uint32(id), makePrepare(primary, v, cv))
-					assert.NoError(t, err, "Replica %d, Prepare %d", id, cv)
-				}
-			}()
-		}
-	}
-	wg.Wait()
-}
-
 func makePrepare(p, v, cv int) *messages.Prepare {
 	prepareUI := &usig.UI{
 		Counter: uint64(cv),
