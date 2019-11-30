@@ -96,7 +96,12 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 // makeCommitmentCollector constructs an instance of
 // commitmentCollector using the supplied abstractions.
 func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
+	var lock sync.Mutex
+
 	return func(replicaID uint32, prepare *messages.Prepare) error {
+		lock.Lock()
+		defer lock.Unlock()
+
 		if done, err := countCommitment(replicaID, prepare); err != nil {
 			return err
 		} else if !done {
