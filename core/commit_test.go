@@ -21,11 +21,13 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 )
@@ -189,6 +191,71 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	mock.On("requestExecutor", request).Once()
 	err = collect(id, prepare)
 	assert.NoError(t, err)
+}
+
+func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
+	const nrFaulty = 1
+	const nrReplicas = 100
+	const nrPrepares = 100
+
+	var executedReqs []*messages.Request
+
+	clientStates := clientstate.NewProvider()
+	captureSeq := makeRequestSeqCapturer(clientStates)
+	prepareSeq := makeRequestSeqPreparer(clientStates)
+	retireSeq := makeRequestSeqRetirer(clientStates)
+	stopReqTimer := makeRequestTimerStopper(clientStates)
+	countCommitment := makeCommitmentCounter(nrFaulty)
+	executeRequest := func(req *messages.Request) {
+		time.Sleep(time.Millisecond)
+		executedReqs = append(executedReqs, req)
+	}
+	collect := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
+
+	wg := new(sync.WaitGroup)
+	for id := 0; id < nrReplicas; id++ {
+		id := id
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for i := 0; i <= nrPrepares; i++ {
+				cv := uint64(i + 1)
+				seq := cv
+
+				request := &messages.Request{
+					Msg: &messages.Request_M{
+						Seq: seq,
+					},
+				}
+				if ok, releaseSeq := captureSeq(request); ok {
+					releaseSeq()
+				}
+
+				prepareUI := &usig.UI{
+					Counter: cv,
+				}
+				prepareUIBytes, _ := prepareUI.MarshalBinary()
+				prepare := &messages.Prepare{
+					Msg: &messages.Prepare_M{
+						Request: request,
+					},
+					ReplicaUi: prepareUIBytes,
+				}
+				_ = prepareSeq(request)
+
+				err := collect(uint32(id), prepare)
+				assert.NoError(t, err, "Replica %d, Prepare %d", id, cv)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	for i, req := range executedReqs {
+		assert.Equal(t, uint64(i+1), req.Msg.Seq)
+	}
 }
 
 func TestMakeCommitmentCounter(t *testing.T) {
