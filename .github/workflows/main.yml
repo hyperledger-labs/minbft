@@ -1,5 +1,5 @@
 name: Continuous integration
-on: push
+on: [push, pull_request]
 env:
   SGX_SDK_URL: https://download.01.org/intel-sgx/linux-2.3.1/ubuntu18.04/sgx_linux_x64_sdk_2.3.101.46683.bin
   GOLANGCI_LINT_URL: https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
