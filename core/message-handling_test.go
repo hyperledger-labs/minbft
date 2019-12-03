@@ -240,14 +240,25 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	id := randReplicaID(n)
 	otherID := randOtherReplicaID(id, n)
 
+	processMessage := func(msg interface{}) (new bool, err error) {
+		args := mock.MethodCalled("messageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
 	processUIMessage := func(msg messages.MessageWithUI) (new bool, err error) {
 		args := mock.MethodCalled("uiMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeReplicaMessageProcessor(id, processUIMessage)
+	process := makeReplicaMessageProcessor(id, processMessage, processUIMessage)
 
 	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
 	uiMsg := mock_messages.NewMockMessageWithUI(ctrl)
+
+	embeddedMsgs := []interface{}{
+		&struct{}{},
+		&struct{}{},
+	}
+	replicaMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
+	uiMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
 
 	replicaMsg.EXPECT().ReplicaID().Return(otherID)
 	assert.Panics(t, func() { process(replicaMsg) }, "Unknown message type")
@@ -258,6 +269,18 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	assert.False(t, new, "Own message")
 
 	uiMsg.EXPECT().ReplicaID().Return(otherID).AnyTimes()
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
+	_, err = process(uiMsg)
+	assert.Error(t, err, "Failed to process embedded message")
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(true, nil).Once()
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
+	_, err = process(uiMsg)
+	assert.Error(t, err, "Failed to process embedded message")
+
+	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil)
+	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil)
 
 	mock.On("uiMessageProcessor", uiMsg).Return(false, fmt.Errorf("Error")).Once()
 	_, err = process(uiMsg)
@@ -388,35 +411,18 @@ func TestMakeApplicableReplicaMessageProcessor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	processMessage := func(msg interface{}) (new bool, err error) {
-		args := mock.MethodCalled("messageProcessor", msg)
-		return args.Bool(0), args.Error(1)
-	}
 	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
 		args := mock.MethodCalled("replicaMessageApplier", msg)
 		return args.Error(0)
 	}
-	process := makeApplicableReplicaMessageProcessor(processMessage, applyReplicaMessage)
+	process := makeApplicableReplicaMessageProcessor(applyReplicaMessage)
 
 	msg := mock_messages.NewMockReplicaMessage(ctrl)
-	embeddedMsgs := []interface{}{
-		&struct{ foo int }{0},
-		&struct{ bar int }{1},
-	}
-	msg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
 
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
-	_, err := process(msg)
-	assert.Error(t, err, "Failed to process embedded message")
-
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil).Once()
-	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil).Once()
 	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
-	_, err = process(msg)
+	_, err := process(msg)
 	assert.Error(t, err, "Failed to apply message")
 
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil).Once()
-	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil).Once()
 	mock.On("replicaMessageApplier", msg).Return(nil).Once()
 	new, err := process(msg)
 	assert.NoError(t, err)

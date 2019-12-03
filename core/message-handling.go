@@ -226,10 +226,10 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
-	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(processMessageThunk, applyReplicaMessage)
+	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(applyReplicaMessage)
 	processViewMessage := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
-	processReplicaMessage := makeReplicaMessageProcessor(id, processUIMessage)
+	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
@@ -398,10 +398,16 @@ func makeMessageProcessor(processRequest requestProcessor, processReplicaMessage
 	}
 }
 
-func makeReplicaMessageProcessor(id uint32, processUIMessage uiMessageProcessor) replicaMessageProcessor {
+func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIMessage uiMessageProcessor) replicaMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		if msg.ReplicaID() == id {
 			return false, nil
+		}
+
+		for _, m := range msg.EmbeddedMessages() {
+			if _, err := process(m); err != nil {
+				return false, fmt.Errorf("Failed to process embedded message: %s", err)
+			}
 		}
 
 		switch msg := msg.(type) {
@@ -447,14 +453,8 @@ func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableR
 	}
 }
 
-func makeApplicableReplicaMessageProcessor(process messageProcessor, applyReplicaMessage replicaMessageApplier) applicableReplicaMessageProcessor {
+func makeApplicableReplicaMessageProcessor(applyReplicaMessage replicaMessageApplier) applicableReplicaMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
-		for _, m := range msg.EmbeddedMessages() {
-			if _, err := process(m); err != nil {
-				return false, fmt.Errorf("Failed to process embedded message: %s", err)
-			}
-		}
-
 		if err := applyReplicaMessage(msg); err != nil {
 			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
