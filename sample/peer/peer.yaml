@@ -16,6 +16,9 @@ client:
   # ID of the client instance
   id: 0
 
+  # Client request timeout (default: 0s, i.e. never timeout)
+  timeout: 3s
+
 # USIG options
 usig:
   # USIG enclave file (environment expansion is supported)

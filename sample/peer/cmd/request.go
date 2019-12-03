@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client"
@@ -57,6 +58,8 @@ func init() {
 	requestCmd.Flags().Int("id", 0, "ID of the client")
 	must(viper.BindPFlag("client.id",
 		requestCmd.Flags().Lookup("id")))
+	requestCmd.Flags().String("timeout", "0", "Timeout for the request")
+	must(viper.BindPFlag("client.timeout", requestCmd.Flags().Lookup("timeout")))
 }
 
 type clientStack struct {
@@ -65,9 +68,20 @@ type clientStack struct {
 }
 
 func request(client client.Client, arg string) {
-	req := []byte(arg)
-	res := <-client.Request(req)
-	fmt.Println("Reply:", string(res))
+	var timeoutChan <-chan time.Time
+	timeout := viper.GetDuration("client.timeout")
+
+	if timeout > 0 {
+		timeoutChan = time.After(timeout)
+	}
+
+	select {
+	case res := <-client.Request([]byte(arg)):
+		fmt.Println("Reply:", string(res))
+	case <-timeoutChan:
+		fmt.Println("Client Request timer expired.")
+		os.Exit(1)
+	}
 }
 
 func requests(args []string) ([]byte, error) {
