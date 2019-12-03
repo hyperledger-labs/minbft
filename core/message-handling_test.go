@@ -254,8 +254,8 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	uiMsg := mock_messages.NewMockMessageWithUI(ctrl)
 
 	embeddedMsgs := []interface{}{
-		&struct{}{},
-		&struct{}{},
+		&struct{ v int }{0},
+		&struct{ v int }{1},
 	}
 	replicaMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
 	uiMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
@@ -275,7 +275,7 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	assert.Error(t, err, "Failed to process embedded message")
 
 	mock.On("messageProcessor", embeddedMsgs[0]).Return(true, nil).Once()
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("messageProcessor", embeddedMsgs[1]).Return(false, fmt.Errorf("Error")).Once()
 	_, err = process(uiMsg)
 	assert.Error(t, err, "Failed to process embedded message")
 
@@ -364,11 +364,11 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 			mock.MethodCalled("viewReleaser", view)
 		}
 	}
-	processApplicableReplicaMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
-		args := mock.MethodCalled("applicableReplicaMessageProcessor", msg)
-		return args.Bool(0), args.Error(1)
+	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg)
+		return args.Error(0)
 	}
-	process := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
+	process := makeViewMessageProcessor(waitView, applyReplicaMessage)
 
 	view := randView()
 
@@ -390,41 +390,9 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	assert.Panics(t, func() { process(viewMsg) }, "Unknown message type")
 
 	mock.On("viewWaiter", view).Return(true).Once()
-	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(false, nil).Once()
+	mock.On("replicaMessageApplier", replicaViewMessage).Return(nil).Once()
 	mock.On("viewReleaser", view).Once()
 	new, err = process(replicaViewMessage)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("viewWaiter", view).Return(true).Once()
-	mock.On("applicableReplicaMessageProcessor", replicaViewMessage).Return(true, nil).Once()
-	mock.On("viewReleaser", view).Once()
-	new, err = process(replicaViewMessage)
-	assert.NoError(t, err)
-	assert.True(t, new)
-}
-
-func TestMakeApplicableReplicaMessageProcessor(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
-		args := mock.MethodCalled("replicaMessageApplier", msg)
-		return args.Error(0)
-	}
-	process := makeApplicableReplicaMessageProcessor(applyReplicaMessage)
-
-	msg := mock_messages.NewMockReplicaMessage(ctrl)
-
-	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
-	_, err := process(msg)
-	assert.Error(t, err, "Failed to apply message")
-
-	mock.On("replicaMessageApplier", msg).Return(nil).Once()
-	new, err := process(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
 }

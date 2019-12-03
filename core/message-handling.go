@@ -98,16 +98,6 @@ type uiMessageProcessor func(msg messages.MessageWithUI) (new bool, err error)
 // invoke concurrently.
 type viewMessageProcessor func(msg messages.ViewMessage) (new bool, err error)
 
-// applicableReplicaMessageProcessor processes a valid replica message
-// ready to apply.
-//
-// It continues processing of the supplied message, which is ready to
-// apply to the replica state. Any embedded messages are guaranteed to
-// be processed before applying the message. The return value new
-// indicates if the message had any effect. It is safe to invoke
-// concurrently.
-type applicableReplicaMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
-
 // replicaMessageApplier applies a replica message to current replica
 // state.
 //
@@ -226,8 +216,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
-	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(applyReplicaMessage)
-	processViewMessage := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
+	processViewMessage := makeViewMessageProcessor(waitView, applyReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
@@ -436,7 +425,7 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 	}
 }
 
-func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableReplicaMessageProcessor) viewMessageProcessor {
+func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
 	return func(msg messages.ViewMessage) (new bool, err error) {
 		ok, release := waitView(msg.View())
 		if !ok {
@@ -446,17 +435,11 @@ func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableR
 
 		switch msg := msg.(type) {
 		case messages.ReplicaMessage:
-			return processApplicable(msg)
+			if err := applyReplicaMessage(msg); err != nil {
+				return false, fmt.Errorf("Failed to apply message: %s", err)
+			}
 		default:
 			panic("Unknown message type")
-		}
-	}
-}
-
-func makeApplicableReplicaMessageProcessor(applyReplicaMessage replicaMessageApplier) applicableReplicaMessageProcessor {
-	return func(msg messages.ReplicaMessage) (new bool, err error) {
-		if err := applyReplicaMessage(msg); err != nil {
-			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
 		return true, nil
