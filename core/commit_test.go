@@ -23,13 +23,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	testifymock "github.com/stretchr/testify/mock"
+
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
+
+	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 )
 
 func TestMakeCommitValidator(t *testing.T) {
@@ -138,6 +143,9 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	countCommitment := func(id uint32, prepare *messages.Prepare) (done bool, err error) {
 		args := mock.MethodCalled("commitmentCounter", id, prepare)
 		return args.Bool(0), args.Error(1)
@@ -152,7 +160,8 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	executeRequest := func(request *messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	collect := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
+	pendingReq := mock_requestlist.NewMockList(ctrl)
+	collect := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
 
 	n := randN()
 	view := randView()
@@ -187,6 +196,7 @@ func TestMakeCommitmentCollector(t *testing.T) {
 
 	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
 	mock.On("requestSeqRetirer", request).Return(true).Once()
+	pendingReq.EXPECT().Remove(clientID)
 	mock.On("requestTimerStopper", clientID).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(id, prepare)
@@ -204,13 +214,14 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
+	pendingReqs := requestlist.New()
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	countCommitment := makeCommitmentCounter(nrFaulty)
 	executeRequest := func(req *messages.Request) {
 		time.Sleep(time.Millisecond)
 		executedReqs = append(executedReqs, req)
 	}
-	collect := makeCommitmentCollector(countCommitment, retireSeq, stopReqTimer, executeRequest)
+	collect := makeCommitmentCollector(countCommitment, retireSeq, pendingReqs, stopReqTimer, executeRequest)
 
 	wg := new(sync.WaitGroup)
 	for id := 0; id < nrReplicas; id++ {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -135,13 +136,15 @@ func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
 // makeRequestProcessor constructs an instance of requestProcessor
 // using id as the current replica ID, n as the total number of nodes,
 // and the supplied abstractions.
-func makeRequestProcessor(captureSeq requestSeqCapturer, applyRequest requestApplier) requestProcessor {
+func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.List, applyRequest requestApplier) requestProcessor {
 	return func(request *messages.Request) (new bool, err error) {
 		new, releaseSeq := captureSeq(request)
 		if !new {
 			return false, nil
 		}
 		defer releaseSeq()
+
+		pendingReq.Add(request)
 
 		if err := applyRequest(request); err != nil {
 			return false, fmt.Errorf("Failed to apply Request: %s", err)
