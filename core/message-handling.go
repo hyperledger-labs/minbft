@@ -447,7 +447,7 @@ func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMe
 	}
 }
 
-// makeMessageApplier constructs an instance of messageApplier using
+// makeReplicaMessageApplier constructs an instance of replicaMessageApplier using
 // the supplied abstractions.
 func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
 	return func(msg messages.ReplicaMessage) error {
