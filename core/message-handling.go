@@ -98,16 +98,6 @@ type uiMessageProcessor func(msg messages.MessageWithUI) (new bool, err error)
 // invoke concurrently.
 type viewMessageProcessor func(msg messages.ViewMessage) (new bool, err error)
 
-// applicableReplicaMessageProcessor processes a valid replica message
-// ready to apply.
-//
-// It continues processing of the supplied message, which is ready to
-// apply to the replica state. Any embedded messages are guaranteed to
-// be processed before applying the message. The return value new
-// indicates if the message had any effect. It is safe to invoke
-// concurrently.
-type applicableReplicaMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
-
 // replicaMessageApplier applies a replica message to current replica
 // state.
 //
@@ -226,10 +216,9 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
-	processApplicableReplicaMessage := makeApplicableReplicaMessageProcessor(processMessageThunk, applyReplicaMessage)
-	processViewMessage := makeViewMessageProcessor(waitView, processApplicableReplicaMessage)
+	processViewMessage := makeViewMessageProcessor(waitView, applyReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
-	processReplicaMessage := makeReplicaMessageProcessor(id, processUIMessage)
+	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
@@ -398,10 +387,16 @@ func makeMessageProcessor(processRequest requestProcessor, processReplicaMessage
 	}
 }
 
-func makeReplicaMessageProcessor(id uint32, processUIMessage uiMessageProcessor) replicaMessageProcessor {
+func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIMessage uiMessageProcessor) replicaMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		if msg.ReplicaID() == id {
 			return false, nil
+		}
+
+		for _, m := range msg.EmbeddedMessages() {
+			if _, err := process(m); err != nil {
+				return false, fmt.Errorf("Failed to process embedded message: %s", err)
+			}
 		}
 
 		switch msg := msg.(type) {
@@ -430,7 +425,7 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 	}
 }
 
-func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableReplicaMessageProcessor) viewMessageProcessor {
+func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
 	return func(msg messages.ViewMessage) (new bool, err error) {
 		ok, release := waitView(msg.View())
 		if !ok {
@@ -440,23 +435,11 @@ func makeViewMessageProcessor(waitView viewWaiter, processApplicable applicableR
 
 		switch msg := msg.(type) {
 		case messages.ReplicaMessage:
-			return processApplicable(msg)
+			if err := applyReplicaMessage(msg); err != nil {
+				return false, fmt.Errorf("Failed to apply message: %s", err)
+			}
 		default:
 			panic("Unknown message type")
-		}
-	}
-}
-
-func makeApplicableReplicaMessageProcessor(process messageProcessor, applyReplicaMessage replicaMessageApplier) applicableReplicaMessageProcessor {
-	return func(msg messages.ReplicaMessage) (new bool, err error) {
-		for _, m := range msg.EmbeddedMessages() {
-			if _, err := process(m); err != nil {
-				return false, fmt.Errorf("Failed to process embedded message: %s", err)
-			}
-		}
-
-		if err := applyReplicaMessage(msg); err != nil {
-			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
 		return true, nil
