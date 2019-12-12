@@ -31,7 +31,7 @@ func TestReqeustSeq(t *testing.T) {
 }
 
 func testCaptureReleaseRequestSeq(t *testing.T) {
-	s := New()
+	s := New(defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -69,7 +69,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 	seqs := make([]bool, nrSeqs)
 	wg := new(sync.WaitGroup)
 
-	state := New()
+	state := New(defaultTimeout)
 
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {
@@ -96,7 +96,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 }
 
 func testPrepareRequestSeq(t *testing.T) {
-	s := New()
+	s := New(defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -160,7 +160,7 @@ func testPrepareRequestSeq(t *testing.T) {
 }
 
 func testRetireRequestSeq(t *testing.T) {
-	s := New()
+	s := New(defaultTimeout)
 
 	cases := []struct {
 		desc string

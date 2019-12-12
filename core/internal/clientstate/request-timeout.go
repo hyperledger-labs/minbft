@@ -24,22 +24,26 @@ import (
 type requestTimerState struct {
 	sync.Mutex
 
-	// Request timeout timer
-	requestTimer timer.Timer
+	timerProvider timer.Provider
 
-	opts *options
+	// Request timeout timer
+	requestTimer   timer.Timer
+	requestTimeout func() time.Duration
 }
 
-func newRequestTimeoutState(opts *options) *requestTimerState {
-	return &requestTimerState{opts: opts}
+func newRequestTimeoutState(timerProvider timer.Provider, requestTimeout func() time.Duration) *requestTimerState {
+	return &requestTimerState{
+		timerProvider:  timerProvider,
+		requestTimeout: requestTimeout,
+	}
 }
 
 func (s *requestTimerState) StartRequestTimer(handleTimeout func()) {
 	s.Lock()
 	defer s.Unlock()
 
-	timerProvider := s.opts.timerProvider
-	timeout := s.opts.requestTimeout()
+	timerProvider := s.timerProvider
+	timeout := s.requestTimeout()
 
 	if s.requestTimer != nil {
 		s.requestTimer.Stop()

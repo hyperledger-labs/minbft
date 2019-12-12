@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+var defaultTimeout func() time.Duration = func() time.Duration { return time.Duration(0) }
 
 func TestProviderConcurrent(t *testing.T) {
 	const nrConcurrent = 10
@@ -30,7 +33,7 @@ func TestProviderConcurrent(t *testing.T) {
 	clientStates := make([]State, nrConcurrent)
 	wg := new(sync.WaitGroup)
 
-	provider := NewProvider()
+	provider := NewProvider(defaultTimeout)
 
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {

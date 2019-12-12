@@ -33,7 +33,7 @@ type Provider func(clientID uint32) State
 
 // NewProvider creates an instance of Provider. Optional parameters
 // can be specified as opts.
-func NewProvider(opts ...Option) Provider {
+func NewProvider(requestTimeout func() time.Duration, opts ...Option) Provider {
 	var (
 		lock sync.Mutex
 		// Client ID -> client state
@@ -46,7 +46,7 @@ func NewProvider(opts ...Option) Provider {
 
 		state := clientStates[clientID]
 		if state == nil {
-			state = New(opts...)
+			state = New(requestTimeout, opts...)
 			clientStates[clientID] = state
 		}
 
@@ -106,8 +106,8 @@ type State interface {
 }
 
 // New creates a new instance of client state representation. Optional
-// arguments opts specify initialization parameters.
-func New(opts ...Option) State {
+// arguments ,taopts specify initialization parameters.
+func New(requestTimeout func() time.Duration, opts ...Option) State {
 	s := &clientState{opts: defaultOptions}
 
 	for _, opt := range opts {
@@ -116,7 +116,7 @@ func New(opts ...Option) State {
 
 	s.seqState = newSeqState()
 	s.replyState = newReplyState()
-	s.requestTimerState = newRequestTimeoutState(&s.opts)
+	s.requestTimerState = newRequestTimeoutState(s.opts.timerProvider, requestTimeout)
 
 	return s
 }
@@ -125,13 +125,11 @@ func New(opts ...Option) State {
 type Option func(*options)
 
 type options struct {
-	timerProvider  timer.Provider
-	requestTimeout func() time.Duration
+	timerProvider timer.Provider
 }
 
 var defaultOptions = options{
-	timerProvider:  timer.Standard(),
-	requestTimeout: func() time.Duration { return time.Duration(0) },
+	timerProvider: timer.Standard(),
 }
 
 // WithTimerProvider specifies the abstract timer implementation to
@@ -139,15 +137,6 @@ var defaultOptions = options{
 func WithTimerProvider(timerProvider timer.Provider) Option {
 	return func(opts *options) {
 		opts.timerProvider = timerProvider
-	}
-}
-
-// WithRequestTimeout specifies a function that returns the duration
-// to use when starting a new request timeout timer. Zero or negative
-// duration disables the timeout. The timeout is disabled by default.
-func WithRequestTimeout(timeout func() time.Duration) Option {
-	return func(opts *options) {
-		opts.requestTimeout = timeout
 	}
 }
 

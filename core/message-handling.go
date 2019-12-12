@@ -155,10 +155,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
-	clientStateOpts := []clientstate.Option{
-		clientstate.WithRequestTimeout(reqTimeout),
-	}
-	clientStates := clientstate.NewProvider(clientStateOpts...)
+	clientStates := clientstate.NewProvider(reqTimeout)
 	peerStates := peerstate.NewProvider()
 	viewState := viewstate.New()
 

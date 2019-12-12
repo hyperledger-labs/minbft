@@ -210,7 +210,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 
 	var executedReqs []*messages.Request
 
-	clientStates := clientstate.NewProvider()
+	clientStates := clientstate.NewProvider(func() time.Duration {return time.Duration(0)})
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
