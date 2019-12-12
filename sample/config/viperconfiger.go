@@ -55,6 +55,7 @@ type Peer struct {
 //
 //      timeout:
 //          request: 2s
+//          prepare: 1s
 //          viewchange: 3s
 //  peers:
 //      - id: 0
@@ -146,6 +147,11 @@ func (c *ViperConfiger) Logsize() uint32 {
 // TimeoutRequest returns the per-request timeout for view change
 func (c *ViperConfiger) TimeoutRequest() time.Duration {
 	return c.getTimeDuration("protocol.timeout.request")
+}
+
+// TimeoutPrepare returns the timeout to forward REQUEST message
+func (c *ViperConfiger) TimeoutPrepare() time.Duration {
+	return c.getTimeDuration("protocol.timeout.prepare")
 }
 
 // TimeoutViewChange returns the timeout to receive NEW-VIEW message

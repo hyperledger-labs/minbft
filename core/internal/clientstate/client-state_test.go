@@ -33,7 +33,7 @@ func TestProviderConcurrent(t *testing.T) {
 	clientStates := make([]State, nrConcurrent)
 	wg := new(sync.WaitGroup)
 
-	provider := NewProvider(defaultTimeout)
+	provider := NewProvider(defaultTimeout, defaultTimeout)
 
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {

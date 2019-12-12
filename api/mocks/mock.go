@@ -90,6 +90,20 @@ func (mr *MockConfigerMockRecorder) N() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "N", reflect.TypeOf((*MockConfiger)(nil).N))
 }
 
+// TimeoutPrepare mocks base method
+func (m *MockConfiger) TimeoutPrepare() time.Duration {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TimeoutPrepare")
+	ret0, _ := ret[0].(time.Duration)
+	return ret0
+}
+
+// TimeoutPrepare indicates an expected call of TimeoutPrepare
+func (mr *MockConfigerMockRecorder) TimeoutPrepare() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TimeoutPrepare", reflect.TypeOf((*MockConfiger)(nil).TimeoutPrepare))
+}
+
 // TimeoutRequest mocks base method
 func (m *MockConfiger) TimeoutRequest() time.Duration {
 	m.ctrl.T.Helper()

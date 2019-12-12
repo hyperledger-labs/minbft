@@ -33,7 +33,7 @@ type Provider func(clientID uint32) State
 
 // NewProvider creates an instance of Provider. Optional parameters
 // can be specified as opts.
-func NewProvider(requestTimeout func() time.Duration, opts ...Option) Provider {
+func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) Provider {
 	var (
 		lock sync.Mutex
 		// Client ID -> client state
@@ -46,7 +46,7 @@ func NewProvider(requestTimeout func() time.Duration, opts ...Option) Provider {
 
 		state := clientStates[clientID]
 		if state == nil {
-			state = New(requestTimeout, opts...)
+			state = New(requestTimeout, prepareTimeout, opts...)
 			clientStates[clientID] = state
 		}
 
@@ -93,6 +93,13 @@ func NewProvider(requestTimeout func() time.Duration, opts ...Option) Provider {
 // has not yet expired, it will be canceled and a new timer started.
 //
 // StopRequestTimer stops timer started by StartRequestTimer, if any.
+//
+// StartPrepareTimer starts a timer to expire after the duration of
+// prepare timeout. The supplied callback function handleTimeout is
+// invoked asynchronously upon timer expiration. If the previous timer
+// has not yet expired, it will be canceled and a new timer started.
+//
+// StopPrepareTimer stops timer started by StartPrepareTimer, if any.
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
@@ -103,11 +110,14 @@ type State interface {
 
 	StartRequestTimer(handleTimeout func())
 	StopRequestTimer()
+
+	StartPrepareTimer(handleTimeout func())
+	StopPrepareTimer()
 }
 
 // New creates a new instance of client state representation. Optional
-// arguments ,taopts specify initialization parameters.
-func New(requestTimeout func() time.Duration, opts ...Option) State {
+// arguments opts specify initialization parameters.
+func New(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) State {
 	s := &clientState{opts: defaultOptions}
 
 	for _, opt := range opts {
@@ -117,6 +127,7 @@ func New(requestTimeout func() time.Duration, opts ...Option) State {
 	s.seqState = newSeqState()
 	s.replyState = newReplyState()
 	s.requestTimer = newTimerState(s.opts.timerProvider, requestTimeout)
+	s.prepareTimer = newTimerState(s.opts.timerProvider, prepareTimeout)
 
 	return s
 }
@@ -145,6 +156,7 @@ type clientState struct {
 	*replyState
 
 	requestTimer *timerState
+	prepareTimer *timerState
 
 	opts options
 }
@@ -155,4 +167,12 @@ func (s *clientState) StartRequestTimer(handleTimeout func()) {
 
 func (s *clientState) StopRequestTimer() {
 	s.requestTimer.StopTimer()
+}
+
+func (s *clientState) StartPrepareTimer(handleTimeout func()) {
+	s.prepareTimer.StartTimer(handleTimeout)
+}
+
+func (s *clientState) StopPrepareTimer() {
+	s.prepareTimer.StopTimer()
 }
