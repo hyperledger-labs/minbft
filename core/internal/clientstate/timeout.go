@@ -21,48 +21,45 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/timer"
 )
 
-type requestTimerState struct {
+type timerState struct {
 	sync.Mutex
 
 	timerProvider timer.Provider
-
-	// Request timeout timer
-	requestTimer   timer.Timer
-	requestTimeout func() time.Duration
+	timeout       func() time.Duration
+	timer         timer.Timer
 }
 
-func newRequestTimeoutState(timerProvider timer.Provider, requestTimeout func() time.Duration) *requestTimerState {
-	return &requestTimerState{
-		timerProvider:  timerProvider,
-		requestTimeout: requestTimeout,
+func newTimerState(timerProvider timer.Provider, timeout func() time.Duration) *timerState {
+	return &timerState{
+		timerProvider: timerProvider,
+		timeout:       timeout,
 	}
 }
 
-func (s *requestTimerState) StartRequestTimer(handleTimeout func()) {
+func (s *timerState) StartTimer(handleTimeout func()) {
 	s.Lock()
 	defer s.Unlock()
 
-	timerProvider := s.timerProvider
-	timeout := s.requestTimeout()
+	timeout := s.timeout()
 
-	if s.requestTimer != nil {
-		s.requestTimer.Stop()
+	if s.timer != nil {
+		s.timer.Stop()
 	}
 
 	if timeout <= time.Duration(0) {
 		return
 	}
 
-	s.requestTimer = timerProvider.AfterFunc(timeout, handleTimeout)
+	s.timer = s.timerProvider.AfterFunc(timeout, handleTimeout)
 }
 
-func (s *requestTimerState) StopRequestTimer() {
+func (s *timerState) StopTimer() {
 	s.Lock()
 	defer s.Unlock()
 
-	if s.requestTimer == nil {
+	if s.timer == nil {
 		return
 	}
 
-	s.requestTimer.Stop()
+	s.timer.Stop()
 }

@@ -116,7 +116,7 @@ func New(requestTimeout func() time.Duration, opts ...Option) State {
 
 	s.seqState = newSeqState()
 	s.replyState = newReplyState()
-	s.requestTimerState = newRequestTimeoutState(s.opts.timerProvider, requestTimeout)
+	s.requestTimer = newTimerState(s.opts.timerProvider, requestTimeout)
 
 	return s
 }
@@ -143,7 +143,16 @@ func WithTimerProvider(timerProvider timer.Provider) Option {
 type clientState struct {
 	*seqState
 	*replyState
-	*requestTimerState
+
+	requestTimer *timerState
 
 	opts options
+}
+
+func (s *clientState) StartRequestTimer(handleTimeout func()) {
+	s.requestTimer.StartTimer(handleTimeout)
+}
+
+func (s *clientState) StopRequestTimer() {
+	s.requestTimer.StopTimer()
 }
