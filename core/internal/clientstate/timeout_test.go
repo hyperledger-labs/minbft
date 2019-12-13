@@ -30,84 +30,101 @@ import (
 	timermock "github.com/hyperledger-labs/minbft/core/internal/timer/mock"
 )
 
-func TestRequestTimeout(t *testing.T) {
-	t.Run("Start", testStartRequestTimeout)
-	t.Run("Stop", testStopRequestTimeout)
+func TestTimeout(t *testing.T) {
+	t.Run("Start", testStartTimeout)
+	t.Run("Stop", testStopTimeout)
 }
 
-func testStartRequestTimeout(t *testing.T) {
+func testStartTimeout(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	s, timerProvider, handleTimeout := setupRequestTimeoutMock(mock, ctrl)
+	s, timerProvider, handleRequestTimeout, handlePrepareTimeout := setupTimeoutMock(mock, ctrl)
 
-	// Start with disabled request timeout
+	// Start with disabled timeout
 	mock.On("requestTimeout").Return(time.Duration(0)).Once()
-	s.StartRequestTimer(handleTimeout)
+	s.StartRequestTimer(handleRequestTimeout)
 
-	// Start with enabled request timeout
+	mock.On("prepareTimeout").Return(time.Duration(0)).Once()
+	s.StartPrepareTimer(handlePrepareTimeout)
+
+	// Start with enabled timeout
 	timeout := randTimeout()
-	mock.On("requestTimeout").Return(timeout).Once()
 	mockTimer := timermock.NewMockTimer(ctrl)
 	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).DoAndReturn(
 		func(d time.Duration, f func()) timer.Timer {
 			f()
 			return mockTimer
 		},
-	)
-	mock.On("requestTimeoutHandler").Once()
-	s.StartRequestTimer(handleTimeout)
-
-	// Restart request timeout
-	mockTimer.EXPECT().Stop()
-	timeout = randTimeout()
+	).Times(2)
 	mock.On("requestTimeout").Return(timeout).Once()
+	mock.On("requestTimeoutHandler").Once()
+	s.StartRequestTimer(handleRequestTimeout)
+	mock.On("prepareTimeout").Return(timeout).Once()
+	mock.On("prepareTimeoutHandler").Once()
+	s.StartPrepareTimer(handlePrepareTimeout)
+
+	// Restart timeout
+	mockTimer.EXPECT().Stop().Times(2)
+	timeout = randTimeout()
 	mockTimer = timermock.NewMockTimer(ctrl)
 	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).DoAndReturn(
 		func(d time.Duration, f func()) timer.Timer {
 			f()
 			return mockTimer
 		},
-	)
+	).Times(2)
+	mock.On("requestTimeout").Return(timeout).Once()
 	mock.On("requestTimeoutHandler").Once()
-	s.StartRequestTimer(handleTimeout)
+	s.StartRequestTimer(handleRequestTimeout)
+	mock.On("prepareTimeout").Return(timeout).Once()
+	mock.On("prepareTimeoutHandler").Once()
+	s.StartPrepareTimer(handlePrepareTimeout)
 }
 
-func testStopRequestTimeout(t *testing.T) {
+func testStopTimeout(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	s, timerProvider, handleTimeout := setupRequestTimeoutMock(mock, ctrl)
+	s, timerProvider, handleRequestTimeout, handlePrepareTimeout := setupTimeoutMock(mock, ctrl)
 
 	timeout := randTimeout()
 	mock.On("requestTimeout").Return(timeout)
+	mock.On("prepareTimeout").Return(timeout)
 
 	// Stop before started
 	assert.NotPanics(t, func() {
 		s.StopRequestTimer()
+		s.StopPrepareTimer()
 	})
 
-	// Start and stop
+	// Start and stop request timer
 	mockTimer := timermock.NewMockTimer(ctrl)
-	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).Return(mockTimer)
-	s.StartRequestTimer(handleTimeout)
-	mockTimer.EXPECT().Stop()
+	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).Return(mockTimer).Times(2)
+	s.StartRequestTimer(handleRequestTimeout)
+	s.StartPrepareTimer(handlePrepareTimeout)
+	mockTimer.EXPECT().Stop().Times(2)
 	s.StopRequestTimer()
+	s.StopPrepareTimer()
 
 	// Stop again
-	mockTimer.EXPECT().Stop().AnyTimes()
+	mockTimer.EXPECT().Stop().Times(2)
 	s.StopRequestTimer()
+	s.StopPrepareTimer()
 }
 
-func setupRequestTimeoutMock(mock *testifymock.Mock, ctrl *gomock.Controller) (state State, timerProvider *timermock.MockProvider, handleTimeout func()) {
-	handleTimeout = func() {
+func setupTimeoutMock(mock *testifymock.Mock, ctrl *gomock.Controller) (state State, timerProvider *timermock.MockProvider, handleRequestTimeout func(), handlePrepareTimeout func()) {
+	handleRequestTimeout = func() {
 		mock.MethodCalled("requestTimeoutHandler")
+	}
+	handlePrepareTimeout = func() {
+		mock.MethodCalled("prepareTimeoutHandler")
 	}
 	requestTimeout := func() time.Duration {
 		args := mock.MethodCalled("requestTimeout")
@@ -119,7 +136,7 @@ func setupRequestTimeoutMock(mock *testifymock.Mock, ctrl *gomock.Controller) (s
 	}
 	timerProvider = timermock.NewMockProvider(ctrl)
 	state = New(requestTimeout, prepareTimeout, WithTimerProvider(timerProvider))
-	return state, timerProvider, handleTimeout
+	return state, timerProvider, handleRequestTimeout, handlePrepareTimeout
 }
 
 func randTimeout() time.Duration {
