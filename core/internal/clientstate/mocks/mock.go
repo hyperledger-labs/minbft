@@ -35,6 +35,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 
 // AddReply mocks base method
 func (m *MockState) AddReply(arg0 *messages.Reply) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddReply", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -42,11 +43,13 @@ func (m *MockState) AddReply(arg0 *messages.Reply) error {
 
 // AddReply indicates an expected call of AddReply
 func (mr *MockStateMockRecorder) AddReply(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReply", reflect.TypeOf((*MockState)(nil).AddReply), arg0)
 }
 
 // CaptureRequestSeq mocks base method
 func (m *MockState) CaptureRequestSeq(arg0 uint64) (bool, func()) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CaptureRequestSeq", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(func())
@@ -55,11 +58,13 @@ func (m *MockState) CaptureRequestSeq(arg0 uint64) (bool, func()) {
 
 // CaptureRequestSeq indicates an expected call of CaptureRequestSeq
 func (mr *MockStateMockRecorder) CaptureRequestSeq(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CaptureRequestSeq", reflect.TypeOf((*MockState)(nil).CaptureRequestSeq), arg0)
 }
 
 // PrepareRequestSeq mocks base method
 func (m *MockState) PrepareRequestSeq(arg0 uint64) (bool, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PrepareRequestSeq", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
@@ -68,11 +73,13 @@ func (m *MockState) PrepareRequestSeq(arg0 uint64) (bool, error) {
 
 // PrepareRequestSeq indicates an expected call of PrepareRequestSeq
 func (mr *MockStateMockRecorder) PrepareRequestSeq(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareRequestSeq", reflect.TypeOf((*MockState)(nil).PrepareRequestSeq), arg0)
 }
 
 // ReplyChannel mocks base method
 func (m *MockState) ReplyChannel(arg0 uint64) <-chan *messages.Reply {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReplyChannel", arg0)
 	ret0, _ := ret[0].(<-chan *messages.Reply)
 	return ret0
@@ -80,11 +87,13 @@ func (m *MockState) ReplyChannel(arg0 uint64) <-chan *messages.Reply {
 
 // ReplyChannel indicates an expected call of ReplyChannel
 func (mr *MockStateMockRecorder) ReplyChannel(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplyChannel", reflect.TypeOf((*MockState)(nil).ReplyChannel), arg0)
 }
 
 // RetireRequestSeq mocks base method
 func (m *MockState) RetireRequestSeq(arg0 uint64) (bool, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RetireRequestSeq", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
@@ -93,25 +102,54 @@ func (m *MockState) RetireRequestSeq(arg0 uint64) (bool, error) {
 
 // RetireRequestSeq indicates an expected call of RetireRequestSeq
 func (mr *MockStateMockRecorder) RetireRequestSeq(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetireRequestSeq", reflect.TypeOf((*MockState)(nil).RetireRequestSeq), arg0)
+}
+
+// StartPrepareTimer mocks base method
+func (m *MockState) StartPrepareTimer(arg0 func()) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StartPrepareTimer", arg0)
+}
+
+// StartPrepareTimer indicates an expected call of StartPrepareTimer
+func (mr *MockStateMockRecorder) StartPrepareTimer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPrepareTimer", reflect.TypeOf((*MockState)(nil).StartPrepareTimer), arg0)
 }
 
 // StartRequestTimer mocks base method
 func (m *MockState) StartRequestTimer(arg0 func()) {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StartRequestTimer", arg0)
 }
 
 // StartRequestTimer indicates an expected call of StartRequestTimer
 func (mr *MockStateMockRecorder) StartRequestTimer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRequestTimer", reflect.TypeOf((*MockState)(nil).StartRequestTimer), arg0)
+}
+
+// StopPrepareTimer mocks base method
+func (m *MockState) StopPrepareTimer() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StopPrepareTimer")
+}
+
+// StopPrepareTimer indicates an expected call of StopPrepareTimer
+func (mr *MockStateMockRecorder) StopPrepareTimer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopPrepareTimer", reflect.TypeOf((*MockState)(nil).StopPrepareTimer))
 }
 
 // StopRequestTimer mocks base method
 func (m *MockState) StopRequestTimer() {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "StopRequestTimer")
 }
 
 // StopRequestTimer indicates an expected call of StopRequestTimer
 func (mr *MockStateMockRecorder) StopRequestTimer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopRequestTimer", reflect.TypeOf((*MockState)(nil).StopRequestTimer))
 }

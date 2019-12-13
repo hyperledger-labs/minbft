@@ -19,6 +19,9 @@ protocol:
     # Request processing timeout (triggers view change)
     request: 2s
 
+    # Prepare processing timeout (forwards request if expired)
+    prepare: 1s
+
     # Initial view change timeout (triggers another view change)
     viewchange: 3s
 

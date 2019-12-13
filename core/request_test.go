@@ -105,7 +105,10 @@ func TestMakeRequestApplier(t *testing.T) {
 	startReqTimer := func(clientID uint32, view uint64) {
 		mock.MethodCalled("requestTimerStarter", clientID, view)
 	}
-	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer)
+	startPrepTimer := func(request *messages.Request, view uint64) {
+		mock.MethodCalled("prepareTimerStarter", request, view)
+	}
+	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
 
 	clientID := rand.Uint32()
 	request := &messages.Request{
@@ -124,12 +127,14 @@ func TestMakeRequestApplier(t *testing.T) {
 
 	mock.On("viewProvider").Return(otherView).Once()
 	mock.On("requestTimerStarter", clientID, otherView).Once()
+	mock.On("prepareTimerStarter", request, otherView).Once()
 	mock.On("viewReleaser", otherView).Once()
 	err := apply(request)
 	assert.NoError(t, err)
 
 	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("requestTimerStarter", clientID, ownView).Once()
+	mock.On("prepareTimerStarter", request, ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
 	mock.On("viewReleaser", ownView).Once()
 	err = apply(request)

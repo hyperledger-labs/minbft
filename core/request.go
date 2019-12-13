@@ -125,6 +125,22 @@ type requestTimeoutHandler func(view uint64)
 // requestTimeoutProvider returns current request timeout duration.
 type requestTimeoutProvider func() time.Duration
 
+// prepareTimerStarter starts prepare timer.
+//
+// A prepare timeout event is triggered if the prepare timeout elapses
+// before corresponding prepareTimerStopper is called with the same
+// replicaID passed. The argument view specifies the view derived from
+// the request message. It is allowed to restart a timer before the previous
+// corresponding timer has stopped or expired. It is safe to invoke
+// concurrently.
+type prepareTimerStarter func(request *messages.Request, view uint64)
+
+// prepareTimerStopper stops prepare timer.
+type prepareTimerStopper func(clientID uint32)
+
+// prepareTimeoutProvider returns current prepare timeout duration.
+type prepareTimeoutProvider func() time.Duration
+
 // makeRequestValidator constructs an instance of requestValidator
 // using the supplied abstractions.
 func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
@@ -154,18 +170,19 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 	}
 }
 
-func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter) requestApplier {
+func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter, startPrepTimer prepareTimerStarter) requestApplier {
 	return func(request *messages.Request) error {
 		view, releaseView := provideView()
 		defer releaseView()
 
-		// The primary has to start request timer, as well.
+		// The primary has to start request/prepare timer, as well.
 		// Suppose, the primary is correct, but its messages
 		// are delayed, and other replicas switch to a new
 		// view. In that case, other replicas might rely on
 		// this correct replica to trigger another view
 		// change, should the new primary be faulty.
 		startReqTimer(request.Msg.ClientId, view)
+		startPrepTimer(request, view)
 
 		if isPrimary(view, id, n) {
 			prepare := &messages.Prepare{
@@ -306,5 +323,33 @@ func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
 	// network delay.
 	return func() time.Duration {
 		return config.TimeoutRequest()
+	}
+}
+
+// makePrepareTimerStarter constructs an instance of
+// prepareTimerStarter.
+func makePrepareTimerStarter(provideClientState clientstate.Provider, logger *logging.Logger) prepareTimerStarter {
+	return func(request *messages.Request, view uint64) {
+		clientID := request.Msg.ClientId
+
+		provideClientState(clientID).StartPrepareTimer(func() {
+			logger.Infof("Prepare timer expired: client=%d view=%d", clientID, view)
+		})
+	}
+}
+
+// makePrepareTimerStopper constructs an instance of
+// prepareTimerStopper.
+func makePrepareTimerStopper(provideClientState clientstate.Provider) prepareTimerStopper {
+	return func(clientID uint32) {
+		provideClientState(clientID).StopPrepareTimer()
+	}
+}
+
+// makePrepareTimeoutProvider constructs an instance of
+// prepareTimeoutProvider.
+func makePrepareTimeoutProvider(config api.Configer) prepareTimeoutProvider {
+	return func() time.Duration {
+		return config.TimeoutPrepare()
 	}
 }

@@ -31,7 +31,7 @@ func TestReply(t *testing.T) {
 }
 
 func testAddReply(t *testing.T) {
-	s := New()
+	s := New(defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -68,7 +68,7 @@ func testAddReply(t *testing.T) {
 }
 
 func testReplyChannel(t *testing.T) {
-	s := New()
+	s := New(defaultTimeout, defaultTimeout)
 
 	seq1 := uint64(1)
 	seq2 := seq1 + 1
@@ -117,7 +117,7 @@ func testReplyChannelConcurrent(t *testing.T) {
 		replies[i] = makeReply(uint64(i + 1))
 	}
 
-	s := New()
+	s := New(defaultTimeout, defaultTimeout)
 	wg := new(sync.WaitGroup)
 	for _, rly := range replies {
 		rly := rly

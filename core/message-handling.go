@@ -146,6 +146,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	f := config.F()
 
 	reqTimeout := makeRequestTimeoutProvider(config)
+	prepTimeout := makePrepareTimeoutProvider(config)
 	handleReqTimeout := func(view uint64) {
 		logger.Panic("Request timed out, but view change not implemented")
 	}
@@ -155,10 +156,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
-	clientStateOpts := []clientstate.Option{
-		clientstate.WithRequestTimeout(reqTimeout),
-	}
-	clientStates := clientstate.NewProvider(clientStateOpts...)
+	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
 	peerStates := peerstate.NewProvider()
 	viewState := viewstate.New()
 
@@ -198,10 +196,13 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
 
+	startPrepTimer := makePrepareTimerStarter(clientStates, logger)
+	stopPrepTimer := makePrepareTimerStopper(clientStates)
+
 	applyCommit := makeCommitApplier(collectCommitment)
-	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage)
+	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
 	applyReplicaMessage = makeReplicaMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer)
+	applyRequest := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
 
 	var processMessage messageProcessor
 
@@ -446,7 +447,7 @@ func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMe
 	}
 }
 
-// makeMessageApplier constructs an instance of messageApplier using
+// makeReplicaMessageApplier constructs an instance of replicaMessageApplier using
 // the supplied abstractions.
 func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
 	return func(msg messages.ReplicaMessage) error {
