@@ -71,7 +71,7 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 			return fmt.Errorf("Request already prepared")
 		}
 
-		stopPrepTimer(prepare.Msg.ReplicaId)
+		stopPrepTimer(request)
 
 		primaryID := prepare.ReplicaID()
 

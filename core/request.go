@@ -128,15 +128,19 @@ type requestTimeoutProvider func() time.Duration
 // prepareTimerStarter starts prepare timer.
 //
 // A prepare timeout event is triggered if the prepare timeout elapses
-// before corresponding prepareTimerStopper is called with the same
-// replicaID passed. The argument view specifies the view derived from
-// the request message. It is allowed to restart a timer before the previous
-// corresponding timer has stopped or expired. It is safe to invoke
-// concurrently.
+// before corresponding prepareTimerStopper is called with a Request
+// message from the same client. The argument view specifies the view
+// derived from the request message. It is allowed to restart a timer
+// before the previous corresponding timer has stopped or expired. It
+// is safe to invoke concurrently.
 type prepareTimerStarter func(request *messages.Request, view uint64)
 
 // prepareTimerStopper stops prepare timer.
-type prepareTimerStopper func(clientID uint32)
+//
+// Given a Request message, the prepare timer started for the
+// corresponding client is stopped, if it has not already been stopped
+// or expired. It is safe to invoke concurrently.
+type prepareTimerStopper func(request *messages.Request)
 
 // prepareTimeoutProvider returns current prepare timeout duration.
 type prepareTimeoutProvider func() time.Duration
@@ -341,8 +345,8 @@ func makePrepareTimerStarter(provideClientState clientstate.Provider, logger *lo
 // makePrepareTimerStopper constructs an instance of
 // prepareTimerStopper.
 func makePrepareTimerStopper(provideClientState clientstate.Provider) prepareTimerStopper {
-	return func(clientID uint32) {
-		provideClientState(clientID).StopPrepareTimer()
+	return func(request *messages.Request) {
+		provideClientState(request.ClientID()).StopPrepareTimer()
 	}
 }
 
