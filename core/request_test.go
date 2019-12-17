@@ -450,6 +450,65 @@ func TestMakeRequestTimeoutProvider(t *testing.T) {
 	assert.Equal(t, expectedTimeout, timeout)
 }
 
+func TestMakePrepareTimerStarter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	clientID := rand.Uint32()
+	view := rand.Uint64()
+
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+
+	startTimer := makePrepareTimerStarter(provider, logging.MustGetLogger(module))
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      rand.Uint64(),
+		},
+	}
+
+	state.EXPECT().StartPrepareTimer(gomock.Any())
+	startTimer(request, view)
+}
+
+func TestMakePrepareTimerStopper(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clientID := rand.Uint32()
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+
+	stopTimer := makePrepareTimerStopper(provider)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      rand.Uint64(),
+		},
+	}
+
+	state.EXPECT().StopPrepareTimer()
+	stopTimer(request)
+}
+
+func TestMakePrepareTimeoutProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	expectedTimeout := time.Duration(rand.Int())
+	config := mock_api.NewMockConfiger(ctrl)
+	config.EXPECT().TimeoutPrepare().Return(expectedTimeout).AnyTimes()
+
+	prepareTimeout := makePrepareTimeoutProvider(config)
+
+	timeout := prepareTimeout()
+	assert.Equal(t, expectedTimeout, timeout)
+}
+
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {
 	state := mock_clientstate.NewMockState(ctrl)
 	provider := func(clientID uint32) clientstate.State {
