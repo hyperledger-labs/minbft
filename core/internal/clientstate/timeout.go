@@ -27,6 +27,7 @@ type timerState struct {
 	timerProvider timer.Provider
 	timeout       func() time.Duration
 	timer         timer.Timer
+	seq           uint64
 }
 
 func newTimerState(timerProvider timer.Provider, timeout func() time.Duration) *timerState {
@@ -36,16 +37,17 @@ func newTimerState(timerProvider timer.Provider, timeout func() time.Duration) *
 	}
 }
 
-func (s *timerState) StartTimer(handleTimeout func()) {
+func (s *timerState) StartTimer(seq uint64, handleTimeout func()) {
 	s.Lock()
 	defer s.Unlock()
-
-	timeout := s.timeout()
 
 	if s.timer != nil {
 		s.timer.Stop()
 	}
 
+	s.seq = seq
+
+	timeout := s.timeout()
 	if timeout <= time.Duration(0) {
 		return
 	}
@@ -53,9 +55,13 @@ func (s *timerState) StartTimer(handleTimeout func()) {
 	s.timer = s.timerProvider.AfterFunc(timeout, handleTimeout)
 }
 
-func (s *timerState) StopTimer() {
+func (s *timerState) StopTimer(seq uint64) {
 	s.Lock()
 	defer s.Unlock()
+
+	if s.seq != seq {
+		return
+	}
 
 	if s.timer == nil {
 		return

@@ -107,49 +107,49 @@ func (mr *MockStateMockRecorder) RetireRequestSeq(arg0 interface{}) *gomock.Call
 }
 
 // StartPrepareTimer mocks base method
-func (m *MockState) StartPrepareTimer(arg0 func()) {
+func (m *MockState) StartPrepareTimer(arg0 uint64, arg1 func()) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartPrepareTimer", arg0)
+	m.ctrl.Call(m, "StartPrepareTimer", arg0, arg1)
 }
 
 // StartPrepareTimer indicates an expected call of StartPrepareTimer
-func (mr *MockStateMockRecorder) StartPrepareTimer(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) StartPrepareTimer(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPrepareTimer", reflect.TypeOf((*MockState)(nil).StartPrepareTimer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPrepareTimer", reflect.TypeOf((*MockState)(nil).StartPrepareTimer), arg0, arg1)
 }
 
 // StartRequestTimer mocks base method
-func (m *MockState) StartRequestTimer(arg0 func()) {
+func (m *MockState) StartRequestTimer(arg0 uint64, arg1 func()) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartRequestTimer", arg0)
+	m.ctrl.Call(m, "StartRequestTimer", arg0, arg1)
 }
 
 // StartRequestTimer indicates an expected call of StartRequestTimer
-func (mr *MockStateMockRecorder) StartRequestTimer(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) StartRequestTimer(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRequestTimer", reflect.TypeOf((*MockState)(nil).StartRequestTimer), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRequestTimer", reflect.TypeOf((*MockState)(nil).StartRequestTimer), arg0, arg1)
 }
 
 // StopPrepareTimer mocks base method
-func (m *MockState) StopPrepareTimer() {
+func (m *MockState) StopPrepareTimer(arg0 uint64) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StopPrepareTimer")
+	m.ctrl.Call(m, "StopPrepareTimer", arg0)
 }
 
 // StopPrepareTimer indicates an expected call of StopPrepareTimer
-func (mr *MockStateMockRecorder) StopPrepareTimer() *gomock.Call {
+func (mr *MockStateMockRecorder) StopPrepareTimer(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopPrepareTimer", reflect.TypeOf((*MockState)(nil).StopPrepareTimer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopPrepareTimer", reflect.TypeOf((*MockState)(nil).StopPrepareTimer), arg0)
 }
 
 // StopRequestTimer mocks base method
-func (m *MockState) StopRequestTimer() {
+func (m *MockState) StopRequestTimer(arg0 uint64) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StopRequestTimer")
+	m.ctrl.Call(m, "StopRequestTimer", arg0)
 }
 
 // StopRequestTimer indicates an expected call of StopRequestTimer
-func (mr *MockStateMockRecorder) StopRequestTimer() *gomock.Call {
+func (mr *MockStateMockRecorder) StopRequestTimer(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopRequestTimer", reflect.TypeOf((*MockState)(nil).StopRequestTimer))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopRequestTimer", reflect.TypeOf((*MockState)(nil).StopRequestTimer), arg0)
 }

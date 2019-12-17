@@ -102,18 +102,18 @@ type requestSeqRetirer func(request *messages.Request) (new bool)
 // requestTimerStarter starts request timer.
 //
 // A request timeout event is triggered if the request timeout elapses
-// before corresponding requestTimerStopper is called with a Request
-// message from the same client. The argument view specifies the
-// current view number. Only single timer per client is maintained.
-// The timer is restarted if the previous timer of the client has not
-// yet stopped or expired. It is safe to invoke concurrently.
+// before corresponding requestTimerStopper is called with the same
+// request message passed. The argument view specifies the current
+// view number. Only single timer per client is maintained. The timer
+// is restarted if the previous timer of the client has not yet
+// stopped or expired. It is safe to invoke concurrently.
 type requestTimerStarter func(request *messages.Request, view uint64)
 
 // requestTimerStopper stops request timer.
 //
-// Given a Request message, the request timer started for the
-// corresponding client is stopped, if it has not already been stopped
-// or expired. It is safe to invoke concurrently.
+// Given a Request message, any request timer started for the same
+// request is stopped, if it has not already been stopped or expired.
+// It is safe to invoke concurrently.
 type requestTimerStopper func(request *messages.Request)
 
 // requestTimeoutHandler handles request timeout expiration.
@@ -128,18 +128,18 @@ type requestTimeoutProvider func() time.Duration
 // prepareTimerStarter starts prepare timer.
 //
 // A prepare timeout event is triggered if the prepare timeout elapses
-// before corresponding prepareTimerStopper is called with a Request
-// message from the same client. The argument view specifies the
-// current view number. Only single timer per client is maintained.
-// The timer is restarted if the previous timer of the client has not
-// yet stopped or expired. It is safe to invoke concurrently.
+// before corresponding prepareTimerStopper is called with the same
+// request message passed. The argument view specifies the current
+// view number. Only single timer per client is maintained. The timer
+// is restarted if the previous timer of the client has not yet
+// stopped or expired. It is safe to invoke concurrently.
 type prepareTimerStarter func(request *messages.Request, view uint64)
 
 // prepareTimerStopper stops prepare timer.
 //
-// Given a Request message, the prepare timer started for the
-// corresponding client is stopped, if it has not already been stopped
-// or expired. It is safe to invoke concurrently.
+// Given a Request message, any prepare timer started for the same
+// request is stopped, if it has not already been stopped or expired.
+// It is safe to invoke concurrently.
 type prepareTimerStopper func(request *messages.Request)
 
 // prepareTimeoutProvider returns current prepare timeout duration.
@@ -303,8 +303,9 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTimeout requestTimeoutHandler, logger *logging.Logger) requestTimerStarter {
 	return func(request *messages.Request, view uint64) {
 		clientID := request.ClientID()
-		provideClientState(clientID).StartRequestTimer(func() {
-			logger.Warningf("Request timer expired: client=%d view=%d", clientID, view)
+		seq := request.Msg.Seq
+		provideClientState(clientID).StartRequestTimer(seq, func() {
+			logger.Warningf("Request timer expired: client=%d seq=%d view=%d", clientID, seq, view)
 			handleTimeout(view)
 		})
 	}
@@ -314,7 +315,7 @@ func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTime
 // requestTimerStopper.
 func makeRequestTimerStopper(provideClientState clientstate.Provider) requestTimerStopper {
 	return func(request *messages.Request) {
-		provideClientState(request.ClientID()).StopRequestTimer()
+		provideClientState(request.ClientID()).StopRequestTimer(request.Msg.Seq)
 	}
 }
 
@@ -337,8 +338,9 @@ func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
 func makePrepareTimerStarter(provideClientState clientstate.Provider, logger *logging.Logger) prepareTimerStarter {
 	return func(request *messages.Request, view uint64) {
 		clientID := request.ClientID()
-		provideClientState(clientID).StartPrepareTimer(func() {
-			logger.Infof("Prepare timer expired: client=%d view=%d", clientID, view)
+		seq := request.Msg.Seq
+		provideClientState(clientID).StartPrepareTimer(seq, func() {
+			logger.Infof("Prepare timer expired: client=%d seq=%d view=%d", clientID, seq, view)
 		})
 	}
 }
@@ -347,7 +349,7 @@ func makePrepareTimerStarter(provideClientState clientstate.Provider, logger *lo
 // prepareTimerStopper.
 func makePrepareTimerStopper(provideClientState clientstate.Provider) prepareTimerStopper {
 	return func(request *messages.Request) {
-		provideClientState(request.ClientID()).StopPrepareTimer()
+		provideClientState(request.ClientID()).StopPrepareTimer(request.Msg.Seq)
 	}
 }
 

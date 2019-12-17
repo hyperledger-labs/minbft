@@ -409,6 +409,7 @@ func TestMakeRequestTimerStarter(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	view := rand.Uint64()
 
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
@@ -422,11 +423,11 @@ func TestMakeRequestTimerStarter(t *testing.T) {
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			ClientId: clientID,
-			Seq:      rand.Uint64(),
+			Seq:      seq,
 		},
 	}
 
-	state.EXPECT().StartRequestTimer(gomock.Any()).Do(func(f func()) { f() })
+	state.EXPECT().StartRequestTimer(seq, gomock.Any()).Do(func(_ uint64, f func()) { f() })
 	mock.On("requestTimeoutHandler", view).Once()
 	startTimer(request, view)
 }
@@ -436,6 +437,7 @@ func TestMakeRequestTimerStopper(t *testing.T) {
 	defer ctrl.Finish()
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
 	stopTimer := makeRequestTimerStopper(provider)
@@ -443,11 +445,11 @@ func TestMakeRequestTimerStopper(t *testing.T) {
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			ClientId: clientID,
-			Seq:      rand.Uint64(),
+			Seq:      seq,
 		},
 	}
 
-	state.EXPECT().StopRequestTimer()
+	state.EXPECT().StopRequestTimer(seq)
 	stopTimer(request)
 }
 
@@ -473,6 +475,7 @@ func TestMakePrepareTimerStarter(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	view := rand.Uint64()
 
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
@@ -482,11 +485,11 @@ func TestMakePrepareTimerStarter(t *testing.T) {
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			ClientId: clientID,
-			Seq:      rand.Uint64(),
+			Seq:      seq,
 		},
 	}
 
-	state.EXPECT().StartPrepareTimer(gomock.Any())
+	state.EXPECT().StartPrepareTimer(seq, gomock.Any())
 	startTimer(request, view)
 }
 
@@ -495,6 +498,7 @@ func TestMakePrepareTimerStopper(t *testing.T) {
 	defer ctrl.Finish()
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
 	stopTimer := makePrepareTimerStopper(provider)
@@ -502,11 +506,11 @@ func TestMakePrepareTimerStopper(t *testing.T) {
 	request := &messages.Request{
 		Msg: &messages.Request_M{
 			ClientId: clientID,
-			Seq:      rand.Uint64(),
+			Seq:      seq,
 		},
 	}
 
-	state.EXPECT().StopPrepareTimer()
+	state.EXPECT().StopPrepareTimer(seq)
 	stopTimer(request)
 }
 
