@@ -179,16 +179,17 @@ func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedU
 		view, releaseView := provideView()
 		defer releaseView()
 
-		// The primary has to start request/prepare timer, as well.
+		// The primary has to start request timer, as well.
 		// Suppose, the primary is correct, but its messages
 		// are delayed, and other replicas switch to a new
 		// view. In that case, other replicas might rely on
 		// this correct replica to trigger another view
 		// change, should the new primary be faulty.
 		startReqTimer(request.Msg.ClientId, view)
-		startPrepTimer(request, view)
 
 		if isPrimary(view, id, n) {
+			startPrepTimer(request, view)
+
 			prepare := &messages.Prepare{
 				Msg: &messages.Prepare_M{
 					View:      view,

@@ -127,7 +127,6 @@ func TestMakeRequestApplier(t *testing.T) {
 
 	mock.On("viewProvider").Return(otherView).Once()
 	mock.On("requestTimerStarter", clientID, otherView).Once()
-	mock.On("prepareTimerStarter", request, otherView).Once()
 	mock.On("viewReleaser", otherView).Once()
 	err := apply(request)
 	assert.NoError(t, err)

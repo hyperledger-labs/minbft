@@ -71,8 +71,6 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 			return fmt.Errorf("Request already prepared")
 		}
 
-		stopPrepTimer(request)
-
 		primaryID := prepare.ReplicaID()
 
 		if err := collectCommitment(primaryID, prepare); err != nil {
@@ -82,6 +80,8 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 		if id == primaryID {
 			return nil // primary does not generate Commit
 		}
+
+		stopPrepTimer(request)
 
 		commit := &messages.Commit{
 			Msg: &messages.Commit_M{
