@@ -16,12 +16,9 @@ package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"
-
-	"github.com/hyperledger-labs/minbft/messages"
 )
 
 type request struct {
-	messages.IsRequest
 	Request
 }
 
@@ -68,3 +65,6 @@ func (m *request) Signature() []byte {
 func (m *request) SetSignature(signature []byte) {
 	m.Request.Signature = signature
 }
+
+func (request) ImplementsClientMessage() {}
+func (request) ImplementsRequest()       {}

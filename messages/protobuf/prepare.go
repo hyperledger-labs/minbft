@@ -21,7 +21,6 @@ import (
 )
 
 type prepare struct {
-	messages.IsPrepare
 	Prepare
 }
 
@@ -70,3 +69,6 @@ func (m *prepare) UIBytes() []byte {
 func (m *prepare) SetUIBytes(uiBytes []byte) {
 	m.ReplicaUi = uiBytes
 }
+
+func (prepare) ImplementsReplicaMessage() {}
+func (prepare) ImplementsPrepare()        {}

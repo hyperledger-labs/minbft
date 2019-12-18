@@ -21,7 +21,6 @@ import (
 )
 
 type commit struct {
-	messages.IsCommit
 	Commit
 }
 
@@ -77,3 +76,6 @@ func (m *commit) UIBytes() []byte {
 func (m *commit) SetUIBytes(uiBytes []byte) {
 	m.ReplicaUi = uiBytes
 }
+
+func (commit) ImplementsReplicaMessage() {}
+func (commit) ImplementsCommit()         {}

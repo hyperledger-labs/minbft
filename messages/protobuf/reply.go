@@ -16,12 +16,9 @@ package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"
-
-	"github.com/hyperledger-labs/minbft/messages"
 )
 
 type reply struct {
-	messages.IsReply
 	Reply
 }
 
@@ -73,3 +70,6 @@ func (m *reply) Signature() []byte {
 func (m *reply) SetSignature(signature []byte) {
 	m.Reply.Signature = signature
 }
+
+func (reply) ImplementsReplicaMessage() {}
+func (reply) ImplementsReply()          {}
