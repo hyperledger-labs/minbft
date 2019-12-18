@@ -154,8 +154,8 @@ func TestMakeCommitmentCollector(t *testing.T) {
 		args := mock.MethodCalled("requestSeqRetirer", request)
 		return args.Bool(0)
 	}
-	stopReqTimer := func(clientID uint32) {
-		mock.MethodCalled("requestTimerStopper", clientID)
+	stopReqTimer := func(request *messages.Request) {
+		mock.MethodCalled("requestTimerStopper", request)
 	}
 	executeRequest := func(request *messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
@@ -197,7 +197,7 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
 	mock.On("requestSeqRetirer", request).Return(true).Once()
 	pendingReq.EXPECT().Remove(clientID)
-	mock.On("requestTimerStopper", clientID).Once()
+	mock.On("requestTimerStopper", request).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(id, prepare)
 	assert.NoError(t, err)

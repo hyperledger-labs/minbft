@@ -116,7 +116,7 @@ func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq reques
 		}
 
 		pendingReq.Remove(request.Msg.ClientId)
-		stopReqTimer(request.Msg.ClientId)
+		stopReqTimer(request)
 		executeRequest(request)
 
 		return nil

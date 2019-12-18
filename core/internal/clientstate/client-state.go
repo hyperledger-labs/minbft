@@ -87,19 +87,25 @@ func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time
 // there will be no Reply message to be added for the supplied request
 // identifier.
 //
-// StartRequestTimer starts a timer to expire after the duration of
-// request timeout. The supplied callback function handleTimeout is
-// invoked asynchronously upon timer expiration. If the previous timer
-// has not yet expired, it will be canceled and a new timer started.
+// StartRequestTimer starts a timer for the supplied request
+// identifier to expire after the duration of request timeout. The
+// supplied callback function handleTimeout is invoked asynchronously
+// upon timer expiration. If the previous timer started for any
+// request identifier has not yet expired, it will be canceled and a
+// new timer started.
 //
-// StopRequestTimer stops timer started by StartRequestTimer, if any.
+// StopRequestTimer stops timer started for the same request
+// identifier by StartRequestTimer, if any.
 //
-// StartPrepareTimer starts a timer to expire after the duration of
-// prepare timeout. The supplied callback function handleTimeout is
-// invoked asynchronously upon timer expiration. If the previous timer
-// has not yet expired, it will be canceled and a new timer started.
+// StartPrepareTimer starts a timer for the supplied request
+// identifier to expire after the duration of prepare timeout. The
+// supplied callback function handleTimeout is invoked asynchronously
+// upon timer expiration. If the previous timer started for any
+// request identifier has not yet expired, it will be canceled and a
+// new timer started.
 //
-// StopPrepareTimer stops timer started by StartPrepareTimer, if any.
+// StopPrepareTimer stops timer started for the same request
+// identifier by StartPrepareTimer, if any.
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
@@ -108,11 +114,11 @@ type State interface {
 	AddReply(reply *messages.Reply) error
 	ReplyChannel(seq uint64) <-chan *messages.Reply
 
-	StartRequestTimer(handleTimeout func())
-	StopRequestTimer()
+	StartRequestTimer(seq uint64, handleTimeout func())
+	StopRequestTimer(seq uint64)
 
-	StartPrepareTimer(handleTimeout func())
-	StopPrepareTimer()
+	StartPrepareTimer(seq uint64, handleTimeout func())
+	StopPrepareTimer(seq uint64)
 }
 
 // New creates a new instance of client state representation. Optional
@@ -161,18 +167,18 @@ type clientState struct {
 	opts options
 }
 
-func (s *clientState) StartRequestTimer(handleTimeout func()) {
-	s.requestTimer.StartTimer(handleTimeout)
+func (s *clientState) StartRequestTimer(seq uint64, handleTimeout func()) {
+	s.requestTimer.StartTimer(seq, handleTimeout)
 }
 
-func (s *clientState) StopRequestTimer() {
-	s.requestTimer.StopTimer()
+func (s *clientState) StopRequestTimer(seq uint64) {
+	s.requestTimer.StopTimer(seq)
 }
 
-func (s *clientState) StartPrepareTimer(handleTimeout func()) {
-	s.prepareTimer.StartTimer(handleTimeout)
+func (s *clientState) StartPrepareTimer(seq uint64, handleTimeout func()) {
+	s.prepareTimer.StartTimer(seq, handleTimeout)
 }
 
-func (s *clientState) StopPrepareTimer() {
-	s.prepareTimer.StopTimer()
+func (s *clientState) StopPrepareTimer(seq uint64) {
+	s.prepareTimer.StopTimer(seq)
 }

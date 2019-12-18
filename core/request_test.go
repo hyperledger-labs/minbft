@@ -102,8 +102,8 @@ func TestMakeRequestApplier(t *testing.T) {
 	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	startReqTimer := func(clientID uint32, view uint64) {
-		mock.MethodCalled("requestTimerStarter", clientID, view)
+	startReqTimer := func(request *messages.Request, view uint64) {
+		mock.MethodCalled("requestTimerStarter", request, view)
 	}
 	startPrepTimer := func(request *messages.Request, view uint64) {
 		mock.MethodCalled("prepareTimerStarter", request, view)
@@ -126,14 +126,13 @@ func TestMakeRequestApplier(t *testing.T) {
 	}
 
 	mock.On("viewProvider").Return(otherView).Once()
-	mock.On("requestTimerStarter", clientID, otherView).Once()
-	mock.On("prepareTimerStarter", request, otherView).Once()
+	mock.On("requestTimerStarter", request, otherView).Once()
 	mock.On("viewReleaser", otherView).Once()
 	err := apply(request)
 	assert.NoError(t, err)
 
 	mock.On("viewProvider").Return(ownView).Once()
-	mock.On("requestTimerStarter", clientID, ownView).Once()
+	mock.On("requestTimerStarter", request, ownView).Once()
 	mock.On("prepareTimerStarter", request, ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
 	mock.On("viewReleaser", ownView).Once()
@@ -410,7 +409,9 @@ func TestMakeRequestTimerStarter(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	view := rand.Uint64()
+
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 	handleTimeout := func(view uint64) {
 		mock.MethodCalled("requestTimeoutHandler", view)
@@ -419,9 +420,16 @@ func TestMakeRequestTimerStarter(t *testing.T) {
 	startTimer := makeRequestTimerStarter(provider, handleTimeout,
 		logging.MustGetLogger(module))
 
-	state.EXPECT().StartRequestTimer(gomock.Any()).Do(func(f func()) { f() })
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      seq,
+		},
+	}
+
+	state.EXPECT().StartRequestTimer(seq, gomock.Any()).Do(func(_ uint64, f func()) { f() })
 	mock.On("requestTimeoutHandler", view).Once()
-	startTimer(clientID, view)
+	startTimer(request, view)
 }
 
 func TestMakeRequestTimerStopper(t *testing.T) {
@@ -429,12 +437,20 @@ func TestMakeRequestTimerStopper(t *testing.T) {
 	defer ctrl.Finish()
 
 	clientID := rand.Uint32()
+	seq := rand.Uint64()
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
 	stopTimer := makeRequestTimerStopper(provider)
 
-	state.EXPECT().StopRequestTimer()
-	stopTimer(clientID)
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      seq,
+		},
+	}
+
+	state.EXPECT().StopRequestTimer(seq)
+	stopTimer(request)
 }
 
 func TestMakeRequestTimeoutProvider(t *testing.T) {
@@ -448,6 +464,67 @@ func TestMakeRequestTimeoutProvider(t *testing.T) {
 	requestTimeout := makeRequestTimeoutProvider(config)
 
 	timeout := requestTimeout()
+	assert.Equal(t, expectedTimeout, timeout)
+}
+
+func TestMakePrepareTimerStarter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	clientID := rand.Uint32()
+	seq := rand.Uint64()
+	view := rand.Uint64()
+
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+
+	startTimer := makePrepareTimerStarter(provider, logging.MustGetLogger(module))
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      seq,
+		},
+	}
+
+	state.EXPECT().StartPrepareTimer(seq, gomock.Any())
+	startTimer(request, view)
+}
+
+func TestMakePrepareTimerStopper(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	clientID := rand.Uint32()
+	seq := rand.Uint64()
+	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
+
+	stopTimer := makePrepareTimerStopper(provider)
+
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			ClientId: clientID,
+			Seq:      seq,
+		},
+	}
+
+	state.EXPECT().StopPrepareTimer(seq)
+	stopTimer(request)
+}
+
+func TestMakePrepareTimeoutProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	expectedTimeout := time.Duration(rand.Int())
+	config := mock_api.NewMockConfiger(ctrl)
+	config.EXPECT().TimeoutPrepare().Return(expectedTimeout).AnyTimes()
+
+	prepareTimeout := makePrepareTimeoutProvider(config)
+
+	timeout := prepareTimeout()
 	assert.Equal(t, expectedTimeout, timeout)
 }
 
