@@ -21,10 +21,12 @@ package client
 import (
 	"fmt"
 
+	logging "github.com/op/go-logging"
+
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
 
-	logging "github.com/op/go-logging"
+	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 const (
@@ -32,6 +34,7 @@ const (
 )
 
 var logger = logging.MustGetLogger(module)
+var messageImpl = protobufMessages.NewImpl()
 
 // Stack combines the interfaces of the external modules
 type Stack interface {

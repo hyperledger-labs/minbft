@@ -23,27 +23,26 @@ import (
 	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
-
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // replicaMessageSigner generates and attaches a normal replica
 // signature to the supplied message modifying it directly.
-type replicaMessageSigner func(msg messages.MessageWithSignature)
+type replicaMessageSigner func(msg messages.SignedMessage)
 
 // messageSignatureVerifier verifies the signature attached to a
 // message against the message data.
-type messageSignatureVerifier func(msg messages.MessageWithSignature) error
+type messageSignatureVerifier func(msg messages.SignedMessage) error
 
 // makeReplicaMessageSigner constructs an instance of messageSigner
 // using the supplied external interface for message authentication.
 func makeReplicaMessageSigner(authen api.Authenticator) replicaMessageSigner {
-	return func(msg messages.MessageWithSignature) {
-		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, msg.Payload())
+	return func(msg messages.SignedMessage) {
+		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, msg.SignedPayload())
 		if err != nil {
 			panic(err) // Supplied Authenticator must be able to sing
 		}
-		msg.AttachSignature(signature)
+		msg.SetSignature(signature)
 	}
 }
 
@@ -51,7 +50,7 @@ func makeReplicaMessageSigner(authen api.Authenticator) replicaMessageSigner {
 // messageSignatureVerifier using the supplied external interface for
 // message authentication.
 func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVerifier {
-	return func(msg messages.MessageWithSignature) error {
+	return func(msg messages.SignedMessage) error {
 		var role api.AuthenticationRole
 		var id uint32
 
@@ -63,10 +62,7 @@ func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVeri
 			panic("Message with no signer ID")
 		}
 
-		payload := msg.Payload()
-		signature := msg.SignatureBytes()
-
-		return authen.VerifyMessageAuthenTag(role, id, payload, signature)
+		return authen.VerifyMessageAuthenTag(role, id, msg.SignedPayload(), msg.Signature())
 	}
 }
 
@@ -85,33 +81,27 @@ func shortString(msg string, max int) string {
 
 func messageString(msg interface{}) string {
 	var cv uint64
-	if msg, ok := msg.(messages.MessageWithUI); ok {
+	if msg, ok := msg.(messages.CertifiedMessage); ok {
 		if ui, err := parseMessageUI(msg); err == nil {
 			cv = ui.Counter
 		}
 	}
 
 	switch msg := msg.(type) {
-	case *messages.Request:
-		m := msg.GetMsg()
+	case messages.Request:
 		return fmt.Sprintf("REQUEST<client=%d seq=%d payload=%s>",
-			m.GetClientId(), m.GetSeq(), shortString(string(m.GetPayload()), logMaxStringWidth))
-	case *messages.Reply:
-		m := msg.GetMsg()
+			msg.ClientID(), msg.Sequence(), shortString(string(msg.Operation()), logMaxStringWidth))
+	case messages.Reply:
 		return fmt.Sprintf("REPLY<replica=%d seq=%d result=%s>",
-			m.GetReplicaId(), m.GetSeq(), shortString(string(m.GetResult()), logMaxStringWidth))
-	case *messages.Prepare:
-		m := msg.GetMsg()
-		req := m.GetRequest().GetMsg()
+			msg.ReplicaID(), msg.Sequence(), shortString(string(msg.Result()), logMaxStringWidth))
+	case messages.Prepare:
+		req := msg.Request()
 		return fmt.Sprintf("PREPARE<cv=%d replica=%d view=%d client=%d seq=%d>",
-			cv, m.GetReplicaId(), m.GetView(),
-			req.GetClientId(), req.GetSeq())
-	case *messages.Commit:
-		m := msg.GetMsg()
-		req := m.GetRequest().GetMsg()
-		return fmt.Sprintf("COMMIT<cv=%d replica=%d primary=%d view=%d client=%d seq=%d>",
-			cv, m.GetReplicaId(), m.GetPrimaryId(), m.GetView(),
-			req.GetClientId(), req.GetSeq())
+			cv, msg.ReplicaID(), msg.View(),
+			req.ClientID(), req.Sequence())
+	case messages.Commit:
+		return fmt.Sprintf("COMMIT<cv=%d replica=%d prepare=%s>",
+			cv, msg.ReplicaID(), messageString(msg.Prepare()))
 	}
 	return "(unknown message)"
 }

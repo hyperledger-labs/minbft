@@ -23,7 +23,7 @@ package requestbuffer
 import (
 	"sync"
 
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // T implements the storage to keep and coordinate flow and processing
@@ -56,7 +56,7 @@ func New() *T {
 // AddReply. The returned channel is closed when RemoveRequest is
 // invoked for the Request message. The returned boolean value
 // indicates if the message was accepted.
-func (rb *T) AddRequest(msg *messages.Request) (<-chan *messages.Reply, bool) {
+func (rb *T) AddRequest(msg messages.Request) (<-chan messages.Reply, bool) {
 	rb.lock.Lock()
 	defer rb.lock.Unlock()
 
@@ -67,11 +67,11 @@ func (rb *T) AddRequest(msg *messages.Request) (<-chan *messages.Reply, bool) {
 		rb.lock.Lock()
 	}
 
-	if msg.Msg.Seq <= rb.lastSeq {
+	if msg.Sequence() <= rb.lastSeq {
 		return nil, false
 	}
 
-	rb.lastSeq = msg.Msg.Seq
+	rb.lastSeq = msg.Sequence()
 	rb.request = newRequest(msg)
 
 	for _, ch := range rb.newAdded {
@@ -81,7 +81,7 @@ func (rb *T) AddRequest(msg *messages.Request) (<-chan *messages.Reply, bool) {
 		}
 	}
 
-	replyChannel := make(chan *messages.Reply)
+	replyChannel := make(chan messages.Reply)
 	go rb.request.supplyReplies(replyChannel)
 
 	return replyChannel, true
@@ -92,14 +92,14 @@ func (rb *T) AddRequest(msg *messages.Request) (<-chan *messages.Reply, bool) {
 // subsequent Reply message with the same replica ID corresponding to
 // the same Request will be dropped. The return value indicates if the
 // message was accepted.
-func (rb *T) AddReply(msg *messages.Reply) bool {
+func (rb *T) AddReply(msg messages.Reply) bool {
 	rb.lock.RLock()
 	request := rb.request
 	rb.lock.RUnlock()
 
 	if request == nil {
 		return false
-	} else if request.Msg.Seq != msg.Msg.Seq {
+	} else if request.Sequence() != msg.Sequence() {
 		return false
 	}
 
@@ -114,7 +114,7 @@ func (rb *T) RemoveRequest(seq uint64) {
 
 	if rb.request == nil {
 		return
-	} else if rb.request.Msg.Seq != seq {
+	} else if rb.request.Sequence() != seq {
 		return
 	}
 
@@ -127,14 +127,14 @@ func (rb *T) RemoveRequest(seq uint64) {
 // function indicates the returned channel should be closed. Nil
 // channel may be passed if there's no need to close the returned
 // channel.
-func (rb *T) RequestStream(cancel <-chan struct{}) <-chan *messages.Request {
-	ch := make(chan *messages.Request)
+func (rb *T) RequestStream(cancel <-chan struct{}) <-chan messages.Request {
+	ch := make(chan messages.Request)
 	go rb.supplyRequests(ch, cancel)
 
 	return ch
 }
 
-func (rb *T) supplyRequests(ch chan<- *messages.Request, cancel <-chan struct{}) {
+func (rb *T) supplyRequests(ch chan<- messages.Request, cancel <-chan struct{}) {
 	defer close(ch)
 
 	newAdded := make(chan struct{}, 1)
@@ -148,10 +148,10 @@ func (rb *T) supplyRequests(ch chan<- *messages.Request, cancel <-chan struct{})
 		request := rb.request
 		rb.lock.RUnlock()
 
-		if request != nil && request.Msg.Seq > lastSeq {
+		if request != nil && request.Sequence() > lastSeq {
 			select {
 			case ch <- request.Request:
-				lastSeq = request.Msg.Seq
+				lastSeq = request.Sequence()
 			case <-request.removed:
 			case <-cancel:
 				return
@@ -170,7 +170,7 @@ func (rb *T) supplyRequests(ch chan<- *messages.Request, cancel <-chan struct{})
 // together with corresponding Reply messages.
 type request struct {
 	// The Request message
-	*messages.Request
+	messages.Request
 
 	// This channel is closed after the request is removed from
 	// the buffer
@@ -180,7 +180,7 @@ type request struct {
 	*replySet
 }
 
-func newRequest(msg *messages.Request) *request {
+func newRequest(msg messages.Request) *request {
 	return &request{
 		Request:  msg,
 		removed:  make(chan struct{}),
@@ -188,11 +188,11 @@ func newRequest(msg *messages.Request) *request {
 	}
 }
 
-func (r *request) addReply(msg *messages.Reply) bool {
+func (r *request) addReply(msg messages.Reply) bool {
 	return r.replySet.addReply(msg)
 }
 
-func (r *request) supplyReplies(ch chan<- *messages.Reply) {
+func (r *request) supplyReplies(ch chan<- messages.Reply) {
 	r.replySet.supplyReplies(ch, r.removed)
 }
 
@@ -203,7 +203,7 @@ type replySet struct {
 	replicas map[uint32]bool
 
 	// Reply messages in order added
-	msgs []*messages.Reply
+	msgs []messages.Reply
 
 	// Buffered channel to notify about new messages
 	newAdded chan struct{}
@@ -216,15 +216,15 @@ func newReplySet() *replySet {
 	}
 }
 
-func (rs *replySet) addReply(msg *messages.Reply) bool {
+func (rs *replySet) addReply(msg messages.Reply) bool {
 	rs.Lock()
 	defer rs.Unlock()
 
-	if rs.replicas[msg.Msg.ReplicaId] {
+	if rs.replicas[msg.ReplicaID()] {
 		return false
 	}
 
-	rs.replicas[msg.Msg.ReplicaId] = true
+	rs.replicas[msg.ReplicaID()] = true
 	rs.msgs = append(rs.msgs, msg)
 
 	select {
@@ -235,7 +235,7 @@ func (rs *replySet) addReply(msg *messages.Reply) bool {
 	return true
 }
 
-func (rs *replySet) supplyReplies(ch chan<- *messages.Reply, cancel <-chan struct{}) {
+func (rs *replySet) supplyReplies(ch chan<- messages.Reply, cancel <-chan struct{}) {
 	defer close(ch)
 
 	next := 0

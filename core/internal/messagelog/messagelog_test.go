@@ -17,13 +17,13 @@
 package messagelog
 
 import (
-	"reflect"
+	"math/rand"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 func TestAppend(t *testing.T) {
@@ -64,9 +64,9 @@ func TestStream(t *testing.T) {
 		log.Append(msg)
 	}
 
-	receiveMessages := func(ch <-chan *messages.Message) {
+	receiveMessages := func(ch <-chan messages.ReplicaMessage) {
 		for i, msg := range msgs {
-			assertMsgEqualf(t, msg, <-ch, "Unexpected message %d", i)
+			assert.Equalf(t, msg, <-ch, "Unexpected message %d", i)
 		}
 	}
 
@@ -97,7 +97,7 @@ func TestConcurrent(t *testing.T) {
 			ch := log.Stream(done)
 
 			for i, msg := range msgs {
-				assertMsgEqualf(t, msg, <-ch,
+				assert.Equalf(t, msg, <-ch,
 					"Unexpected message %d from stream %d", i, streamID)
 			}
 
@@ -137,7 +137,7 @@ func TestWithFaulty(t *testing.T) {
 			}
 
 			for i, msg := range msgs {
-				assertMsgEqualf(t, msg, <-ch,
+				assert.Equalf(t, msg, <-ch,
 					"Unexpected message %d from stream %d", i, streamID)
 			}
 
@@ -152,20 +152,17 @@ func TestWithFaulty(t *testing.T) {
 	wg.Wait()
 }
 
-func makeManyMsgs(nrMessages int) []*messages.Message {
-	msgs := make([]*messages.Message, nrMessages)
+func makeManyMsgs(nrMessages int) []messages.ReplicaMessage {
+	msgs := make([]messages.ReplicaMessage, nrMessages)
 	for i := 0; i < nrMessages; i++ {
 		msgs[i] = makeMsg()
 	}
 	return msgs
 }
 
-func makeMsg() *messages.Message {
-	return &messages.Message{}
-}
-
-func assertMsgEqualf(t assert.TestingT, expected, actual *messages.Message, msg string, args ...interface{}) bool {
-	expectedPtr := reflect.ValueOf(expected).Pointer()
-	actualPtr := reflect.ValueOf(actual).Pointer()
-	return assert.Equalf(t, expectedPtr, actualPtr, msg, args...)
+func makeMsg() messages.ReplicaMessage {
+	return struct {
+		messages.ReplicaMessage
+		i int
+	}{i: rand.Int()}
 }

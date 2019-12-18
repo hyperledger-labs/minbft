@@ -6,7 +6,7 @@ package mock_clientstate
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	protobuf "github.com/hyperledger-labs/minbft/messages/protobuf"
+	messages "github.com/hyperledger-labs/minbft/messages"
 	reflect "reflect"
 )
 
@@ -34,7 +34,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // AddReply mocks base method
-func (m *MockState) AddReply(arg0 *protobuf.Reply) error {
+func (m *MockState) AddReply(arg0 messages.Reply) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddReply", arg0)
 	ret0, _ := ret[0].(error)
@@ -78,10 +78,10 @@ func (mr *MockStateMockRecorder) PrepareRequestSeq(arg0 interface{}) *gomock.Cal
 }
 
 // ReplyChannel mocks base method
-func (m *MockState) ReplyChannel(arg0 uint64) <-chan *protobuf.Reply {
+func (m *MockState) ReplyChannel(arg0 uint64) <-chan messages.Reply {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReplyChannel", arg0)
-	ret0, _ := ret[0].(<-chan *protobuf.Reply)
+	ret0, _ := ret[0].(<-chan messages.Reply)
 	return ret0
 }
 

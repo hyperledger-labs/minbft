@@ -19,11 +19,14 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
+
+var messageImpl = protobufMessages.NewImpl()
 
 func TestReply(t *testing.T) {
 	t.Run("Add", testAddReply)
@@ -113,7 +116,7 @@ func testReplyChannelConcurrent(t *testing.T) {
 	const nrConcurrent = 5
 	const nrRequests = 10
 
-	replies := make([]*messages.Reply, nrRequests)
+	replies := make([]messages.Reply, nrRequests)
 	for i := range replies {
 		replies[i] = makeReply(uint64(i + 1))
 	}
@@ -122,7 +125,7 @@ func testReplyChannelConcurrent(t *testing.T) {
 	wg := new(sync.WaitGroup)
 	for _, rly := range replies {
 		rly := rly
-		seq := rly.Msg.Seq
+		seq := rly.Sequence()
 
 		for workerID := 0; workerID < nrConcurrent; workerID++ {
 			workerID := workerID
@@ -142,13 +145,8 @@ func testReplyChannelConcurrent(t *testing.T) {
 	}
 }
 
-func makeReply(seq uint64) *messages.Reply {
+func makeReply(seq uint64) messages.Reply {
 	result := make([]byte, 1)
 	rand.Read(result)
-	return &messages.Reply{
-		Msg: &messages.Reply_M{
-			Seq:    seq,
-			Result: result,
-		},
-	}
+	return messageImpl.NewReply(rand.Uint32(), rand.Uint32(), seq, result)
 }

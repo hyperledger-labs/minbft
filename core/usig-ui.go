@@ -21,9 +21,8 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
-
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // uiCapturer synchronizes beginning of sequential processing of USIG
@@ -35,22 +34,22 @@ import (
 // needs to be processed. If so, the processing has to be completed by
 // invoking the returned release function. It is safe to invoke
 // concurrently.
-type uiCapturer func(msg messages.MessageWithUI) (new bool, release func())
+type uiCapturer func(msg messages.CertifiedMessage) (new bool, release func())
 
 // uiVerifier verifies USIG certificate attached to a message.
 //
 // USIG certificate is verified and the UI is returned if it is valid
 // for the message. A UI with zero counter value is never valid.
-type uiVerifier func(msg messages.MessageWithUI) (ui *usig.UI, err error)
+type uiVerifier func(msg messages.CertifiedMessage) (ui *usig.UI, err error)
 
 // uiAssigner assigns a unique identifier to a message.
 //
 // USIG UI is assigned and attached to the supplied message.
-type uiAssigner func(msg messages.MessageWithUI)
+type uiAssigner func(msg messages.CertifiedMessage)
 
 // makeUICapturer constructs uiCapturer using the supplied interface.
 func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
-	return func(msg messages.MessageWithUI) (new bool, release func()) {
+	return func(msg messages.CertifiedMessage) (new bool, release func()) {
 		replicaID := msg.ReplicaID()
 		ui, err := parseMessageUI(msg)
 		if err != nil {
@@ -66,7 +65,7 @@ func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 // makeUIVerifier constructs uiVerifier using the supplied external
 // authenticator to verify USIG certificates.
 func makeUIVerifier(authen api.Authenticator) uiVerifier {
-	return func(msg messages.MessageWithUI) (*usig.UI, error) {
+	return func(msg messages.CertifiedMessage) (*usig.UI, error) {
 		ui, err := parseMessageUI(msg)
 		if err != nil {
 			return nil, err
@@ -76,7 +75,7 @@ func makeUIVerifier(authen api.Authenticator) uiVerifier {
 			return nil, fmt.Errorf("Invalid (zero) counter value")
 		}
 
-		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), msg.Payload(), msg.UIBytes()); err != nil {
+		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), msg.CertifiedPayload(), msg.UIBytes()); err != nil {
 			return nil, fmt.Errorf("Failed verifying USIG certificate: %s", err)
 		}
 
@@ -87,17 +86,17 @@ func makeUIVerifier(authen api.Authenticator) uiVerifier {
 // makeUIAssigner constructs uiAssigner using the supplied external
 // authentication interface to generate USIG UIs.
 func makeUIAssigner(authen api.Authenticator) uiAssigner {
-	return func(msg messages.MessageWithUI) {
-		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, msg.Payload())
+	return func(msg messages.CertifiedMessage) {
+		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, msg.CertifiedPayload())
 		if err != nil {
 			panic(err)
 		}
 
-		msg.AttachUI(uiBytes)
+		msg.SetUIBytes(uiBytes)
 	}
 }
 
-func parseMessageUI(msg messages.MessageWithUI) (*usig.UI, error) {
+func parseMessageUI(msg messages.CertifiedMessage) (*usig.UI, error) {
 	ui := new(usig.UI)
 
 	if err := ui.UnmarshalBinary(msg.UIBytes()); err != nil {

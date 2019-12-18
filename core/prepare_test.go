@@ -22,11 +22,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	testifymock "github.com/stretchr/testify/mock"
 
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
-
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 func TestMakePrepareValidator(t *testing.T) {
@@ -38,27 +38,17 @@ func TestMakePrepareValidator(t *testing.T) {
 	primary := primaryID(n, view)
 	backup := randOtherReplicaID(primary, n)
 
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: rand.Uint32(),
-		},
-	}
+	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	ui := &usig.UI{Counter: rand.Uint64()}
-	makePrepareMsg := func(id uint32) *messages.Prepare {
-		return &messages.Prepare{
-			Msg: &messages.Prepare_M{
-				View:      view,
-				ReplicaId: id,
-				Request:   request,
-			},
-		}
+	makePrepareMsg := func(id uint32) messages.Prepare {
+		return messageImpl.NewPrepare(id, view, request)
 	}
 
-	verifyUI := func(msg messages.MessageWithUI) (*usig.UI, error) {
+	verifyUI := func(msg messages.CertifiedMessage) (*usig.UI, error) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Get(0).(*usig.UI), args.Error(1)
 	}
-	validateRequest := func(request *messages.Request) error {
+	validateRequest := func(request messages.Request) error {
 		args := mock.MethodCalled("requestValidator", request)
 		return args.Error(0)
 	}
@@ -93,52 +83,27 @@ func TestMakePrepareApplier(t *testing.T) {
 	view := randView()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
-	prepareRequestSeq := func(request *messages.Request) (new bool) {
+	prepareRequestSeq := func(request messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
 		return args.Bool(0)
 	}
-	collectCommitment := func(id uint32, prepare *messages.Prepare) error {
+	collectCommitment := func(id uint32, prepare messages.Prepare) error {
 		args := mock.MethodCalled("commitmentCollector", id, prepare)
 		return args.Error(0)
 	}
-	handleGeneratedUIMessage := func(msg messages.MessageWithUI) {
+	handleGeneratedUIMessage := func(msg messages.CertifiedMessage) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
-	stopPrepTimer := func(request *messages.Request) {
+	stopPrepTimer := func(request messages.Request) {
 		mock.MethodCalled("prepareTimerStopper", request)
 	}
 	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
 
 	clientID := rand.Uint32()
-	vfp := viewForPrimary(n, id)
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      rand.Uint64(),
-		},
-	}
-	ownPrepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			View:      vfp,
-			ReplicaId: id,
-			Request:   request,
-		},
-	}
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			View:      view,
-			ReplicaId: primary,
-			Request:   request,
-		},
-	}
-	commit := &messages.Commit{
-		Msg: &messages.Commit_M{
-			View:      view,
-			ReplicaId: id,
-			PrimaryId: primary,
-			Request:   request,
-		},
-	}
+	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
+	ownPrepare := messageImpl.NewPrepare(id, viewForPrimary(n, id), request)
+	prepare := messageImpl.NewPrepare(primary, view, request)
+	commit := messageImpl.NewCommit(id, prepare)
 
 	mock.On("requestSeqPreparer", request).Return(false).Once()
 	err := apply(prepare)

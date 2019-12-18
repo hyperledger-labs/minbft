@@ -31,9 +31,8 @@ import (
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
-
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 
 	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 )
@@ -47,38 +46,22 @@ func TestMakeCommitValidator(t *testing.T) {
 	primary := primaryID(n, view)
 	backup := randOtherReplicaID(primary, n)
 
-	verifyUI := func(msg messages.MessageWithUI) (*usig.UI, error) {
+	verifyUI := func(msg messages.CertifiedMessage) (*usig.UI, error) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Get(0).(*usig.UI), args.Error(1)
 	}
-	validatePrepare := func(prepare *messages.Prepare) error {
+	validatePrepare := func(prepare messages.Prepare) error {
 		args := mock.MethodCalled("prepareValidator", prepare)
 		return args.Error(0)
 	}
 	validate := makeCommitValidator(verifyUI, validatePrepare)
 
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: rand.Uint32(),
-		},
-	}
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			View:      view,
-			ReplicaId: primary,
-			Request:   request,
-		},
-	}
+	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
+	prepare := messageImpl.NewPrepare(primary, view, request)
+
 	ui := &usig.UI{Counter: rand.Uint64()}
-	makeCommitMsg := func(id uint32) *messages.Commit {
-		return &messages.Commit{
-			Msg: &messages.Commit_M{
-				View:      view,
-				ReplicaId: id,
-				PrimaryId: primary,
-				Request:   request,
-			},
-		}
+	makeCommitMsg := func(id uint32) messages.Commit {
+		return messageImpl.NewCommit(id, prepare)
 	}
 
 	commit := makeCommitMsg(primary)
@@ -106,7 +89,7 @@ func TestMakeCommitApplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	collectCommitment := func(id uint32, prepare *messages.Prepare) error {
+	collectCommitment := func(id uint32, prepare messages.Prepare) error {
 		args := mock.MethodCalled("commitmentCollector", id, prepare)
 		return args.Error(0)
 	}
@@ -117,19 +100,9 @@ func TestMakeCommitApplier(t *testing.T) {
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
 
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: primary,
-			View:      view,
-		},
-	}
-	commit := &messages.Commit{
-		Msg: &messages.Commit_M{
-			View:      view,
-			ReplicaId: id,
-			PrimaryId: primary,
-		},
-	}
+	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
+	prepare := messageImpl.NewPrepare(primary, view, request)
+	commit := messageImpl.NewCommit(id, prepare)
 
 	mock.On("commitmentCollector", id, prepare).Return(fmt.Errorf("Error")).Once()
 	err := apply(commit)
@@ -147,18 +120,18 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	countCommitment := func(id uint32, prepare *messages.Prepare) (done bool, err error) {
+	countCommitment := func(id uint32, prepare messages.Prepare) (done bool, err error) {
 		args := mock.MethodCalled("commitmentCounter", id, prepare)
 		return args.Bool(0), args.Error(1)
 	}
-	retireSeq := func(request *messages.Request) (new bool) {
+	retireSeq := func(request messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqRetirer", request)
 		return args.Bool(0)
 	}
-	stopReqTimer := func(request *messages.Request) {
+	stopReqTimer := func(request messages.Request) {
 		mock.MethodCalled("requestTimerStopper", request)
 	}
-	executeRequest := func(request *messages.Request) {
+	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
 	pendingReq := mock_requestlist.NewMockList(ctrl)
@@ -169,18 +142,9 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
 	clientID := rand.Uint32()
-	request := &messages.Request{
-		Msg: &messages.Request_M{
-			ClientId: clientID,
-			Seq:      rand.Uint64(),
-		},
-	}
-	prepare := &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: primary,
-			Request:   request,
-		},
-	}
+
+	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
+	prepare := messageImpl.NewPrepare(primary, view, request)
 
 	mock.On("commitmentCounter", id, prepare).Return(false, fmt.Errorf("Error")).Once()
 	err := collect(id, prepare)
@@ -209,7 +173,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	const nrReplicas = 100
 	const nrPrepares = 100
 
-	var executedReqs []*messages.Request
+	var executedReqs []messages.Request
 
 	timeout := func() time.Duration { return time.Duration(0) }
 	clientStates := clientstate.NewProvider(timeout, timeout)
@@ -219,7 +183,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	pendingReqs := requestlist.New()
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	countCommitment := makeCommitmentCounter(nrFaulty)
-	executeRequest := func(req *messages.Request) {
+	executeRequest := func(req messages.Request) {
 		time.Sleep(time.Millisecond)
 		executedReqs = append(executedReqs, req)
 	}
@@ -237,11 +201,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 				cv := uint64(i + 1)
 				seq := cv
 
-				request := &messages.Request{
-					Msg: &messages.Request_M{
-						Seq: seq,
-					},
-				}
+				request := messageImpl.NewRequest(0, seq, nil)
 				if ok, releaseSeq := captureSeq(request); ok {
 					releaseSeq()
 				}
@@ -250,12 +210,9 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 					Counter: cv,
 				}
 				prepareUIBytes, _ := prepareUI.MarshalBinary()
-				prepare := &messages.Prepare{
-					Msg: &messages.Prepare_M{
-						Request: request,
-					},
-					ReplicaUi: prepareUIBytes,
-				}
+
+				prepare := messageImpl.NewPrepare(0, 0, request)
+				prepare.SetUIBytes(prepareUIBytes)
 				_ = prepareSeq(request)
 
 				err := collect(uint32(id), prepare)
@@ -267,7 +224,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	wg.Wait()
 
 	for i, req := range executedReqs {
-		assert.Equal(t, uint64(i+1), req.Msg.Seq)
+		assert.Equal(t, uint64(i+1), req.Sequence())
 	}
 }
 
@@ -422,17 +379,14 @@ func TestMakeCommitmentCounter(t *testing.T) {
 	}
 }
 
-func makePrepare(p, v, cv int) *messages.Prepare {
+func makePrepare(p, v, cv int) messages.Prepare {
 	prepareUI := &usig.UI{
 		Counter: uint64(cv),
 	}
 	prepareUIBytes, _ := prepareUI.MarshalBinary()
+	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
+	prepare := messageImpl.NewPrepare(uint32(p), uint64(v), request)
+	prepare.SetUIBytes(prepareUIBytes)
 
-	return &messages.Prepare{
-		Msg: &messages.Prepare_M{
-			ReplicaId: uint32(p),
-			View:      uint64(v),
-		},
-		ReplicaUi: prepareUIBytes,
-	}
+	return prepare
 }

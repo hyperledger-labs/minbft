@@ -19,7 +19,7 @@ package requestlist
 import (
 	"sync"
 
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // List defines methods to manipulate a set of Request messages. The
@@ -34,12 +34,12 @@ import (
 //
 // All method returns all messages currently in the set.
 type List interface {
-	Add(req *messages.Request)
+	Add(req messages.Request)
 	Remove(clientID uint32)
-	All() []*messages.Request
+	All() []messages.Request
 }
 
-type msgMap map[uint32]*messages.Request
+type msgMap map[uint32]messages.Request
 
 type list struct {
 	sync.RWMutex
@@ -53,7 +53,7 @@ func New() List {
 	}
 }
 
-func (l *list) Add(req *messages.Request) {
+func (l *list) Add(req messages.Request) {
 	l.Lock()
 	defer l.Unlock()
 
@@ -67,11 +67,11 @@ func (l *list) Remove(clientID uint32) {
 	delete(l.messages, clientID)
 }
 
-func (l *list) All() []*messages.Request {
+func (l *list) All() []messages.Request {
 	l.RLock()
 	defer l.RUnlock()
 
-	all := make([]*messages.Request, 0, len(l.messages))
+	all := make([]messages.Request, 0, len(l.messages))
 	for _, m := range l.messages {
 		all = append(all, m)
 	}

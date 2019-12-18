@@ -21,7 +21,7 @@ package messagelog
 import (
 	"sync"
 
-	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 // MessageLog represents the message storage. It allows to
@@ -38,15 +38,15 @@ import (
 // indicates the returned channel should be closed. Nil channel may be
 // passed if there's no need to close the returned channel.
 type MessageLog interface {
-	Append(msg *messages.Message)
-	Stream(done <-chan struct{}) <-chan *messages.Message
+	Append(msg messages.ReplicaMessage)
+	Stream(done <-chan struct{}) <-chan messages.ReplicaMessage
 }
 
 type messageLog struct {
 	lock sync.RWMutex
 
 	// Messages in order added
-	msgs []*messages.Message
+	msgs []messages.ReplicaMessage
 
 	// Buffered channels to notify about new messages
 	newAdded []chan<- struct{}
@@ -57,7 +57,7 @@ func New() MessageLog {
 	return &messageLog{}
 }
 
-func (log *messageLog) Append(msg *messages.Message) {
+func (log *messageLog) Append(msg messages.ReplicaMessage) {
 	log.lock.Lock()
 	defer log.lock.Unlock()
 
@@ -71,14 +71,14 @@ func (log *messageLog) Append(msg *messages.Message) {
 	}
 }
 
-func (log *messageLog) Stream(done <-chan struct{}) <-chan *messages.Message {
-	ch := make(chan *messages.Message)
+func (log *messageLog) Stream(done <-chan struct{}) <-chan messages.ReplicaMessage {
+	ch := make(chan messages.ReplicaMessage)
 	go log.supplyMessages(ch, done)
 
 	return ch
 }
 
-func (log *messageLog) supplyMessages(ch chan<- *messages.Message, done <-chan struct{}) {
+func (log *messageLog) supplyMessages(ch chan<- messages.ReplicaMessage, done <-chan struct{}) {
 	defer close(ch)
 
 	newAdded := make(chan struct{}, 1)

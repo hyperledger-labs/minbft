@@ -22,6 +22,8 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
+
+	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 const (
@@ -29,6 +31,8 @@ const (
 	defaultLogPrefix  = `%{color}[%{module}] %{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset}`
 	logMaxStringWidth = 256
 )
+
+var messageImpl = protobufMessages.NewImpl()
 
 // Stack combines interfaces of external modules
 type Stack interface {
