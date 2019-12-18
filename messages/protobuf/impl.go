@@ -43,6 +43,10 @@ func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
 		prep := newPrepare()
 		prep.set(t.Prepare)
 		return prep, nil
+	case *Message_Commit:
+		comm := newCommit()
+		comm.set(t.Commit)
+		return comm, nil
 	default:
 		return nil, fmt.Errorf("unknown message type")
 	}
@@ -61,7 +65,9 @@ func (*impl) NewPrepare(r uint32, v uint64, req messages.Request) messages.Prepa
 }
 
 func (*impl) NewCommit(r uint32, prep messages.Prepare) messages.Commit {
-	panic("Not implemented")
+	m := newCommit()
+	m.init(r, prep)
+	return m
 }
 
 func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
