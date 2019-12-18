@@ -6,7 +6,7 @@ package mock_requestlist
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	messages "github.com/hyperledger-labs/minbft/messages"
+	protobuf "github.com/hyperledger-labs/minbft/messages/protobuf"
 	reflect "reflect"
 )
 
@@ -34,7 +34,7 @@ func (m *MockList) EXPECT() *MockListMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockList) Add(arg0 *messages.Request) {
+func (m *MockList) Add(arg0 *protobuf.Request) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Add", arg0)
 }
@@ -46,10 +46,10 @@ func (mr *MockListMockRecorder) Add(arg0 interface{}) *gomock.Call {
 }
 
 // All mocks base method
-func (m *MockList) All() []*messages.Request {
+func (m *MockList) All() []*protobuf.Request {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "All")
-	ret0, _ := ret[0].([]*messages.Request)
+	ret0, _ := ret[0].([]*protobuf.Request)
 	return ret0
 }
 

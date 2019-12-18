@@ -23,7 +23,7 @@ package requestbuffer
 import (
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/messages"
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // T implements the storage to keep and coordinate flow and processing

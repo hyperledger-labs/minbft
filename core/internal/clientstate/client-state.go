@@ -24,7 +24,8 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/minbft/core/internal/timer"
-	"github.com/hyperledger-labs/minbft/messages"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // Provider returns an instance of state representation associated

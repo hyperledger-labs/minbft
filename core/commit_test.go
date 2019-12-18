@@ -31,8 +31,9 @@ import (
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 
 	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 )

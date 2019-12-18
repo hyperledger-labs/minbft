@@ -21,9 +21,10 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 func TestList(t *testing.T) {

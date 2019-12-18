@@ -23,7 +23,8 @@ import (
 	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/messages"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // replicaMessageSigner generates and attaches a normal replica

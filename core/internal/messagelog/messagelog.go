@@ -21,7 +21,7 @@ package messagelog
 import (
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/messages"
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // MessageLog represents the message storage. It allows to

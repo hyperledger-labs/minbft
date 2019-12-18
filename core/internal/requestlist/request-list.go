@@ -19,7 +19,7 @@ package requestlist
 import (
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/messages"
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // List defines methods to manipulate a set of Request messages. The

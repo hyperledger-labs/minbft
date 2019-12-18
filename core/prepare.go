@@ -20,7 +20,7 @@ package minbft
 import (
 	"fmt"
 
-	"github.com/hyperledger-labs/minbft/messages"
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // prepareValidator validates a Prepare message.

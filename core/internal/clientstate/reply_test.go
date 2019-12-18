@@ -19,9 +19,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 func TestReply(t *testing.T) {

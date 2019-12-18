@@ -30,7 +30,8 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
-	"github.com/hyperledger-labs/minbft/messages"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // messageStreamHandler fetches serialized messages from in channel,

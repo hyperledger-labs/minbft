@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/messages"
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 type replyState struct {

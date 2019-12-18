@@ -6,7 +6,7 @@ package mock_messagelog
 
 import (
 	gomock "github.com/golang/mock/gomock"
-	messages "github.com/hyperledger-labs/minbft/messages"
+	protobuf "github.com/hyperledger-labs/minbft/messages/protobuf"
 	reflect "reflect"
 )
 
@@ -34,7 +34,7 @@ func (m *MockMessageLog) EXPECT() *MockMessageLogMockRecorder {
 }
 
 // Append mocks base method
-func (m *MockMessageLog) Append(arg0 *messages.Message) {
+func (m *MockMessageLog) Append(arg0 *protobuf.Message) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Append", arg0)
 }
@@ -46,10 +46,10 @@ func (mr *MockMessageLogMockRecorder) Append(arg0 interface{}) *gomock.Call {
 }
 
 // Stream mocks base method
-func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan *messages.Message {
+func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan *protobuf.Message {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stream", arg0)
-	ret0, _ := ret[0].(<-chan *messages.Message)
+	ret0, _ := ret[0].(<-chan *protobuf.Message)
 	return ret0
 }
 

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package messages
+package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"

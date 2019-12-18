@@ -27,7 +27,8 @@ import (
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
-	"github.com/hyperledger-labs/minbft/messages"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // requestReplier provides Reply message given Request message.

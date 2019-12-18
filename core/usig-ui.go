@@ -21,8 +21,9 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // uiCapturer synchronizes beginning of sequential processing of USIG

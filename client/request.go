@@ -24,7 +24,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
-	"github.com/hyperledger-labs/minbft/messages"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 // requestHandler initiates the specified operation to execute on the

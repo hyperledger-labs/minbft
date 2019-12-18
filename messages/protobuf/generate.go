@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/messages MessageWithUI,ReplicaMessage,ViewMessage
+//go:generate protoc messages.proto --go_out=plugins=grpc:.
 
-package mock_messages //nolint
+package protobuf

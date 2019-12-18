@@ -24,8 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	testifymock "github.com/stretchr/testify/mock"
 
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
+
+	messages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
 func TestMakePrepareValidator(t *testing.T) {
