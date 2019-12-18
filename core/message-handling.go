@@ -90,14 +90,14 @@ type replicaMessageProcessor func(msg messages.ReplicaMessage) (new bool, err er
 // safe to invoke concurrently.
 type uiMessageProcessor func(msg messages.MessageWithUI) (new bool, err error)
 
-// viewMessageProcessor processes a valid message for a specific view.
+// viewMessageProcessor processes a valid message in current view.
 //
-// It continues processing of the supplied message, which has to be
-// processed in a specific view. The message is guaranteed to be
-// processed in the required view, or not processed at all. The return
-// value new indicates if the message had any effect. It is safe to
-// invoke concurrently.
-type viewMessageProcessor func(msg messages.ViewMessage) (new bool, err error)
+// It continues processing of the supplied message, according to the
+// current view number. The message is guaranteed to be processed in a
+// corresponding view, or not processed at all. The return value new
+// indicates if the message had any effect. It is safe to invoke
+// concurrently.
+type viewMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
 
 // replicaMessageApplier applies a replica message to current replica
 // state.
@@ -418,30 +418,34 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 		}
 		defer release()
 
-		switch msg := msg.(type) {
-		case messages.ViewMessage:
-			return processViewMessage(msg)
-		default:
-			panic("Unknown message type")
-		}
+		return processViewMessage(msg)
 	}
 }
 
 func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
-	return func(msg messages.ViewMessage) (new bool, err error) {
-		ok, release := waitView(msg.View())
-		if !ok {
-			return false, nil
-		}
-		defer release()
-
+	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		switch msg := msg.(type) {
-		case messages.ReplicaMessage:
-			if err := applyReplicaMessage(msg); err != nil {
-				return false, fmt.Errorf("Failed to apply message: %s", err)
+		case *messages.Prepare, *messages.Commit:
+			var view uint64
+
+			switch msg := msg.(type) {
+			case *messages.Prepare:
+				view = msg.View()
+			case *messages.Commit:
+				view = msg.View()
 			}
+
+			ok, release := waitView(view)
+			if !ok {
+				return false, nil
+			}
+			defer release()
 		default:
 			panic("Unknown message type")
+		}
+
+		if err := applyReplicaMessage(msg); err != nil {
+			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
 		return true, nil
