@@ -16,6 +16,8 @@ package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"
+
+	"github.com/hyperledger-labs/minbft/messages"
 )
 
 func MarshalOrPanic(m proto.Message) []byte {
@@ -24,4 +26,15 @@ func MarshalOrPanic(m proto.Message) []byte {
 		panic(err)
 	}
 	return bytes
+}
+
+func pbRequestFromAPI(req messages.Request) *Request {
+	return &Request{
+		Msg: &Request_M{
+			ClientId: req.ClientID(),
+			Seq:      req.Sequence(),
+			Payload:  req.Operation(),
+		},
+		Signature: req.Signature(),
+	}
 }

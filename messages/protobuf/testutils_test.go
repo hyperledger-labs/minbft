@@ -15,10 +15,12 @@
 package protobuf
 
 import (
+	"fmt"
 	"hash/crc32"
 	"math/rand"
 
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 func randBytes() []byte {
@@ -41,4 +43,16 @@ func remarshalMsg(impl messages.MessageImpl, msg messages.Message) messages.Mess
 		panic(err)
 	}
 	return msg2
+}
+
+func newTestUI(data []byte) []byte {
+	ui := &usig.UI{
+		Counter: rand.Uint64(),
+	}
+	ui.Cert = testSig([]byte(fmt.Sprintf("%d:%x", ui.Counter, data)))
+	uiBytes, err := ui.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+	return uiBytes
 }
