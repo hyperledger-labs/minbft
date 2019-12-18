@@ -36,6 +36,7 @@ func (m *MockTimer) EXPECT() *MockTimerMockRecorder {
 
 // Expired mocks base method
 func (m *MockTimer) Expired() <-chan time.Time {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Expired")
 	ret0, _ := ret[0].(<-chan time.Time)
 	return ret0
@@ -43,21 +44,25 @@ func (m *MockTimer) Expired() <-chan time.Time {
 
 // Expired indicates an expected call of Expired
 func (mr *MockTimerMockRecorder) Expired() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Expired", reflect.TypeOf((*MockTimer)(nil).Expired))
 }
 
 // Reset mocks base method
 func (m *MockTimer) Reset(arg0 time.Duration) {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Reset", arg0)
 }
 
 // Reset indicates an expected call of Reset
 func (mr *MockTimerMockRecorder) Reset(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockTimer)(nil).Reset), arg0)
 }
 
 // Stop mocks base method
 func (m *MockTimer) Stop() bool {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stop")
 	ret0, _ := ret[0].(bool)
 	return ret0
@@ -65,6 +70,7 @@ func (m *MockTimer) Stop() bool {
 
 // Stop indicates an expected call of Stop
 func (mr *MockTimerMockRecorder) Stop() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockTimer)(nil).Stop))
 }
 
@@ -93,6 +99,7 @@ func (m *MockProvider) EXPECT() *MockProviderMockRecorder {
 
 // AfterFunc mocks base method
 func (m *MockProvider) AfterFunc(arg0 time.Duration, arg1 func()) timer.Timer {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AfterFunc", arg0, arg1)
 	ret0, _ := ret[0].(timer.Timer)
 	return ret0
@@ -100,11 +107,13 @@ func (m *MockProvider) AfterFunc(arg0 time.Duration, arg1 func()) timer.Timer {
 
 // AfterFunc indicates an expected call of AfterFunc
 func (mr *MockProviderMockRecorder) AfterFunc(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterFunc", reflect.TypeOf((*MockProvider)(nil).AfterFunc), arg0, arg1)
 }
 
 // NewTimer mocks base method
 func (m *MockProvider) NewTimer(arg0 time.Duration) timer.Timer {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewTimer", arg0)
 	ret0, _ := ret[0].(timer.Timer)
 	return ret0
@@ -112,5 +121,6 @@ func (m *MockProvider) NewTimer(arg0 time.Duration) timer.Timer {
 
 // NewTimer indicates an expected call of NewTimer
 func (mr *MockProviderMockRecorder) NewTimer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewTimer", reflect.TypeOf((*MockProvider)(nil).NewTimer), arg0)
 }

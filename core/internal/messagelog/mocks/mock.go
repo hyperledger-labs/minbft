@@ -35,16 +35,19 @@ func (m *MockMessageLog) EXPECT() *MockMessageLogMockRecorder {
 
 // Append mocks base method
 func (m *MockMessageLog) Append(arg0 *messages.Message) {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Append", arg0)
 }
 
 // Append indicates an expected call of Append
 func (mr *MockMessageLogMockRecorder) Append(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockMessageLog)(nil).Append), arg0)
 }
 
 // Stream mocks base method
 func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan *messages.Message {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stream", arg0)
 	ret0, _ := ret[0].(<-chan *messages.Message)
 	return ret0
@@ -52,5 +55,6 @@ func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan *messages.Message {
 
 // Stream indicates an expected call of Stream
 func (mr *MockMessageLogMockRecorder) Stream(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockMessageLog)(nil).Stream), arg0)
 }

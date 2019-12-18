@@ -35,6 +35,7 @@ func (m *MockUSIG) EXPECT() *MockUSIGMockRecorder {
 
 // CreateUI mocks base method
 func (m *MockUSIG) CreateUI(arg0 []byte) (*usig.UI, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateUI", arg0)
 	ret0, _ := ret[0].(*usig.UI)
 	ret1, _ := ret[1].(error)
@@ -43,11 +44,13 @@ func (m *MockUSIG) CreateUI(arg0 []byte) (*usig.UI, error) {
 
 // CreateUI indicates an expected call of CreateUI
 func (mr *MockUSIGMockRecorder) CreateUI(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUI", reflect.TypeOf((*MockUSIG)(nil).CreateUI), arg0)
 }
 
 // ID mocks base method
 func (m *MockUSIG) ID() []byte {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ID")
 	ret0, _ := ret[0].([]byte)
 	return ret0
@@ -55,11 +58,13 @@ func (m *MockUSIG) ID() []byte {
 
 // ID indicates an expected call of ID
 func (mr *MockUSIGMockRecorder) ID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MockUSIG)(nil).ID))
 }
 
 // VerifyUI mocks base method
 func (m *MockUSIG) VerifyUI(arg0 []byte, arg1 *usig.UI, arg2 []byte) error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "VerifyUI", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
@@ -67,5 +72,6 @@ func (m *MockUSIG) VerifyUI(arg0 []byte, arg1 *usig.UI, arg2 []byte) error {
 
 // VerifyUI indicates an expected call of VerifyUI
 func (mr *MockUSIGMockRecorder) VerifyUI(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyUI", reflect.TypeOf((*MockUSIG)(nil).VerifyUI), arg0, arg1, arg2)
 }
