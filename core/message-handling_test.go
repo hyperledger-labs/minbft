@@ -251,51 +251,107 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	}
 	process := makeReplicaMessageProcessor(id, processMessage, processUIMessage)
 
-	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
-	uiMsg := mock_messages.NewMockMessageWithUI(ctrl)
-
-	embeddedMsgs := []interface{}{
-		&struct{ v int }{0},
-		&struct{ v int }{1},
+	request := &messages.Request{
+		Msg: &messages.Request_M{
+			Seq: rand.Uint64(),
+		},
 	}
-	replicaMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
-	uiMsg.EXPECT().EmbeddedMessages().Return(embeddedMsgs).AnyTimes()
 
-	replicaMsg.EXPECT().ReplicaID().Return(otherID)
-	assert.Panics(t, func() { process(replicaMsg) }, "Unknown message type")
+	t.Run("UnknownMessageType", func(t *testing.T) {
+		replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
+		replicaMsg.EXPECT().EmbeddedMessages().Return(nil).AnyTimes()
+		replicaMsg.EXPECT().ReplicaID().Return(otherID).AnyTimes()
+		assert.Panics(t, func() { process(replicaMsg) }, "Unknown message type")
+	})
+	t.Run("Prepare", func(t *testing.T) {
+		ownPrepare := &messages.Prepare{
+			Msg: &messages.Prepare_M{
+				ReplicaId: id,
+				Request:   request,
+			},
+		}
+		new, err := process(ownPrepare)
+		assert.NoError(t, err)
+		assert.False(t, new, "Own Prepare")
 
-	uiMsg.EXPECT().ReplicaID().Return(id)
-	new, err := process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new, "Own message")
+		primary := randOtherReplicaID(id, n)
+		prepare := &messages.Prepare{
+			Msg: &messages.Prepare_M{
+				ReplicaId: primary,
+				Request:   request,
+			},
+		}
 
-	uiMsg.EXPECT().ReplicaID().Return(otherID).AnyTimes()
+		mock.On("messageProcessor", request).Return(false, fmt.Errorf("Error")).Once()
+		_, err = process(prepare)
+		assert.Error(t, err, "Failed to process embedded Request")
 
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, fmt.Errorf("Error")).Once()
-	_, err = process(uiMsg)
-	assert.Error(t, err, "Failed to process embedded message")
+		mock.On("messageProcessor", request).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
+		_, err = process(prepare)
+		assert.Error(t, err, "Failed to finish processing Prepare")
 
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(true, nil).Once()
-	mock.On("messageProcessor", embeddedMsgs[1]).Return(false, fmt.Errorf("Error")).Once()
-	_, err = process(uiMsg)
-	assert.Error(t, err, "Failed to process embedded message")
+		mock.On("messageProcessor", request).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", prepare).Return(true, nil).Once()
+		new, err = process(prepare)
+		assert.NoError(t, err)
+		assert.True(t, new)
 
-	mock.On("messageProcessor", embeddedMsgs[0]).Return(false, nil)
-	mock.On("messageProcessor", embeddedMsgs[1]).Return(true, nil)
+		mock.On("messageProcessor", request).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", prepare).Return(false, nil).Once()
+		new, err = process(prepare)
+		assert.NoError(t, err)
+		assert.False(t, new)
+	})
+	t.Run("Commit", func(t *testing.T) {
+		primary := randOtherReplicaID(id, n)
+		prepare := &messages.Prepare{
+			Msg: &messages.Prepare_M{
+				ReplicaId: primary,
+				Request:   request,
+			},
+		}
 
-	mock.On("uiMessageProcessor", uiMsg).Return(false, fmt.Errorf("Error")).Once()
-	_, err = process(uiMsg)
-	assert.Error(t, err, "Failed to process message with UI")
+		ownCommit := &messages.Commit{
+			Msg: &messages.Commit_M{
+				ReplicaId: id,
+				PrimaryId: primary,
+				Request:   request,
+			},
+		}
+		new, err := process(ownCommit)
+		assert.NoError(t, err)
+		assert.False(t, new, "Own Commit")
 
-	mock.On("uiMessageProcessor", uiMsg).Return(false, nil).Once()
-	new, err = process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new)
+		commit := &messages.Commit{
+			Msg: &messages.Commit_M{
+				ReplicaId: randOtherReplicaID(id, n),
+				PrimaryId: primary,
+				Request:   request,
+			},
+		}
 
-	mock.On("uiMessageProcessor", uiMsg).Return(true, nil).Once()
-	new, err = process(uiMsg)
-	assert.NoError(t, err)
-	assert.True(t, new)
+		mock.On("messageProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
+		_, err = process(commit)
+		assert.Error(t, err, "Failed to process embedded Prepare")
+
+		mock.On("messageProcessor", prepare).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", commit).Return(false, fmt.Errorf("Error")).Once()
+		_, err = process(commit)
+		assert.Error(t, err, "Failed to finish processing Commit")
+
+		mock.On("messageProcessor", prepare).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", commit).Return(true, nil).Once()
+		new, err = process(commit)
+		assert.NoError(t, err)
+		assert.True(t, new)
+
+		mock.On("messageProcessor", prepare).Return(true, nil).Once()
+		mock.On("uiMessageProcessor", commit).Return(false, nil).Once()
+		new, err = process(commit)
+		assert.NoError(t, err)
+		assert.False(t, new)
+	})
 }
 
 func TestMakeUIMessageProcessor(t *testing.T) {
