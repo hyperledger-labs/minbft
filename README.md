@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/hyperledger-labs/minbft/tree/master.svg?style=svg)](https://circleci.com/gh/hyperledger-labs/minbft/tree/master)
+[![GitHub Actions](https://github.com/hyperledger-labs/minbft/workflows/.github/workflows/continuous-integration.yml/badge.svg)](https://github.com/hyperledger-labs/minbft/actions)
 [![GoDoc](https://godoc.org/github.com/hyperledger-labs/minbft?status.svg)](https://godoc.org/github.com/hyperledger-labs/minbft)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hyperledger-labs/minbft)](https://goreportcard.com/report/github.com/hyperledger-labs/minbft)
 
@@ -116,8 +116,9 @@ sudo apt-get install build-essential pkg-config
 
 ### Golang ###
 
-`go1.11` is used to build this project. For installation instructions
-please visit [this page](https://golang.org/doc/install).
+Go 1.11 or later is required to build this project (tested with Go 1.11
+and 1.13). For installation instructions please visit [this page]
+(https://golang.org/doc/install).
 
 ### Intel® SGX SDK ###
 

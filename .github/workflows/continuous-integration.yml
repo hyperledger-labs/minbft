@@ -8,8 +8,11 @@ env:
 
 jobs:
   build:
-    name: Continuous integration
+    name: Build with Go ${{ matrix.go }}
     runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        go: [1.11, 1.13]
     steps:
       - name: Install Intel SGX SDK
         run: |
@@ -17,6 +20,12 @@ jobs:
           chmod +x sgx_linux_x64_sdk.bin
           echo -e "no\n/opt/intel" | sudo ./sgx_linux_x64_sdk.bin
           rm sgx_linux_x64_sdk.bin
+      - uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Print Go version
+        run: |
+          go version
       - name: Install GolangCI-Lint
         run: |
           curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin $GOLANGCI_LINT_VERSION
