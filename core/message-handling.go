@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
-
 	logging "github.com/op/go-logging"
 
 	"github.com/hyperledger-labs/minbft/api"
@@ -43,7 +41,7 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // If there is any message produced in reply, it will be send to reply
 // channel, otherwise nil channel is returned. The return value new
 // indicates that the message has not been processed before.
-type incomingMessageHandler func(msg interface{}) (reply <-chan interface{}, new bool, err error)
+type incomingMessageHandler func(msg messages.Message) (reply <-chan messages.Message, new bool, err error)
 
 // peerMessageSupplier supplies messages for peer replica.
 //
@@ -62,7 +60,7 @@ type peerConnector func(out <-chan []byte) (in <-chan []byte, err error)
 // It authenticates and checks the supplied message for internal
 // consistency. It does not use replica's current state and has no
 // side-effect. It is safe to invoke concurrently.
-type messageValidator func(msg interface{}) error
+type messageValidator func(msg messages.Message) error
 
 // messageProcessor processes a valid message.
 //
@@ -70,7 +68,7 @@ type messageValidator func(msg interface{}) error
 // current replica's state. The supplied message is assumed to be
 // authentic and internally consistent. The return value new indicates
 // if the message had any effect. It is safe to invoke concurrently.
-type messageProcessor func(msg interface{}) (new bool, err error)
+type messageProcessor func(msg messages.Message) (new bool, err error)
 
 // replicaMessageProcessor processes a valid replica message.
 //
@@ -87,16 +85,16 @@ type replicaMessageProcessor func(msg messages.ReplicaMessage) (new bool, err er
 // once only and in the sequence assigned by the replica USIG. The
 // return value new indicates if the message had any effect. It is
 // safe to invoke concurrently.
-type uiMessageProcessor func(msg messages.MessageWithUI) (new bool, err error)
+type uiMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
 
-// viewMessageProcessor processes a valid message for a specific view.
+// viewMessageProcessor processes a valid message in current view.
 //
-// It continues processing of the supplied message, which has to be
-// processed in a specific view. The message is guaranteed to be
-// processed in the required view, or not processed at all. The return
-// value new indicates if the message had any effect. It is safe to
-// invoke concurrently.
-type viewMessageProcessor func(msg messages.ViewMessage) (new bool, err error)
+// It continues processing of the supplied message, according to the
+// current view number. The message is guaranteed to be processed in a
+// corresponding view, or not processed at all. The return value new
+// indicates if the message had any effect. It is safe to invoke
+// concurrently.
+type viewMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
 
 // replicaMessageApplier applies a replica message to current replica
 // state.
@@ -114,14 +112,14 @@ type replicaMessageApplier func(msg messages.ReplicaMessage) error
 // channel is returned. The supplied message is assumed to be
 // authentic and internally consistent. It is safe to invoke
 // concurrently.
-type messageReplier func(msg interface{}) (reply <-chan interface{}, err error)
+type messageReplier func(msg messages.Message) (reply <-chan messages.Message, err error)
 
 // generatedUIMessageHandler assigns UI and handles generated message.
 //
 // It assigns and attaches a UI to the supplied message, then takes
 // further steps to handle the message. It is safe to invoke
 // concurrently.
-type generatedUIMessageHandler func(msg messages.MessageWithUI)
+type generatedUIMessageHandler func(msg messages.CertifiedMessage)
 
 // generatedMessageHandler handles generated message.
 //
@@ -212,7 +210,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	// invoked only after getting fully constructed. This "thunk"
 	// delays evaluation of processMessage variable, thus
 	// resolving this circular dependency.
-	processMessageThunk := func(msg interface{}) (new bool, err error) {
+	processMessageThunk := func(msg messages.Message) (new bool, err error) {
 		return processMessage(msg)
 	}
 
@@ -233,13 +231,12 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Logger) messageStreamHandler {
 	return func(in <-chan []byte, reply chan<- []byte) {
 		for msgBytes := range in {
-			wrappedMsg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, wrappedMsg); err != nil {
+			msg, err := messageImpl.NewFromBinary(msgBytes)
+			if err != nil {
 				logger.Warningf("Failed to unmarshal message: %s", err)
 				continue
 			}
 
-			msg := messages.UnwrapMessage(wrappedMsg)
 			msgStr := messageString(msg)
 
 			logger.Debugf("Received %s", msgStr)
@@ -251,8 +248,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 				if !more {
 					continue
 				}
-				replyMsg := messages.WrapMessage(m)
-				replyBytes, err := proto.Marshal(replyMsg)
+				replyBytes, err := m.MarshalBinary()
 				if err != nil {
 					panic(err)
 				}
@@ -308,7 +304,7 @@ func startPeerConnection(connect peerConnector, supply peerMessageSupplier) erro
 func makePeerMessageSupplier(log messagelog.MessageLog) peerMessageSupplier {
 	return func(out chan<- []byte) {
 		for msg := range log.Stream(nil) {
-			msgBytes, err := proto.Marshal(msg)
+			msgBytes, err := msg.MarshalBinary()
 			if err != nil {
 				panic(err)
 			}
@@ -333,7 +329,7 @@ func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnec
 // incomingMessageHandler using id as the current replica ID, and the
 // supplied abstractions.
 func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) incomingMessageHandler {
-	return func(msg interface{}) (replyChan <-chan interface{}, new bool, err error) {
+	return func(msg messages.Message) (replyChan <-chan messages.Message, new bool, err error) {
 		err = validate(msg)
 		if err != nil {
 			err = fmt.Errorf("Validation failed: %s", err)
@@ -359,13 +355,13 @@ func makeIncomingMessageHandler(validate messageValidator, process messageProces
 // makeMessageValidator constructs an instance of messageValidator
 // using the supplied abstractions.
 func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator) messageValidator {
-	return func(msg interface{}) error {
+	return func(msg messages.Message) error {
 		switch msg := msg.(type) {
-		case *messages.Request:
+		case messages.Request:
 			return validateRequest(msg)
-		case *messages.Prepare:
+		case messages.Prepare:
 			return validatePrepare(msg)
-		case *messages.Commit:
+		case messages.Commit:
 			return validateCommit(msg)
 		default:
 			panic("Unknown message type")
@@ -376,9 +372,9 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 // makeMessageProcessor constructs an instance of messageProcessor
 // using the supplied abstractions.
 func makeMessageProcessor(processRequest requestProcessor, processReplicaMessage replicaMessageProcessor) messageProcessor {
-	return func(msg interface{}) (new bool, err error) {
+	return func(msg messages.Message) (new bool, err error) {
 		switch msg := msg.(type) {
-		case *messages.Request:
+		case messages.Request:
 			return processRequest(msg)
 		case messages.ReplicaMessage:
 			return processReplicaMessage(msg)
@@ -394,14 +390,14 @@ func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIM
 			return false, nil
 		}
 
-		for _, m := range msg.EmbeddedMessages() {
+		for _, m := range messages.EmbeddedMessages(msg) {
 			if _, err := process(m); err != nil {
 				return false, fmt.Errorf("Failed to process embedded message: %s", err)
 			}
 		}
 
 		switch msg := msg.(type) {
-		case messages.MessageWithUI:
+		case messages.CertifiedMessage:
 			return processUIMessage(msg)
 		default:
 			panic("Unknown message type")
@@ -410,37 +406,41 @@ func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIM
 }
 
 func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) uiMessageProcessor {
-	return func(msg messages.MessageWithUI) (new bool, err error) {
+	return func(msg messages.CertifiedMessage) (new bool, err error) {
 		new, release := captureUI(msg)
 		if !new {
 			return false, nil
 		}
 		defer release()
 
-		switch msg := msg.(type) {
-		case messages.ViewMessage:
-			return processViewMessage(msg)
-		default:
-			panic("Unknown message type")
-		}
+		return processViewMessage(msg)
 	}
 }
 
 func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
-	return func(msg messages.ViewMessage) (new bool, err error) {
-		ok, release := waitView(msg.View())
-		if !ok {
-			return false, nil
-		}
-		defer release()
-
+	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		switch msg := msg.(type) {
-		case messages.ReplicaMessage:
-			if err := applyReplicaMessage(msg); err != nil {
-				return false, fmt.Errorf("Failed to apply message: %s", err)
+		case messages.Prepare, messages.Commit:
+			var view uint64
+
+			switch msg := msg.(type) {
+			case messages.Prepare:
+				view = msg.View()
+			case messages.Commit:
+				view = msg.Prepare().View()
 			}
+
+			ok, release := waitView(view)
+			if !ok {
+				return false, nil
+			}
+			defer release()
 		default:
 			panic("Unknown message type")
+		}
+
+		if err := applyReplicaMessage(msg); err != nil {
+			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
 		return true, nil
@@ -452,11 +452,11 @@ func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMe
 func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
 	return func(msg messages.ReplicaMessage) error {
 		switch msg := msg.(type) {
-		case *messages.Prepare:
+		case messages.Prepare:
 			return applyPrepare(msg)
-		case *messages.Commit:
+		case messages.Commit:
 			return applyCommit(msg)
-		case *messages.Reply:
+		case messages.Reply:
 			return nil
 		default:
 			panic("Unknown message type")
@@ -467,11 +467,11 @@ func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitAp
 // makeMessageReplier constructs an instance of messageReplier using
 // the supplied abstractions.
 func makeMessageReplier(replyRequest requestReplier) messageReplier {
-	return func(msg interface{}) (reply <-chan interface{}, err error) {
-		outChan := make(chan interface{})
+	return func(msg messages.Message) (reply <-chan messages.Message, err error) {
+		outChan := make(chan messages.Message)
 
 		switch msg := msg.(type) {
-		case *messages.Request:
+		case messages.Request:
 			go func() {
 				defer close(outChan)
 				if m, more := <-replyRequest(msg); more {
@@ -479,7 +479,7 @@ func makeMessageReplier(replyRequest requestReplier) messageReplier {
 				}
 			}()
 			return outChan, nil
-		case *messages.Prepare, *messages.Commit:
+		case messages.Prepare, messages.Commit:
 			return nil, nil
 		default:
 			panic("Unknown message type")
@@ -506,7 +506,7 @@ func makeGeneratedMessageHandler(apply replicaMessageApplier, consume generatedM
 func makeGeneratedUIMessageHandler(assignUI uiAssigner, handle generatedMessageHandler) generatedUIMessageHandler {
 	var lock sync.Mutex
 
-	return func(msg messages.MessageWithUI) {
+	return func(msg messages.CertifiedMessage) {
 		lock.Lock()
 		defer lock.Unlock()
 
@@ -518,14 +518,14 @@ func makeGeneratedUIMessageHandler(assignUI uiAssigner, handle generatedMessageH
 func makeGeneratedMessageConsumer(log messagelog.MessageLog, provider clientstate.Provider) generatedMessageConsumer {
 	return func(msg messages.ReplicaMessage) {
 		switch msg := msg.(type) {
-		case *messages.Reply:
-			clientID := msg.Msg.ClientId
+		case messages.Reply:
+			clientID := msg.ClientID()
 			if err := provider(clientID).AddReply(msg); err != nil {
 				// Erroneous Reply must never be supplied
 				panic(fmt.Errorf("Failed to consume generated Reply: %s", err))
 			}
-		case *messages.Prepare, *messages.Commit:
-			log.Append(messages.WrapMessage(msg))
+		case messages.ReplicaMessage:
+			log.Append(msg)
 		default:
 			panic("Unknown message type")
 		}

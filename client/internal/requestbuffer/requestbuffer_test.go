@@ -24,7 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hyperledger-labs/minbft/messages"
+
+	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
+
+var messageImpl = protobufMessages.NewImpl()
 
 func TestAddRequest(t *testing.T) {
 	rb := New()
@@ -172,12 +176,12 @@ func TestConcurrent(t *testing.T) {
 
 		go func(seq uint64) {
 			defer wg.Done()
-			expectedReplies := make(map[uint32]*messages.Reply)
-			receivedReplies := make(map[uint32]*messages.Reply)
+			expectedReplies := make(map[uint32]messages.Reply)
+			receivedReplies := make(map[uint32]messages.Reply)
 			for id := uint32(0); id < nrReplicas; id++ {
 				expectedReplies[id] = makeReply(id, seq)
 				rly := <-ch
-				receivedReplies[rly.Msg.ReplicaId] = rly
+				receivedReplies[rly.ReplicaID()] = rly
 			}
 
 			assert.Equal(t, expectedReplies, receivedReplies)
@@ -206,7 +210,7 @@ func TestWithFaulty(t *testing.T) {
 		}
 		go func(id uint32) {
 			for req := range ch {
-				rly := makeReply(id, req.Msg.Seq)
+				rly := makeReply(id, req.Sequence())
 				_ = rb.AddReply(rly)
 			}
 		}(id)
@@ -233,19 +237,10 @@ func TestWithFaulty(t *testing.T) {
 	close(done)
 }
 
-func makeRequest(seq uint64) *messages.Request {
-	return &messages.Request{
-		Msg: &messages.Request_M{
-			Seq: seq,
-		},
-	}
+func makeRequest(seq uint64) messages.Request {
+	return messageImpl.NewRequest(0, seq, nil)
 }
 
-func makeReply(replicaID uint32, seq uint64) *messages.Reply {
-	return &messages.Reply{
-		Msg: &messages.Reply_M{
-			ReplicaId: replicaID,
-			Seq:       seq,
-		},
-	}
+func makeReply(replicaID uint32, seq uint64) messages.Reply {
+	return messageImpl.NewReply(replicaID, 0, seq, nil)
 }

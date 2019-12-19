@@ -1,6 +1,4 @@
-// Copyright (c) 2018 NEC Laboratories Europe GmbH.
-//
-// Authors: Sergey Fedorov <sergey.fedorov@neclab.eu>
+// Copyright (c) 2019 NEC Laboratories Europe GmbH.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/messages Message,ClientMessage,ReplicaMessage,CertifiedMessage,SignedMessage
+package messages
 
-package mock_messages //nolint
+// EmbeddedMessages returns messages embedded into the specified one.
+func EmbeddedMessages(msg ReplicaMessage) []Message {
+	switch msg := msg.(type) {
+	case Prepare:
+		return []Message{msg.Request()}
+	case Commit:
+		return []Message{msg.Prepare()}
+	case Reply:
+		return nil
+	default:
+		panic("Unknown message type")
+	}
+}

@@ -28,7 +28,7 @@ import (
 // It authenticates and checks the supplied message for internal
 // consistency. It does not use replica's current state and has no
 // side-effect. It is safe to invoke concurrently.
-type prepareValidator func(prepare *messages.Prepare) error
+type prepareValidator func(prepare messages.Prepare) error
 
 // prepareApplier applies Prepare message to current replica state.
 //
@@ -36,21 +36,21 @@ type prepareValidator func(prepare *messages.Prepare) error
 // changing the state accordingly and producing any required messages
 // or side effects. The supplied message is assumed to be authentic
 // and internally consistent. It is safe to invoke concurrently.
-type prepareApplier func(prepare *messages.Prepare) error
+type prepareApplier func(prepare messages.Prepare) error
 
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
 // interfaces.
 func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest requestValidator) prepareValidator {
-	return func(prepare *messages.Prepare) error {
-		replicaID := prepare.Msg.ReplicaId
-		view := prepare.Msg.View
+	return func(prepare messages.Prepare) error {
+		replicaID := prepare.ReplicaID()
+		view := prepare.View()
 
 		if !isPrimary(view, replicaID, n) {
 			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
 		}
 
-		if err := validateRequest(prepare.Msg.Request); err != nil {
+		if err := validateRequest(prepare.Request()); err != nil {
 			return fmt.Errorf("Request invalid: %s", err)
 		}
 
@@ -65,8 +65,9 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 // makePrepareApplier constructs an instance of prepareApplier using
 // id as the current replica ID, and the supplied abstract interfaces.
 func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedUIMessage generatedUIMessageHandler, stopPrepTimer prepareTimerStopper) prepareApplier {
-	return func(prepare *messages.Prepare) error {
-		request := prepare.Msg.Request
+	return func(prepare messages.Prepare) error {
+		request := prepare.Request()
+
 		if new := prepareSeq(request); !new {
 			return fmt.Errorf("Request already prepared")
 		}
@@ -83,16 +84,7 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 
 		stopPrepTimer(request)
 
-		commit := &messages.Commit{
-			Msg: &messages.Commit_M{
-				View:      prepare.Msg.View,
-				ReplicaId: id,
-				PrimaryId: primaryID,
-				Request:   request,
-				PrimaryUi: prepare.UIBytes(),
-			},
-		}
-
+		commit := messageImpl.NewCommit(id, prepare)
 		handleGeneratedUIMessage(commit)
 
 		return nil

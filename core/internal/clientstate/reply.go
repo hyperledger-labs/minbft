@@ -28,7 +28,7 @@ type replyState struct {
 	lastRepliedSeq uint64
 
 	// Last Reply message
-	reply *messages.Reply
+	reply messages.Reply
 
 	// Channels to close when new Reply added
 	replyAdded []chan<- struct{}
@@ -38,8 +38,8 @@ func newReplyState() *replyState {
 	return &replyState{}
 }
 
-func (s *replyState) AddReply(reply *messages.Reply) error {
-	seq := reply.Msg.Seq
+func (s *replyState) AddReply(reply messages.Reply) error {
+	seq := reply.Sequence()
 
 	s.Lock()
 	defer s.Unlock()
@@ -59,8 +59,8 @@ func (s *replyState) AddReply(reply *messages.Reply) error {
 	return nil
 }
 
-func (s *replyState) ReplyChannel(seq uint64) <-chan *messages.Reply {
-	out := make(chan *messages.Reply, 1)
+func (s *replyState) ReplyChannel(seq uint64) <-chan messages.Reply {
+	out := make(chan messages.Reply, 1)
 
 	go func() {
 		defer close(out)
@@ -72,7 +72,7 @@ func (s *replyState) ReplyChannel(seq uint64) <-chan *messages.Reply {
 		reply := s.reply
 		s.Unlock()
 
-		if reply.Msg.Seq == seq {
+		if reply.Sequence() == seq {
 			out <- reply
 		}
 	}()

@@ -111,8 +111,8 @@ type State interface {
 	PrepareRequestSeq(seq uint64) (new bool, err error)
 	RetireRequestSeq(seq uint64) (new bool, err error)
 
-	AddReply(reply *messages.Reply) error
-	ReplyChannel(seq uint64) <-chan *messages.Reply
+	AddReply(reply messages.Reply) error
+	ReplyChannel(seq uint64) <-chan messages.Reply
 
 	StartRequestTimer(seq uint64, handleTimeout func())
 	StopRequestTimer(seq uint64)

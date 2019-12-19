@@ -1,6 +1,4 @@
-// Copyright (c) 2018 NEC Laboratories Europe GmbH.
-//
-// Authors: Sergey Fedorov <sergey.fedorov@neclab.eu>
+// Copyright (c) 2019 NEC Laboratories Europe GmbH.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/messages Message,ClientMessage,ReplicaMessage,CertifiedMessage,SignedMessage
+package protobuf
 
-package mock_messages //nolint
+import (
+	"github.com/golang/protobuf/proto"
+
+	"github.com/hyperledger-labs/minbft/messages"
+)
+
+func MarshalOrPanic(m proto.Message) []byte {
+	bytes, err := proto.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return bytes
+}
+
+func pbRequestFromAPI(req messages.Request) *Request {
+	return &Request{
+		Msg: &Request_M{
+			ClientId: req.ClientID(),
+			Seq:      req.Sequence(),
+			Payload:  req.Operation(),
+		},
+		Signature: req.Signature(),
+	}
+}

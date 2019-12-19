@@ -30,7 +30,7 @@ import (
 // It authenticates and checks the supplied message for internal
 // consistency. It does not use replica's current state and has no
 // side-effect. It is safe to invoke concurrently.
-type commitValidator func(commit *messages.Commit) error
+type commitValidator func(commit messages.Commit) error
 
 // commitApplier applies Commit message to current replica state.
 //
@@ -38,7 +38,7 @@ type commitValidator func(commit *messages.Commit) error
 // changing the state accordingly and producing any required side
 // effects. The supplied message is assumed to be authentic and
 // internally consistent. It is safe to invoke concurrently.
-type commitApplier func(commit *messages.Commit) error
+type commitApplier func(commit messages.Commit) error
 
 // commitmentCollector collects commitment on prepared Request.
 //
@@ -47,7 +47,7 @@ type commitApplier func(commit *messages.Commit) error
 // distinct replicas has been reached, it triggers further required
 // actions to complete the prepared Request. It is safe to invoke
 // concurrently.
-type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
+type commitmentCollector func(replicaID uint32, prepare messages.Prepare) error
 
 // commitmentCounter counts commitments on prepared Request.
 //
@@ -57,17 +57,19 @@ type commitmentCollector func(replicaID uint32, prepare *messages.Prepare) error
 // Prepare, such that the threshold to execute the prepared operation
 // has been reached. An error is returned if any inconsistency is
 // detected.
-type commitmentCounter func(replicaID uint32, prepare *messages.Prepare) (done bool, err error)
+type commitmentCounter func(replicaID uint32, prepare messages.Prepare) (done bool, err error)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
 func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) commitValidator {
-	return func(commit *messages.Commit) error {
-		if commit.Msg.ReplicaId == commit.Msg.PrimaryId {
+	return func(commit messages.Commit) error {
+		prepare := commit.Prepare()
+
+		if commit.ReplicaID() == prepare.ReplicaID() {
 			return fmt.Errorf("Commit from primary")
 		}
 
-		if err := validatePrepare(commit.Prepare()); err != nil {
+		if err := validatePrepare(prepare); err != nil {
 			return fmt.Errorf("Invalid Prepare: %s", err)
 		}
 
@@ -82,7 +84,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 // makeCommitApplier constructs an instance of commitApplier using the
 // supplied abstractions.
 func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
-	return func(commit *messages.Commit) error {
+	return func(commit messages.Commit) error {
 		replicaID := commit.ReplicaID()
 		prepare := commit.Prepare()
 
@@ -99,7 +101,7 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, pendingReq requestlist.List, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
 	var lock sync.Mutex
 
-	return func(replicaID uint32, prepare *messages.Prepare) error {
+	return func(replicaID uint32, prepare messages.Prepare) error {
 		lock.Lock()
 		defer lock.Unlock()
 
@@ -109,13 +111,13 @@ func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq reques
 			return nil
 		}
 
-		request := prepare.Msg.Request
+		request := prepare.Request()
 
 		if new := retireSeq(request); !new {
 			return nil // request already accepted for execution
 		}
 
-		pendingReq.Remove(request.Msg.ClientId)
+		pendingReq.Remove(request.ClientID())
 		stopReqTimer(request)
 		executeRequest(request)
 
@@ -143,7 +145,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 		prepareStates = make(map[uint64]replicasCommittedMap)
 	)
 
-	return func(replicaID uint32, prepare *messages.Prepare) (done bool, err error) {
+	return func(replicaID uint32, prepare messages.Prepare) (done bool, err error) {
 		primaryID := prepare.ReplicaID()
 		prepareView := prepare.View()
 		prepareUI, err := parseMessageUI(prepare)

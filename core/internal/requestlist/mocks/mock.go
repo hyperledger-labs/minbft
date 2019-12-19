@@ -34,7 +34,7 @@ func (m *MockList) EXPECT() *MockListMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockList) Add(arg0 *messages.Request) {
+func (m *MockList) Add(arg0 messages.Request) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Add", arg0)
 }
@@ -46,10 +46,10 @@ func (mr *MockListMockRecorder) Add(arg0 interface{}) *gomock.Call {
 }
 
 // All mocks base method
-func (m *MockList) All() []*messages.Request {
+func (m *MockList) All() []messages.Request {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "All")
-	ret0, _ := ret[0].([]*messages.Request)
+	ret0, _ := ret[0].([]messages.Request)
 	return ret0
 }
 

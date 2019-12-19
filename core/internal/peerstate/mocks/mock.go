@@ -35,6 +35,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 
 // CaptureUI mocks base method
 func (m *MockState) CaptureUI(arg0 *usig.UI) (bool, func()) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CaptureUI", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(func())
@@ -43,5 +44,6 @@ func (m *MockState) CaptureUI(arg0 *usig.UI) (bool, func()) {
 
 // CaptureUI indicates an expected call of CaptureUI
 func (mr *MockStateMockRecorder) CaptureUI(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CaptureUI", reflect.TypeOf((*MockState)(nil).CaptureUI), arg0)
 }

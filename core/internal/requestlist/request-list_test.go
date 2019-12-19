@@ -21,10 +21,13 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
+
+var messageImpl = protobufMessages.NewImpl()
 
 func TestList(t *testing.T) {
 	var cases []struct {
@@ -54,12 +57,7 @@ func TestList(t *testing.T) {
 		assertMsg := fmt.Sprintf("case=%d cid=%d seq=%d add=%t rm=%t",
 			i, c.cid, c.seq, c.add, c.rm)
 		if c.add {
-			l.Add(&messages.Request{
-				Msg: &messages.Request_M{
-					ClientId: uint32(c.cid),
-					Seq:      uint64(c.seq),
-				},
-			})
+			l.Add(messageImpl.NewRequest(uint32(c.cid), uint64(c.seq), nil))
 		}
 		if c.rm {
 			l.Remove(uint32(c.cid))
@@ -67,8 +65,8 @@ func TestList(t *testing.T) {
 		msgs := l.All()
 		require.Len(t, msgs, len(c.list), assertMsg)
 		for _, m := range msgs {
-			cid := int(m.Msg.ClientId)
-			seq := m.Msg.Seq
+			cid := int(m.ClientID())
+			seq := m.Sequence
 			require.EqualValues(t, c.list[cid], seq)
 		}
 	}
@@ -89,12 +87,7 @@ func TestListConcurrent(t *testing.T) {
 			defer wg.Done()
 
 			for seq := 1; seq <= nrRequests; seq++ {
-				m := &messages.Request{
-					Msg: &messages.Request_M{
-						ClientId: uint32(cid),
-						Seq:      uint64(seq),
-					},
-				}
+				m := messageImpl.NewRequest(uint32(cid), uint64(seq), nil)
 				l.Add(m)
 
 				list := l.All()

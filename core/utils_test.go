@@ -25,8 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/messages"
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
+	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
 func TestMakeReplicaMessageSigner(t *testing.T) {
@@ -40,15 +42,16 @@ func TestMakeReplicaMessageSigner(t *testing.T) {
 	signature := make([]byte, 1)
 	rand.Read(payload)
 	rand.Read(signature)
-	msg := &fakeMsgWithSignature{payload: payload}
+	msg := mock_messages.NewMockSignedMessage(ctrl)
+	msg.EXPECT().SignedPayload().Return(payload).AnyTimes()
 
 	err := fmt.Errorf("cannot sign")
 	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, payload).Return(nil, err)
 	assert.Panics(t, func() { signer(msg) })
 
 	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, payload).Return(signature, nil)
-	assert.NotPanics(t, func() { signer(msg) })
-	assert.Equal(t, signature, msg.signature)
+	msg.EXPECT().SetSignature(signature)
+	signer(msg)
 }
 
 func TestMakeMessageSignatureVerifier(t *testing.T) {
@@ -63,53 +66,26 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 	signature := make([]byte, 1)
 	rand.Read(payload)
 	rand.Read(signature)
-	msgWithSig := &fakeMsgWithSignature{
-		payload:   payload,
-		signature: signature,
-	}
-	clientMsg := &fakeClientMsg{
-		id:                   clientID,
-		fakeMsgWithSignature: msgWithSig,
-	}
 
-	assert.Panics(t, func() {
-		verifier(msgWithSig)
-	}, "Message with no signer ID")
+	signedMsg := mock_messages.NewMockSignedMessage(ctrl)
+	signedMsg.EXPECT().SignedPayload().Return(payload).AnyTimes()
+	signedMsg.EXPECT().Signature().Return(signature).AnyTimes()
+	clientMsg := mock_messages.NewMockClientMessage(ctrl)
+	clientMsg.EXPECT().ClientID().Return(clientID).AnyTimes()
+	msg := struct {
+		messages.ClientMessage
+		messages.SignedMessage
+	}{clientMsg, signedMsg}
 
-	err := fmt.Errorf("invalid signature")
+	assert.Panics(t, func() { verifier(signedMsg) }, "Message with no signer ID")
+
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
-		payload, signature).Return(err)
-	err = verifier(clientMsg)
+		payload, signature).Return(fmt.Errorf(""))
+	err := verifier(msg)
 	assert.Error(t, err)
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
 		payload, signature).Return(nil)
-	err = verifier(clientMsg)
+	err = verifier(msg)
 	assert.NoError(t, err)
-}
-
-type fakeMsgWithSignature struct {
-	payload   []byte
-	signature []byte
-}
-
-func (m *fakeMsgWithSignature) Payload() []byte {
-	return m.payload
-}
-
-func (m *fakeMsgWithSignature) SignatureBytes() []byte {
-	return m.signature
-}
-
-func (m *fakeMsgWithSignature) AttachSignature(signature []byte) {
-	m.signature = signature
-}
-
-type fakeClientMsg struct {
-	*fakeMsgWithSignature
-	id uint32
-}
-
-func (m *fakeClientMsg) ClientID() uint32 {
-	return m.id
 }

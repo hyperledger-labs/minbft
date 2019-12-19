@@ -16,4 +16,4 @@
 
 //go:generate protoc messages.proto --go_out=plugins=grpc:.
 
-package messages
+package protobuf

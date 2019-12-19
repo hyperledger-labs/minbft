@@ -20,7 +20,6 @@ package client
 import (
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -79,8 +78,7 @@ func startReplicaConnection(outHandler outgoingMessageHandler, inHandler incomin
 func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
 	return func(out chan<- []byte) {
 		for req := range buf.RequestStream(nil) {
-			msg := messages.WrapMessage(req)
-			mBytes, err := proto.Marshal(msg)
+			mBytes, err := req.MarshalBinary()
 			if err != nil {
 				panic(err)
 			}
@@ -95,15 +93,15 @@ func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
 func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler) incomingMessageHandler {
 	return func(in <-chan []byte) {
 		for msgBytes := range in {
-			msg := &messages.Message{}
-			if err := proto.Unmarshal(msgBytes, msg); err != nil {
+			msg, err := messageImpl.NewFromBinary(msgBytes)
+			if err != nil {
 				logger.Warningf("Error unmarshaling message from replica %d: %v", replicaID, err)
 				continue
 			}
 
-			switch t := msg.Type.(type) {
-			case *messages.Message_Reply:
-				handleReply(t.Reply)
+			switch msg := msg.(type) {
+			case messages.Reply:
+				handleReply(msg)
 			default:
 				logger.Warningf("Received unknown message from replica %d", replicaID)
 			}
@@ -126,34 +124,34 @@ func makeReplicaConnector(replicaID uint32, connector api.ReplicaConnector) repl
 
 // replyMessageHandler performs processing of the Reply message
 // received from a replica
-type replyMessageHandler func(reply *messages.Reply)
+type replyMessageHandler func(reply messages.Reply)
 
 // replyAuthenticator verifies a Reply message for integrity and
 // authenticity
-type replyAuthenticator func(reply *messages.Reply) error
+type replyAuthenticator func(reply messages.Reply) error
 
 // replyConsumer performs further processing of a valid Reply
 // messages, verified for integrity and authenticity. The returned
 // value indicates if the message was accepted.
-type replyConsumer func(reply *messages.Reply) bool
+type replyConsumer func(reply messages.Reply) bool
 
 // makeReplyMessageHandler construct a replyMessageHandler using the
 // supplied abstractions.
 func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenticator) replyMessageHandler {
-	return func(reply *messages.Reply) {
-		replyMsg := reply.Msg
+	return func(reply messages.Reply) {
+		replicaID := reply.ReplicaID()
 
 		err := authenticator(reply)
 		if err != nil {
 			logger.Warningf("Failed to authenticate Reply message from replica %d: %v",
-				replyMsg.ReplicaId, err)
+				replicaID, err)
 			return
 		}
 
-		logger.Debugf("Received Reply message from replica %d", replyMsg.ReplicaId)
+		logger.Debugf("Received Reply message from replica %d", replicaID)
 
 		if ok := consumer(reply); !ok {
-			logger.Infof("Dropped Reply message from replica %d", replyMsg.ReplicaId)
+			logger.Infof("Dropped Reply message from replica %d", replicaID)
 		}
 	}
 }
@@ -161,27 +159,20 @@ func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenti
 // makeReplyAuthenticator constructs a replyAuthenticator using the
 // supplied authenticator to perform replica signature verification.
 func makeReplyAuthenticator(clientID uint32, authenticator api.Authenticator) replyAuthenticator {
-	return func(reply *messages.Reply) error {
-		replyMsg := reply.Msg
-
-		msgBytes, err := proto.Marshal(replyMsg)
-		if err != nil {
-			panic(err)
-		}
-
-		if replyMsg.ClientId != clientID {
+	return func(reply messages.Reply) error {
+		if reply.ClientID() != clientID {
 			return fmt.Errorf("Client ID mismatch")
 		}
 
-		return authenticator.VerifyMessageAuthenTag(api.ReplicaAuthen, replyMsg.ReplicaId,
-			msgBytes, reply.Signature)
+		return authenticator.VerifyMessageAuthenTag(api.ReplicaAuthen, reply.ReplicaID(),
+			reply.SignedPayload(), reply.Signature())
 	}
 }
 
 // makeReplyConsumer constructs a replyConsumer using the supplied
 // request buffer to add the message to
 func makeReplyConsumer(buf *requestbuffer.T) replyConsumer {
-	return func(reply *messages.Reply) bool {
+	return func(reply messages.Reply) bool {
 		return buf.AddReply(reply)
 	}
 }
