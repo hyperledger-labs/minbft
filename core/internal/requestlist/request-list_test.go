@@ -31,11 +31,11 @@ var messageImpl = protobufMessages.NewImpl()
 
 func TestList(t *testing.T) {
 	var cases []struct {
-		cid  int // clientID
-		seq  int
-		add  bool
-		rm   bool
-		list map[int]int // clientID -> seq
+		Cid  int // clientID
+		Seq  int
+		Add  bool
+		Rm   bool
+		List map[int]int // clientID -> seq
 	}
 	casesYAML := []byte(`
 - {                           list: {          }}
@@ -47,7 +47,7 @@ func TestList(t *testing.T) {
 - {cid: 0,         rm:  true, list: {      1: 3}}
 - {cid: 1,         rm:  true, list: {          }}
 `)
-	if err := yaml.Unmarshal(casesYAML, &cases); err != nil {
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,19 +55,19 @@ func TestList(t *testing.T) {
 
 	for i, c := range cases {
 		assertMsg := fmt.Sprintf("case=%d cid=%d seq=%d add=%t rm=%t",
-			i, c.cid, c.seq, c.add, c.rm)
-		if c.add {
-			l.Add(messageImpl.NewRequest(uint32(c.cid), uint64(c.seq), nil))
+			i, c.Cid, c.Seq, c.Add, c.Rm)
+		if c.Add {
+			l.Add(messageImpl.NewRequest(uint32(c.Cid), uint64(c.Seq), nil))
 		}
-		if c.rm {
-			l.Remove(uint32(c.cid))
+		if c.Rm {
+			l.Remove(uint32(c.Cid))
 		}
 		msgs := l.All()
-		require.Len(t, msgs, len(c.list), assertMsg)
+		require.Len(t, msgs, len(c.List), assertMsg)
 		for _, m := range msgs {
 			cid := int(m.ClientID())
-			seq := m.Sequence
-			require.EqualValues(t, c.list[cid], seq)
+			seq := m.Sequence()
+			require.EqualValues(t, c.List[cid], seq)
 		}
 	}
 }
