@@ -188,10 +188,10 @@ func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedU
 		startReqTimer(request, view)
 
 		if isPrimary(view, id, n) {
-			startPrepTimer(request, view)
-
 			prepare := messageImpl.NewPrepare(id, view, request)
 			handleGeneratedUIMessage(prepare)
+		} else {
+			startPrepTimer(request, view)
 		}
 
 		return nil
