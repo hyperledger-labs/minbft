@@ -1,4 +1,4 @@
-[![GitHub Actions](https://github.com/hyperledger-labs/minbft/workflows/.github/workflows/continuous-integration.yml/badge.svg)](https://github.com/hyperledger-labs/minbft/actions)
+[![GitHub Actions](https://github.com/hyperledger-labs/minbft/workflows/Continuous%20integration/badge.svg)](https://github.com/hyperledger-labs/minbft/actions)
 [![GoDoc](https://godoc.org/github.com/hyperledger-labs/minbft?status.svg)](https://godoc.org/github.com/hyperledger-labs/minbft)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hyperledger-labs/minbft)](https://goreportcard.com/report/github.com/hyperledger-labs/minbft)
 
