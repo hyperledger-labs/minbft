@@ -200,7 +200,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
 	applyReplicaMessage = makeReplicaMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
+	applyRequest := makeRequestApplier(id, n, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
 
 	var processMessage messageProcessor
 
@@ -214,7 +214,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 		return processMessage(msg)
 	}
 
-	processRequest := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
+	processRequest := makeRequestProcessor(captureSeq, pendingReq, provideView, applyRequest)
 	processViewMessage := makeViewMessageProcessor(waitView, applyReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)

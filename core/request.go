@@ -57,8 +57,9 @@ type requestProcessor func(request messages.Request) (new bool, err error)
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required messages
 // or side effects. The supplied message is assumed to be authentic
-// and internally consistent. It is safe to invoke concurrently.
-type requestApplier func(request messages.Request) error
+// and internally consistent. The supplied view number should denote
+// the current active view. It is safe to invoke concurrently.
+type requestApplier func(request messages.Request, view uint64) error
 
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
@@ -156,7 +157,7 @@ func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
 // makeRequestProcessor constructs an instance of requestProcessor
 // using id as the current replica ID, n as the total number of nodes,
 // and the supplied abstractions.
-func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.List, applyRequest requestApplier) requestProcessor {
+func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.List, provideView viewProvider, applyRequest requestApplier) requestProcessor {
 	return func(request messages.Request) (new bool, err error) {
 		new, releaseSeq := captureSeq(request)
 		if !new {
@@ -166,7 +167,10 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 
 		pendingReq.Add(request)
 
-		if err := applyRequest(request); err != nil {
+		view, releaseView := provideView()
+		defer releaseView()
+
+		if err := applyRequest(request, view); err != nil {
 			return false, fmt.Errorf("Failed to apply Request: %s", err)
 		}
 
@@ -174,11 +178,8 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 	}
 }
 
-func makeRequestApplier(id, n uint32, provideView viewProvider, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter, startPrepTimer prepareTimerStarter) requestApplier {
-	return func(request messages.Request) error {
-		view, releaseView := provideView()
-		defer releaseView()
-
+func makeRequestApplier(id, n uint32, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter, startPrepTimer prepareTimerStarter) requestApplier {
+	return func(request messages.Request, view uint64) error {
 		// The primary has to start request timer, as well.
 		// Suppose, the primary is correct, but its messages
 		// are delayed, and other replicas switch to a new
