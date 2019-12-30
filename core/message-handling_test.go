@@ -406,31 +406,25 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 		msg := mock_messages.NewMockReplicaMessage(ctrl)
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
-	t.Run("Prepare", func(t *testing.T) {
+
+	testReplicaMessage := func(t *testing.T, msg messages.ReplicaMessage) {
 		mock.On("viewWaiter", view).Return(false).Once()
-		new, err := process(prepare)
+		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.False(t, new, "Message for former view")
 
 		mock.On("viewWaiter", view).Return(true).Once()
-		mock.On("replicaMessageApplier", prepare).Return(nil).Once()
+		mock.On("replicaMessageApplier", msg).Return(nil).Once()
 		mock.On("viewReleaser", view).Once()
-		new, err = process(prepare)
+		new, err = process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)
+	}
+	t.Run("Prepare", func(t *testing.T) {
+		testReplicaMessage(t, prepare)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("viewWaiter", view).Return(false).Once()
-		new, err := process(commit)
-		assert.NoError(t, err)
-		assert.False(t, new, "Message for former view")
-
-		mock.On("viewWaiter", view).Return(true).Once()
-		mock.On("replicaMessageApplier", commit).Return(nil).Once()
-		mock.On("viewReleaser", view).Once()
-		new, err = process(commit)
-		assert.NoError(t, err)
-		assert.True(t, new)
+		testReplicaMessage(t, commit)
 	})
 }
 
