@@ -17,42 +17,22 @@
 // well as to coordinate the process of changing its value according
 // to the view-change mechanism.
 //
-// There are two distinct modes of operation for a replica: 'normal'
-// mode and 'view-change' mode.
-//
-// In the normal mode, a replica operates in a stable configuration,
-// called view, represented by the active view number. Initially, a
-// replica operates in the normal mode with an active view number
-// equal to zero. The active view can only be changed to a higher view
-// number via a transition through the view-change mode.
-//
-// A replica can request to change the view at any time. Requesting a
-// view change does not change the mode of operation between normal
-// and view-change, but helps peer replicas to coordinate the
-// beginning of a view-change operation.
-//
-// A replica begins a transition to a new view by first switching to
-// the view-change mode. Since there is no active view in this mode, a
-// replica waits for a new view to become the active one. It will then
-// shift to the normal mode as soon as there is a new established
-// active view. The new view number can be increased multiple times
-// before the view change is complete.
-//
-// Finally, as stated above, a replica transitions to the new view by
-// switching back to the normal mode when the view-change operation is
-// complete.
+// There are three main values that represent the state of the view:
+// 'current', 'expected', and 'requested' view numbers. The values
+// initially equal to zero and can only monotonically increase. The
+// current view is active if current and expected view numbers match.
 package viewstate
 
 import "sync"
 
-// State defines operations on the state of the view-change mechanism
-// maintained by each replica. All methods are safe to invoke
-// concurrently.
+// State defines operations on view state. All methods are safe to
+// invoke concurrently.
 //
 // WaitAndHoldActiveView waits for active view and defers view change.
-// If already in the view-change mode, it blocks and waits for the
-// normal mode. The returned view number is guaranteed to denote the
-// current active view until the returned release function is invoked.
+// It waits until current and expected view numbers become equal, then
+// returns the current active view number. The returned view number is
+// guaranteed to denote the current active view until the returned
+// release function is invoked.
 //
 // WaitAndHoldView waits for specific active view and defers view
 // change. This method resembles WaitAndHoldActiveView, but only waits
@@ -64,35 +44,26 @@ import "sync"
 // is invoked.
 //
 // RequestViewChange handles synchronization of view change requests.
-// If the supplied view number is greater than the last requested and
-// the active view number then it returns true and records the view
-// number as last requested; otherwise, false is returned.
+// If the supplied value is greater than both the requested and
+// current view numbers then the requested view number is increased to
+// match the supplied value. It returns true if the requested view
+// number was updated.
 //
-// StartViewChange synchronizes beginning of view change. If in the
-// normal mode and the supplied value is higher than the active view
-// number then it switches to the view-change mode with the expected
-// new view number equal to the supplied value. If already in the
-// view-change mode and the supplied value is higher than the expected
-// new view number then the expected new view number is updated.
-// Before switching to the view-change mode, this method blocks any
-// new invocation of WaitAndHoldActiveView or WaitAndHoldView and
-// waits for all release functions returned from WaitAndHoldActiveView
-// or WaitAndHoldView to be invoked. It returns true if the replica
-// switched to the view-change mode or the expected new view number
-// was increased; otherwise false. If true is returned, any new
-// invocation of StartViewChange or FinishViewChange is blocked until
-// the returned release function is invoked.
+// StartViewChange synchronizes beginning of view change. If the
+// supplied view number is greater than the expected view number then
+// the latter is increased to match the supplied one. It returns true
+// if the expected view number was updated. In that case, the current
+// and expected view numbers will remain the same until the returned
+// release function is invoked.
 //
-// FinishViewChange synchronizes completion of view change. If the
-// replica is in the normal mode then it first begins a view change,
-// same as StartViewChange. If the supplied value equals to the
-// expected new view number, it returns true together with a release
-// function; otherwise false. If true is returned, any new invocation
-// of StartViewChange or FinishViewChange is blocked until the
-// returned release function is invoked. Invocation of the release
-// function switches the replica back to the normal mode with the
-// active view number equal to the supplied value, and unblocks any
-// waiting WaitAndHoldActiveView or WaitAndHoldView invocation.
+// FinishViewChange synchronizes completion of view change. First, it
+// attempts to increase the expected view number to match the supplied
+// view number, same as StartViewChange. After that, if the supplied
+// value is greater than the current view number then the latter is
+// increased to match the supplied one. It returns true if the current
+// view number was updated and matches the expected view number. In
+// that case, the current and expected view numbers will remain the
+// same until the returned release function is invoked.
 type State interface {
 	WaitAndHoldActiveView() (view uint64, release func())
 	WaitAndHoldView(view uint64) (ok bool, release func())
@@ -101,21 +72,14 @@ type State interface {
 	FinishViewChange(newView uint64) (ok bool, release func())
 }
 
-// In the normal mode, if lastNewView == lastActiveView. Otherwise, in
-// the view-change mode, and lastNewView > lastActiveView.
 type viewState struct {
 	sync.Mutex
 
-	// Last active view number
-	lastActiveView uint64
+	currentView   uint64
+	expectedView  uint64
+	requestedView uint64
 
-	// Last requested view change
-	lastRequestedView uint64
-
-	// Last started view change
-	lastNewView uint64
-
-	// Cond to signal on view change beginning/completion
+	// Cond to signal on updating current/expected view
 	viewChangeStartedFinished *sync.Cond
 
 	// Number of active view holders
@@ -124,14 +88,14 @@ type viewState struct {
 	// Cond to signal on active view release
 	activeViewReleased *sync.Cond
 
-	// Flag to indicate view change is blocked
+	// Flag to block updating current/expected view
 	viewChangeBlocked bool
 
-	// Cond to signal when view change is unblocked
+	// Cond to signal unblocking current/expected view
 	viewChangeUnblocked *sync.Cond
 }
 
-// New creates a new instance of the view-change mechanism state.
+// New creates a new instance of the view state.
 func New() State {
 	s := new(viewState)
 	s.viewChangeStartedFinished = sync.NewCond(s)
@@ -145,21 +109,21 @@ func (s *viewState) WaitAndHoldActiveView() (view uint64, release func()) {
 	s.Lock()
 	defer s.Unlock()
 
-	for !s.inNormalMode() {
+	for s.currentView != s.expectedView {
 		s.viewChangeStartedFinished.Wait()
 	}
 
 	s.nrActiveViewHolders++
 
-	return s.lastActiveView, s.releaseActiveView
+	return s.currentView, s.releaseActiveView
 }
 
 func (s *viewState) WaitAndHoldView(view uint64) (ok bool, release func()) {
 	s.Lock()
 	defer s.Unlock()
 
-	for !s.inView(view) {
-		if !s.isPossibleNewView(view) {
+	for view != s.currentView || s.currentView != s.expectedView {
+		if view < s.currentView || view < s.expectedView {
 			return false, nil
 		}
 
@@ -187,12 +151,12 @@ func (s *viewState) RequestViewChange(newView uint64) bool {
 	s.Lock()
 	defer s.Unlock()
 
-	if newView <= s.lastRequestedView {
+	if newView <= s.requestedView {
 		return false
 	}
-	s.lastRequestedView = newView
+	s.requestedView = newView
 
-	return s.isNewView(newView)
+	return newView > s.currentView
 }
 
 func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
@@ -200,7 +164,7 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 	defer s.Unlock()
 
 	for {
-		if !s.isNewViewCandidate(newView) {
+		if newView <= s.expectedView {
 			return false, nil
 		}
 
@@ -210,7 +174,7 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 		}
 		s.viewChangeBlocked = true
 
-		s.lastNewView = newView
+		s.expectedView = newView
 		s.viewChangeStartedFinished.Broadcast()
 
 		for s.nrActiveViewHolders > 0 {
@@ -226,7 +190,7 @@ func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
 	defer s.Unlock()
 
 	for {
-		if !s.isPossibleNewView(newView) {
+		if newView <= s.currentView || newView < s.expectedView {
 			return false, nil
 		}
 
@@ -236,9 +200,9 @@ func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
 		}
 		s.viewChangeBlocked = true
 
-		// Check if the view change needs to be started
-		if s.isNewViewCandidate(newView) {
-			s.lastNewView = newView
+		// Check if the expected view needs to be updated
+		if s.expectedView < newView {
+			s.expectedView = newView
 			s.viewChangeStartedFinished.Broadcast()
 		}
 
@@ -254,7 +218,7 @@ func (s *viewState) finishAndUnblockViewChange() {
 	s.Lock()
 	defer s.Unlock()
 
-	s.lastActiveView = s.lastNewView
+	s.currentView = s.expectedView
 	s.viewChangeStartedFinished.Broadcast()
 	s.unblockViewChangeLocked()
 }
@@ -269,24 +233,4 @@ func (s *viewState) unblockViewChange() {
 func (s *viewState) unblockViewChangeLocked() {
 	s.viewChangeBlocked = false
 	s.viewChangeUnblocked.Broadcast()
-}
-
-func (s *viewState) inNormalMode() bool {
-	return s.lastActiveView == s.lastNewView
-}
-
-func (s *viewState) inView(view uint64) bool {
-	return s.inNormalMode() && view == s.lastActiveView
-}
-
-func (s *viewState) isNewView(view uint64) bool {
-	return view > s.lastActiveView
-}
-
-func (s *viewState) isNewViewCandidate(view uint64) bool {
-	return view > s.lastNewView
-}
-
-func (s *viewState) isPossibleNewView(view uint64) bool {
-	return s.isNewView(view) && view >= s.lastNewView
 }
