@@ -34,6 +34,7 @@ import (
 
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 	mock_messagelog "github.com/hyperledger-labs/minbft/core/internal/messagelog/mocks"
+	mock_viewstate "github.com/hyperledger-labs/minbft/core/internal/viewstate/mocks"
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
@@ -382,17 +383,12 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	waitView := func(view uint64) (ok bool, release func()) {
-		args := mock.MethodCalled("viewWaiter", view)
-		return args.Bool(0), func() {
-			mock.MethodCalled("viewReleaser", view)
-		}
-	}
+	viewState := mock_viewstate.NewMockState(ctrl)
 	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
 		args := mock.MethodCalled("replicaMessageApplier", msg)
 		return args.Error(0)
 	}
-	process := makeViewMessageProcessor(waitView, applyReplicaMessage)
+	process := makeViewMessageProcessor(viewState, applyReplicaMessage)
 
 	n := randN()
 	primary := randReplicaID(n)
@@ -408,12 +404,14 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	})
 
 	testReplicaMessage := func(t *testing.T, msg messages.ReplicaMessage) {
-		mock.On("viewWaiter", view).Return(false).Once()
+		viewState.EXPECT().WaitAndHoldView(view).Return(false, nil)
 		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.False(t, new, "Message for former view")
 
-		mock.On("viewWaiter", view).Return(true).Once()
+		viewState.EXPECT().WaitAndHoldView(view).Return(true, func() {
+			mock.MethodCalled("viewReleaser", view)
+		})
 		mock.On("replicaMessageApplier", msg).Return(nil).Once()
 		mock.On("viewReleaser", view).Once()
 		new, err = process(msg)

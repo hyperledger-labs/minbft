@@ -27,6 +27,7 @@ import (
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
+	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -157,7 +158,7 @@ func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
 // makeRequestProcessor constructs an instance of requestProcessor
 // using id as the current replica ID, n as the total number of nodes,
 // and the supplied abstractions.
-func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.List, provideView viewProvider, applyRequest requestApplier) requestProcessor {
+func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.List, viewState viewstate.State, applyRequest requestApplier) requestProcessor {
 	return func(request messages.Request) (new bool, err error) {
 		new, releaseSeq := captureSeq(request)
 		if !new {
@@ -167,7 +168,7 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 
 		pendingReq.Add(request)
 
-		view, releaseView := provideView()
+		view, releaseView := viewState.WaitAndHoldActiveView()
 		defer releaseView()
 
 		if err := applyRequest(request, view); err != nil {

@@ -165,8 +165,6 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	captureUI := makeUICapturer(peerStates)
-	provideView := viewState.WaitAndHoldActiveView
-	waitView := viewState.WaitAndHoldView
 
 	var applyReplicaMessage replicaMessageApplier
 
@@ -214,8 +212,8 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 		return processMessage(msg)
 	}
 
-	processRequest := makeRequestProcessor(captureSeq, pendingReq, provideView, applyRequest)
-	processViewMessage := makeViewMessageProcessor(waitView, applyReplicaMessage)
+	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
+	processViewMessage := makeViewMessageProcessor(viewState, applyReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
@@ -417,7 +415,7 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 	}
 }
 
-func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
+func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		switch msg := msg.(type) {
 		case messages.Prepare, messages.Commit:
@@ -430,7 +428,7 @@ func makeViewMessageProcessor(waitView viewWaiter, applyReplicaMessage replicaMe
 				view = msg.Prepare().View()
 			}
 
-			ok, release := waitView(view)
+			ok, release := viewState.WaitAndHoldView(view)
 			if !ok {
 				return false, nil
 			}
