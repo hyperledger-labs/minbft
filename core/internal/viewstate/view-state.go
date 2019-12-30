@@ -73,7 +73,8 @@ type State interface {
 }
 
 type viewState struct {
-	sync.Mutex
+	currentExpectedViewLock sync.RWMutex
+	requestedViewLock       sync.Mutex
 
 	currentView   uint64
 	expectedView  uint64
@@ -81,156 +82,89 @@ type viewState struct {
 
 	// Cond to signal on updating current/expected view
 	viewChangeStartedFinished *sync.Cond
-
-	// Number of active view holders
-	nrActiveViewHolders int
-
-	// Cond to signal on active view release
-	activeViewReleased *sync.Cond
-
-	// Flag to block updating current/expected view
-	viewChangeBlocked bool
-
-	// Cond to signal unblocking current/expected view
-	viewChangeUnblocked *sync.Cond
 }
 
 // New creates a new instance of the view state.
 func New() State {
 	s := new(viewState)
-	s.viewChangeStartedFinished = sync.NewCond(s)
-	s.activeViewReleased = sync.NewCond(s)
-	s.viewChangeUnblocked = sync.NewCond(s)
+	s.viewChangeStartedFinished = sync.NewCond(s.currentExpectedViewLock.RLocker())
 
 	return s
 }
 
 func (s *viewState) WaitAndHoldActiveView() (view uint64, release func()) {
-	s.Lock()
-	defer s.Unlock()
+	s.currentExpectedViewLock.RLock()
+	release = s.currentExpectedViewLock.RUnlock
 
 	for s.currentView != s.expectedView {
 		s.viewChangeStartedFinished.Wait()
 	}
 
-	s.nrActiveViewHolders++
-
-	return s.currentView, s.releaseActiveView
+	return s.currentView, release
 }
 
 func (s *viewState) WaitAndHoldView(view uint64) (ok bool, release func()) {
-	s.Lock()
-	defer s.Unlock()
+	s.currentExpectedViewLock.RLock()
+	release = s.currentExpectedViewLock.RUnlock
 
 	for view != s.currentView || s.currentView != s.expectedView {
 		if view < s.currentView || view < s.expectedView {
+			release()
 			return false, nil
 		}
 
 		s.viewChangeStartedFinished.Wait()
 	}
 
-	s.nrActiveViewHolders++
-
-	return true, s.releaseActiveView
-}
-
-func (s *viewState) releaseActiveView() {
-	s.Lock()
-	defer s.Unlock()
-
-	s.nrActiveViewHolders--
-	if s.nrActiveViewHolders == 0 {
-		s.activeViewReleased.Broadcast()
-	} else if s.nrActiveViewHolders < 0 {
-		panic("Duplicate active view release")
-	}
+	return true, release
 }
 
 func (s *viewState) RequestViewChange(newView uint64) bool {
-	s.Lock()
-	defer s.Unlock()
+	s.requestedViewLock.Lock()
+	defer s.requestedViewLock.Unlock()
 
 	if newView <= s.requestedView {
 		return false
 	}
 	s.requestedView = newView
 
+	s.currentExpectedViewLock.RLock()
+	defer s.currentExpectedViewLock.RUnlock()
+
 	return newView > s.currentView
 }
 
 func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
-	s.Lock()
-	defer s.Unlock()
+	s.currentExpectedViewLock.Lock()
+	release = s.currentExpectedViewLock.Unlock
 
-	for {
-		if newView <= s.expectedView {
-			return false, nil
-		}
-
-		if s.viewChangeBlocked {
-			s.viewChangeUnblocked.Wait()
-			continue // recheck
-		}
-		s.viewChangeBlocked = true
-
+	if s.expectedView < newView {
 		s.expectedView = newView
 		s.viewChangeStartedFinished.Broadcast()
 
-		for s.nrActiveViewHolders > 0 {
-			s.activeViewReleased.Wait()
-		}
-
-		return true, s.unblockViewChange
+		return true, release
 	}
+
+	release()
+	return false, nil
 }
 
 func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
-	s.Lock()
-	defer s.Unlock()
+	s.currentExpectedViewLock.Lock()
+	release = s.currentExpectedViewLock.Unlock
 
-	for {
-		if newView <= s.currentView || newView < s.expectedView {
-			return false, nil
-		}
-
-		if s.viewChangeBlocked {
-			s.viewChangeUnblocked.Wait()
-			continue // recheck
-		}
-		s.viewChangeBlocked = true
-
+	if s.currentView < newView && s.expectedView <= newView {
 		// Check if the expected view needs to be updated
 		if s.expectedView < newView {
 			s.expectedView = newView
-			s.viewChangeStartedFinished.Broadcast()
 		}
 
-		for s.nrActiveViewHolders > 0 {
-			s.activeViewReleased.Wait()
-		}
+		s.currentView = s.expectedView
+		s.viewChangeStartedFinished.Broadcast()
 
-		return true, s.finishAndUnblockViewChange
+		return true, release
 	}
-}
 
-func (s *viewState) finishAndUnblockViewChange() {
-	s.Lock()
-	defer s.Unlock()
-
-	s.currentView = s.expectedView
-	s.viewChangeStartedFinished.Broadcast()
-	s.unblockViewChangeLocked()
-}
-
-func (s *viewState) unblockViewChange() {
-	s.Lock()
-	defer s.Unlock()
-
-	s.unblockViewChangeLocked()
-}
-
-func (s *viewState) unblockViewChangeLocked() {
-	s.viewChangeBlocked = false
-	s.viewChangeUnblocked.Broadcast()
+	release()
+	return false, nil
 }
