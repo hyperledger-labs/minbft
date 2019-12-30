@@ -15,152 +15,84 @@
 package viewstate
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestViewState(t *testing.T) {
 	s := New()
 
-	cases := []struct {
-		desc string
+	var cases []struct {
+		View int
 
-		view int
+		Request bool
+		Start   bool
+		Finish  bool
 
-		request bool
-		start   bool
-		finish  bool
+		Wait   bool
+		Active bool
 
-		wait   bool
-		active bool
+		Ok bool
+	}
+	casesYAML := []byte(`
+- {view: 0, request: n, start: n, finish: n, wait: y, active: y, ok: y}
+- {view: 0, request: y, start: y, finish: y, wait: n, active: n, ok: n}
+- {view: 1, request: y, start: n, finish: n, wait: n, active: n, ok: y}
+- {view: 1, request: y, start: n, finish: n, wait: n, active: n, ok: n}
+- {view: 1, request: n, start: y, finish: y, wait: y, active: y, ok: y}
+- {view: 1, request: n, start: y, finish: y, wait: n, active: n, ok: n}
+- {view: 2, request: y, start: y, finish: n, wait: n, active: n, ok: y}
+- {view: 1, request: n, start: n, finish: n, wait: y, active: n, ok: n}
+- {view: 3, request: y, start: y, finish: n, wait: n, active: n, ok: y}
+- {view: 2, request: n, start: n, finish: y, wait: n, active: n, ok: n}
+- {view: 2, request: n, start: n, finish: n, wait: y, active: n, ok: n}
+- {view: 3, request: y, start: y, finish: n, wait: n, active: n, ok: n}
+- {view: 3, request: n, start: n, finish: y, wait: y, active: y, ok: y}
+- {view: 4, request: n, start: n, finish: y, wait: y, active: y, ok: y}
+- {view: 4, request: y, start: y, finish: n, wait: n, active: n, ok: n}
+`)
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
+		t.Fatal(err)
+	}
 
-		ok bool
-	}{{
-		desc:   "Wait for view #0",
-		view:   0,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:    "Request, begin and complete change to view #0",
-		view:    0,
-		request: true,
-		start:   true,
-		finish:  true,
-		ok:      false,
-	}, {
-		desc:    "Request change to view #1",
-		view:    1,
-		request: true,
-		ok:      true,
-	}, {
-		desc:    "Request change to view #1 again",
-		view:    1,
-		request: true,
-		ok:      false,
-	}, {
-		desc:   "Begin and complete change to view #1",
-		view:   1,
-		start:  true,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:   "Begin and complete change to view #1 again",
-		view:   1,
-		start:  true,
-		finish: true,
-		ok:     false,
-	}, {
-		desc:    "Request and begin change to view #2",
-		view:    2,
-		request: true,
-		start:   true,
-		ok:      true,
-	}, {
-		desc: "Wait for view #1",
-		view: 1,
-		wait: true,
-		ok:   false,
-	}, {
-		desc:    "Request and begin change to view #3",
-		view:    3,
-		request: true,
-		start:   true,
-		ok:      true,
-	}, {
-		desc:   "Complete change to view #2",
-		view:   2,
-		finish: true,
-		ok:     false,
-	}, {
-		desc: "Wait for view #2",
-		view: 2,
-		wait: true,
-		ok:   false,
-	}, {
-		desc:    "Request and begin change to view #3 again",
-		view:    3,
-		request: true,
-		start:   true,
-		ok:      false,
-	}, {
-		desc:   "Complete change to view #3",
-		view:   3,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:   "Complete change to view #4",
-		view:   4,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:    "Request and begin change to view #4",
-		view:    4,
-		request: true,
-		start:   true,
-		ok:      false,
-	}}
-
-	for _, c := range cases {
-		view := uint64(c.view)
-		if c.request {
+	for i, c := range cases {
+		assertMsg := fmt.Sprintf("Case #%d", i)
+		view := uint64(c.View)
+		if c.Request {
 			ok := s.RequestViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
+			require.Equal(t, c.Ok, ok, assertMsg)
 		}
-		if c.start {
+		if c.Start {
 			ok, release := s.StartViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
+			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				release()
 			}
 		}
-		if c.finish {
+		if c.Finish {
 			ok, release := s.FinishViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
+			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				release()
 			}
 		}
-		if c.wait {
+		if c.Wait {
 			ok, release := s.WaitAndHoldView(view)
-			require.Equal(t, c.ok, ok, c.desc)
+			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				release()
 			}
 		}
-		if c.active {
+		if c.Active {
 			activeView, release := s.WaitAndHoldActiveView()
-			require.Equal(t, view, activeView, c.desc)
+			require.Equal(t, view, activeView, assertMsg)
 			release()
 		}
 	}
