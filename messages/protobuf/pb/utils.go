@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package pb
 
 import (
 	"github.com/golang/protobuf/proto"
@@ -28,7 +28,7 @@ func MarshalOrPanic(m proto.Message) []byte {
 	return bytes
 }
 
-func pbRequestFromAPI(req messages.Request) *Request {
+func RequestFromAPI(req messages.Request) *Request {
 	return &Request{
 		Msg: &Request_M{
 			ClientId: req.ClientID(),

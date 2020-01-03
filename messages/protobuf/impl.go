@@ -20,6 +20,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type impl struct{}
@@ -29,25 +30,25 @@ func NewImpl() messages.MessageImpl {
 }
 
 func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
-	msg := &Message{}
+	msg := &pb.Message{}
 	if err := proto.Unmarshal(data, msg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal message wrapper: %s", err)
 	}
 
 	switch t := msg.Type.(type) {
-	case *Message_Request:
+	case *pb.Message_Request:
 		req := newRequest()
 		req.set(t.Request)
 		return req, nil
-	case *Message_Prepare:
+	case *pb.Message_Prepare:
 		prep := newPrepare()
 		prep.set(t.Prepare)
 		return prep, nil
-	case *Message_Commit:
+	case *pb.Message_Commit:
 		comm := newCommit()
 		comm.set(t.Commit)
 		return comm, nil
-	case *Message_Reply:
+	case *pb.Message_Reply:
 		reply := newReply()
 		reply.set(t.Reply)
 		return reply, nil

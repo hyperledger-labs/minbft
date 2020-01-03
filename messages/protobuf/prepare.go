@@ -18,10 +18,11 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type prepare struct {
-	Prepare
+	pb.Prepare
 }
 
 func newPrepare() *prepare {
@@ -29,19 +30,19 @@ func newPrepare() *prepare {
 }
 
 func (m *prepare) init(r uint32, v uint64, req messages.Request) {
-	m.Prepare = Prepare{Msg: &Prepare_M{
+	m.Prepare = pb.Prepare{Msg: &pb.Prepare_M{
 		ReplicaId: r,
 		View:      v,
-		Request:   pbRequestFromAPI(req),
+		Request:   pb.RequestFromAPI(req),
 	}}
 }
 
-func (m *prepare) set(pbMsg *Prepare) {
+func (m *prepare) set(pbMsg *pb.Prepare) {
 	m.Prepare = *pbMsg
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Prepare{Prepare: &m.Prepare}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Prepare{Prepare: &m.Prepare}})
 }
 
 func (m *prepare) ReplicaID() uint32 {
@@ -59,7 +60,7 @@ func (m *prepare) Request() messages.Request {
 }
 
 func (m *prepare) CertifiedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.MarshalOrPanic(m.Msg)
 }
 
 func (m *prepare) UIBytes() []byte {

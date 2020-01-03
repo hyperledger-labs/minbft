@@ -17,7 +17,7 @@
 
 syntax = "proto3";
 
-package protobuf;
+package pb;
 
 message Message{
     oneof type {

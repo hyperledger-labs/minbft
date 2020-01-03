@@ -16,10 +16,12 @@ package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"
+
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type request struct {
-	Request
+	pb.Request
 }
 
 func newRequest() *request {
@@ -27,19 +29,19 @@ func newRequest() *request {
 }
 
 func (m *request) init(cl uint32, seq uint64, op []byte) {
-	m.Request = Request{Msg: &Request_M{
+	m.Request = pb.Request{Msg: &pb.Request_M{
 		ClientId: cl,
 		Seq:      seq,
 		Payload:  op,
 	}}
 }
 
-func (m *request) set(pbMsg *Request) {
+func (m *request) set(pbMsg *pb.Request) {
 	m.Request = *pbMsg
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Request{Request: &m.Request}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Request{Request: &m.Request}})
 }
 
 func (m *request) ClientID() uint32 {
@@ -55,7 +57,7 @@ func (m *request) Operation() []byte {
 }
 
 func (m *request) SignedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.MarshalOrPanic(m.Msg)
 }
 
 func (m *request) Signature() []byte {

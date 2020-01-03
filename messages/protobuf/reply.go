@@ -16,10 +16,12 @@ package protobuf
 
 import (
 	"github.com/golang/protobuf/proto"
+
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type reply struct {
-	Reply
+	pb.Reply
 }
 
 func newReply() *reply {
@@ -27,7 +29,7 @@ func newReply() *reply {
 }
 
 func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
-	m.Reply = Reply{Msg: &Reply_M{
+	m.Reply = pb.Reply{Msg: &pb.Reply_M{
 		ReplicaId: r,
 		ClientId:  cl,
 		Seq:       seq,
@@ -35,12 +37,12 @@ func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
 	}}
 }
 
-func (m *reply) set(pbMsg *Reply) {
+func (m *reply) set(pbMsg *pb.Reply) {
 	m.Reply = *pbMsg
 }
 
 func (m *reply) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Reply{Reply: &m.Reply}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Reply{Reply: &m.Reply}})
 }
 
 func (m *reply) ReplicaID() uint32 {
@@ -60,7 +62,7 @@ func (m *reply) Result() []byte {
 }
 
 func (m *reply) SignedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.MarshalOrPanic(m.Msg)
 }
 
 func (m *reply) Signature() []byte {
