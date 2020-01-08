@@ -41,14 +41,16 @@ import "sync"
 //
 // FinishViewChange synchronizes completion of view change. If the
 // supplied value is greater than the current view number then the
-// latter is increased to match the supplied one. It returns true if
-// the current view number was updated and matches the expected view
-// number. In that case, the current and expected view numbers will
-// remain the same until the returned release function is invoked.
+// latter is increased to match the supplied one. The return value
+// "ok" indicates if the current view number was updated. In that
+// case, the current and expected view numbers will remain the same
+// until the returned release function is invoked. The return value
+// "active" indicates if the current and expected view numbers match,
+// i.e. the current view has become active.
 type State interface {
 	HoldView() (current, expected uint64, release func())
 	StartViewChange(newView uint64) (ok bool, release func())
-	FinishViewChange(newView uint64) (ok bool, release func())
+	FinishViewChange(newView uint64) (ok, active bool, release func())
 }
 
 type viewState struct {
@@ -84,7 +86,7 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 	return false, nil
 }
 
-func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
+func (s *viewState) FinishViewChange(newView uint64) (ok, active bool, release func()) {
 	s.Lock()
 	release = s.Unlock
 
@@ -92,10 +94,12 @@ func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
 		s.currentView = newView
 
 		if s.currentView == s.expectedView {
-			return true, release
+			active = true
 		}
+
+		return true, active, release
 	}
 
 	release()
-	return false, nil
+	return false, false, nil
 }

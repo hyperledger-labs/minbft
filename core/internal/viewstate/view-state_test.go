@@ -45,7 +45,7 @@ func TestViewState(t *testing.T) {
 - {view: 1, start: y, finish: y, current: 1, expected: 1, ok: n}
 - {view: 2, start: y, finish: n, current: 1, expected: 2, ok: y}
 - {view: 3, start: y, finish: n, current: 1, expected: 3, ok: y}
-- {view: 2, start: n, finish: y, current: 2, expected: 3, ok: n}
+- {view: 2, start: n, finish: y, current: 2, expected: 3, ok: y}
 - {view: 3, start: y, finish: n, current: 2, expected: 3, ok: n}
 - {view: 3, start: n, finish: y, current: 3, expected: 3, ok: y}
 - {view: 4, start: y, finish: y, current: 4, expected: 4, ok: y}
@@ -65,9 +65,14 @@ func TestViewState(t *testing.T) {
 			}
 		}
 		if c.Finish {
-			ok, release := s.FinishViewChange(view)
+			ok, active, release := s.FinishViewChange(view)
 			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
+				if c.Current == c.Expected {
+					require.True(t, active)
+				} else {
+					require.False(t, active)
+				}
 				release()
 			}
 		}
@@ -130,15 +135,18 @@ func TestConcurrent(t *testing.T) {
 	}
 
 	finishViewChange := func(view uint64) {
-		ok, release := s.FinishViewChange(view)
+		ok, active, release := s.FinishViewChange(view)
 		if !ok {
 			return
 		}
 		assert.True(t, finished < view,
 			"Finished view change number cannot decrease")
 		finished = view
-		assert.True(t, started <= view,
-			"Finished view change number cannot be lower than last started")
+		if active {
+			assert.True(t, started == view)
+		} else {
+			assert.True(t, started > view)
+		}
 		go release()
 	}
 

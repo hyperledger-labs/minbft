@@ -33,12 +33,13 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // FinishViewChange mocks base method
-func (m *MockState) FinishViewChange(arg0 uint64) (bool, func()) {
+func (m *MockState) FinishViewChange(arg0 uint64) (bool, bool, func()) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FinishViewChange", arg0)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(func())
-	return ret0, ret1
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(func())
+	return ret0, ret1, ret2
 }
 
 // FinishViewChange indicates an expected call of FinishViewChange
