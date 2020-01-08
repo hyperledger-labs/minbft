@@ -17,10 +17,10 @@
 // well as to coordinate the process of changing its value according
 // to the view-change mechanism.
 //
-// There are three main values that represent the state of the view:
-// 'current', 'expected', and 'requested' view numbers. The values
-// initially equal to zero and can only monotonically increase. The
-// current view is active if current and expected view numbers match.
+// There are two main values that represent the state of the view:
+// 'current' and 'expected' view numbers. The values initially equal
+// to zero and can only monotonically increase. The current view is
+// active if current and expected view numbers match.
 package viewstate
 
 import "sync"
@@ -31,12 +31,6 @@ import "sync"
 // HoldView method returns current and expected view numbers and
 // defers view change. The returned values will denote the actual view
 // state until the returned release function is invoked.
-//
-// RequestViewChange handles synchronization of view change requests.
-// If the supplied value is greater than both the requested and
-// current view numbers then the requested view number is increased to
-// match the supplied value. It returns true if the requested view
-// number was updated.
 //
 // StartViewChange synchronizes beginning of view change. If the
 // supplied view number is greater than the expected view number then
@@ -55,18 +49,15 @@ import "sync"
 // same until the returned release function is invoked.
 type State interface {
 	HoldView() (current, expected uint64, release func())
-	RequestViewChange(newView uint64) bool
 	StartViewChange(newView uint64) (ok bool, release func())
 	FinishViewChange(newView uint64) (ok bool, release func())
 }
 
 type viewState struct {
-	currentExpectedViewLock sync.RWMutex
-	requestedViewLock       sync.Mutex
+	sync.RWMutex
 
-	currentView   uint64
-	expectedView  uint64
-	requestedView uint64
+	currentView  uint64
+	expectedView uint64
 }
 
 // New creates a new instance of the view state.
@@ -75,30 +66,15 @@ func New() State {
 }
 
 func (s *viewState) HoldView() (current, expected uint64, release func()) {
-	s.currentExpectedViewLock.RLock()
-	release = s.currentExpectedViewLock.RUnlock
+	s.RLock()
+	release = s.RUnlock
 
 	return s.currentView, s.expectedView, release
 }
 
-func (s *viewState) RequestViewChange(newView uint64) bool {
-	s.requestedViewLock.Lock()
-	defer s.requestedViewLock.Unlock()
-
-	if newView <= s.requestedView {
-		return false
-	}
-	s.requestedView = newView
-
-	s.currentExpectedViewLock.RLock()
-	defer s.currentExpectedViewLock.RUnlock()
-
-	return newView > s.currentView
-}
-
 func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
-	s.currentExpectedViewLock.Lock()
-	release = s.currentExpectedViewLock.Unlock
+	s.Lock()
+	release = s.Unlock
 
 	if s.expectedView < newView {
 		s.expectedView = newView
@@ -111,8 +87,8 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 }
 
 func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
-	s.currentExpectedViewLock.Lock()
-	release = s.currentExpectedViewLock.Unlock
+	s.Lock()
+	release = s.Unlock
 
 	if s.currentView < newView && s.expectedView <= newView {
 		// Check if the expected view needs to be updated

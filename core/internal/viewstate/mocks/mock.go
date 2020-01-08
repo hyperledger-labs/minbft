@@ -63,20 +63,6 @@ func (mr *MockStateMockRecorder) HoldView() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HoldView", reflect.TypeOf((*MockState)(nil).HoldView))
 }
 
-// RequestViewChange mocks base method
-func (m *MockState) RequestViewChange(arg0 uint64) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RequestViewChange", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// RequestViewChange indicates an expected call of RequestViewChange
-func (mr *MockStateMockRecorder) RequestViewChange(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestViewChange", reflect.TypeOf((*MockState)(nil).RequestViewChange), arg0)
-}
-
 // StartViewChange mocks base method
 func (m *MockState) StartViewChange(arg0 uint64) (bool, func()) {
 	m.ctrl.T.Helper()

@@ -17,7 +17,6 @@ package viewstate
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,9 +31,8 @@ func TestViewState(t *testing.T) {
 	var cases []struct {
 		View int
 
-		Request bool
-		Start   bool
-		Finish  bool
+		Start  bool
+		Finish bool
 
 		Current  int
 		Expected int
@@ -42,18 +40,16 @@ func TestViewState(t *testing.T) {
 		Ok bool
 	}
 	casesYAML := []byte(`
-- {view: 0, request: y, start: y, finish: y, current: 0, expected: 0, ok: n}
-- {view: 1, request: y, start: n, finish: n, current: 0, expected: 0, ok: y}
-- {view: 1, request: y, start: n, finish: n, current: 0, expected: 0, ok: n}
-- {view: 1, request: n, start: y, finish: y, current: 1, expected: 1, ok: y}
-- {view: 1, request: n, start: y, finish: y, current: 1, expected: 1, ok: n}
-- {view: 2, request: y, start: y, finish: n, current: 1, expected: 2, ok: y}
-- {view: 3, request: y, start: y, finish: n, current: 1, expected: 3, ok: y}
-- {view: 2, request: n, start: n, finish: y, current: 1, expected: 3, ok: n}
-- {view: 3, request: y, start: y, finish: n, current: 1, expected: 3, ok: n}
-- {view: 3, request: n, start: n, finish: y, current: 3, expected: 3, ok: y}
-- {view: 4, request: n, start: n, finish: y, current: 4, expected: 4, ok: y}
-- {view: 4, request: y, start: y, finish: n, current: 4, expected: 4, ok: n}
+- {view: 0, start: y, finish: y, current: 0, expected: 0, ok: n}
+- {view: 1, start: y, finish: y, current: 1, expected: 1, ok: y}
+- {view: 1, start: y, finish: y, current: 1, expected: 1, ok: n}
+- {view: 2, start: y, finish: n, current: 1, expected: 2, ok: y}
+- {view: 3, start: y, finish: n, current: 1, expected: 3, ok: y}
+- {view: 2, start: n, finish: y, current: 1, expected: 3, ok: n}
+- {view: 3, start: y, finish: n, current: 1, expected: 3, ok: n}
+- {view: 3, start: n, finish: y, current: 3, expected: 3, ok: y}
+- {view: 4, start: n, finish: y, current: 4, expected: 4, ok: y}
+- {view: 4, start: y, finish: n, current: 4, expected: 4, ok: n}
 `)
 	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
 		t.Fatal(err)
@@ -62,10 +58,6 @@ func TestViewState(t *testing.T) {
 	for i, c := range cases {
 		assertMsg := fmt.Sprintf("Case #%d", i)
 		view := uint64(c.View)
-		if c.Request {
-			ok := s.RequestViewChange(view)
-			require.Equal(t, c.Ok, ok, assertMsg)
-		}
 		if c.Start {
 			ok, release := s.StartViewChange(view)
 			require.Equal(t, c.Ok, ok, assertMsg)
@@ -103,9 +95,8 @@ func TestConcurrent(t *testing.T) {
 	}
 
 	var (
-		requested uint64
-		started   uint64
-		finished  uint64
+		started  uint64
+		finished uint64
 	)
 
 	s := New()
@@ -124,21 +115,6 @@ func TestConcurrent(t *testing.T) {
 				break
 			}
 		}
-	}
-
-	requestViewChange := func(view uint64) {
-		lastRequested := atomic.LoadUint64(&requested)
-		lastFinished := atomic.LoadUint64(&finished)
-
-		if !s.RequestViewChange(view) {
-			return
-		}
-		atomic.CompareAndSwapUint64(&requested, lastRequested, view)
-		assert.True(t, lastRequested < view,
-			"Requested view change number cannot decrease")
-		assert.True(t, lastFinished < view,
-			"Requested view change number must be higher than last finished")
-
 	}
 
 	startViewChange := func(view uint64) {
@@ -161,7 +137,7 @@ func TestConcurrent(t *testing.T) {
 		}
 		assert.True(t, finished < view,
 			"Finished view change number cannot decrease")
-		atomic.StoreUint64(&finished, view)
+		finished = view
 		assert.True(t, started <= view,
 			"Finished view change number cannot be lower than last started")
 		go release()
@@ -171,7 +147,6 @@ func TestConcurrent(t *testing.T) {
 		for view := uint64(0); view <= nrViewChanges; view++ {
 			view := view
 			runConcurrently(func() { holdView(view) })
-			runConcurrently(func() { requestViewChange(view) })
 			runConcurrently(func() { startViewChange(view) })
 			runConcurrently(func() { finishViewChange(view) })
 		}
