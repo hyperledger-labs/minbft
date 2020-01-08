@@ -392,7 +392,9 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 
 	n := randN()
 	primary := randReplicaID(n)
-	view := viewForPrimary(n, primary)
+	view := viewForPrimary(n, primary) + uint64(n)
+	oldView := view - uint64(1+rand.Intn(int(n-1)))
+	newView := view + uint64(1+rand.Intn(int(n-1)))
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
@@ -404,16 +406,34 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	})
 
 	testReplicaMessage := func(t *testing.T, msg messages.ReplicaMessage) {
-		viewState.EXPECT().WaitAndHoldView(view).Return(false, nil)
+		viewState.EXPECT().HoldView().Return(view, newView, func() {
+			mock.MethodCalled("viewReleaser")
+		})
+		mock.On("viewReleaser").Once()
 		new, err := process(msg)
+		assert.NoError(t, err)
+		assert.False(t, new, "View change in progress")
+
+		viewState.EXPECT().HoldView().Return(newView, newView, func() {
+			mock.MethodCalled("viewReleaser")
+		})
+		mock.On("viewReleaser").Once()
+		new, err = process(msg)
 		assert.NoError(t, err)
 		assert.False(t, new, "Message for former view")
 
-		viewState.EXPECT().WaitAndHoldView(view).Return(true, func() {
-			mock.MethodCalled("viewReleaser", view)
+		viewState.EXPECT().HoldView().Return(oldView, oldView, func() {
+			mock.MethodCalled("viewReleaser")
+		})
+		mock.On("viewReleaser").Once()
+		_, err = process(msg)
+		assert.Error(t, err, "Message for unexpected view")
+
+		viewState.EXPECT().HoldView().Return(view, view, func() {
+			mock.MethodCalled("viewReleaser")
 		})
 		mock.On("replicaMessageApplier", msg).Return(nil).Once()
-		mock.On("viewReleaser", view).Once()
+		mock.On("viewReleaser").Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)

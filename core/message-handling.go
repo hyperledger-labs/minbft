@@ -419,20 +419,31 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		switch msg := msg.(type) {
 		case messages.Prepare, messages.Commit:
-			var view uint64
+			var messageView uint64
 
 			switch msg := msg.(type) {
 			case messages.Prepare:
-				view = msg.View()
+				messageView = msg.View()
 			case messages.Commit:
-				view = msg.Prepare().View()
+				messageView = msg.Prepare().View()
 			}
 
-			ok, release := viewState.WaitAndHoldView(view)
-			if !ok {
+			currentView, expectedView, release := viewState.HoldView()
+			defer release()
+
+			if currentView != expectedView {
 				return false, nil
 			}
-			defer release()
+
+			if messageView < currentView {
+				return false, nil
+			} else if messageView > currentView {
+				// A correct peer replica would ensure
+				// that this replica would transition
+				// into the new view before processing
+				// the message.
+				return false, fmt.Errorf("Message refers to unexpected view")
+			}
 		default:
 			panic("Unknown message type")
 		}

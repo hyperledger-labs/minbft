@@ -59,7 +59,9 @@ func TestMakeRequestProcessor(t *testing.T) {
 	viewState := mock_viewstate.NewMockState(ctrl)
 	process := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 
+	n := randN()
 	view := randView()
+	newView := view + uint64(1+rand.Intn(int(n-1)))
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
 	mock.On("requestSeqCapturer", request).Return(false).Once()
@@ -69,22 +71,32 @@ func TestMakeRequestProcessor(t *testing.T) {
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	pendingReq.EXPECT().Add(request)
-	viewState.EXPECT().WaitAndHoldActiveView().Return(view, func() {
-		mock.MethodCalled("viewReleaser", view)
+	viewState.EXPECT().HoldView().Return(view, newView, func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	mock.On("viewReleaser").Once()
+	mock.On("requestSeqReleaser", request).Once()
+	_, err = process(request)
+	assert.NoError(t, err)
+
+	mock.On("requestSeqCapturer", request).Return(true).Once()
+	pendingReq.EXPECT().Add(request)
+	viewState.EXPECT().HoldView().Return(view, view, func() {
+		mock.MethodCalled("viewReleaser")
 	})
 	mock.On("requestApplier", request, view).Return(fmt.Errorf("Failed")).Once()
-	mock.On("viewReleaser", view).Once()
+	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
 	assert.Error(t, err, "Failed to apply Request")
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	pendingReq.EXPECT().Add(request)
-	viewState.EXPECT().WaitAndHoldActiveView().Return(view, func() {
-		mock.MethodCalled("viewReleaser", view)
+	viewState.EXPECT().HoldView().Return(view, view, func() {
+		mock.MethodCalled("viewReleaser")
 	})
 	mock.On("requestApplier", request, view).Return(nil).Once()
-	mock.On("viewReleaser", view).Once()
+	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	new, err = process(request)
 	assert.NoError(t, err)

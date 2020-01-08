@@ -47,6 +47,22 @@ func (mr *MockStateMockRecorder) FinishViewChange(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishViewChange", reflect.TypeOf((*MockState)(nil).FinishViewChange), arg0)
 }
 
+// HoldView mocks base method
+func (m *MockState) HoldView() (uint64, uint64, func()) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HoldView")
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(uint64)
+	ret2, _ := ret[2].(func())
+	return ret0, ret1, ret2
+}
+
+// HoldView indicates an expected call of HoldView
+func (mr *MockStateMockRecorder) HoldView() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HoldView", reflect.TypeOf((*MockState)(nil).HoldView))
+}
+
 // RequestViewChange mocks base method
 func (m *MockState) RequestViewChange(arg0 uint64) bool {
 	m.ctrl.T.Helper()
@@ -74,34 +90,4 @@ func (m *MockState) StartViewChange(arg0 uint64) (bool, func()) {
 func (mr *MockStateMockRecorder) StartViewChange(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartViewChange", reflect.TypeOf((*MockState)(nil).StartViewChange), arg0)
-}
-
-// WaitAndHoldActiveView mocks base method
-func (m *MockState) WaitAndHoldActiveView() (uint64, func()) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitAndHoldActiveView")
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(func())
-	return ret0, ret1
-}
-
-// WaitAndHoldActiveView indicates an expected call of WaitAndHoldActiveView
-func (mr *MockStateMockRecorder) WaitAndHoldActiveView() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitAndHoldActiveView", reflect.TypeOf((*MockState)(nil).WaitAndHoldActiveView))
-}
-
-// WaitAndHoldView mocks base method
-func (m *MockState) WaitAndHoldView(arg0 uint64) (bool, func()) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitAndHoldView", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(func())
-	return ret0, ret1
-}
-
-// WaitAndHoldView indicates an expected call of WaitAndHoldView
-func (mr *MockStateMockRecorder) WaitAndHoldView(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitAndHoldView", reflect.TypeOf((*MockState)(nil).WaitAndHoldView), arg0)
 }

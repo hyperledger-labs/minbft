@@ -168,10 +168,14 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 
 		pendingReq.Add(request)
 
-		view, releaseView := viewState.WaitAndHoldActiveView()
+		currentView, expectedView, releaseView := viewState.HoldView()
 		defer releaseView()
 
-		if err := applyRequest(request, view); err != nil {
+		if currentView != expectedView {
+			return true, nil
+		}
+
+		if err := applyRequest(request, currentView); err != nil {
 			return false, fmt.Errorf("Failed to apply Request: %s", err)
 		}
 

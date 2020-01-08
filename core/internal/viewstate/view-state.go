@@ -28,20 +28,9 @@ import "sync"
 // State defines operations on view state. All methods are safe to
 // invoke concurrently.
 //
-// WaitAndHoldActiveView waits for active view and defers view change.
-// It waits until current and expected view numbers become equal, then
-// returns the current active view number. The returned view number is
-// guaranteed to denote the current active view until the returned
-// release function is invoked.
-//
-// WaitAndHoldView waits for specific active view and defers view
-// change. This method resembles WaitAndHoldActiveView, but only waits
-// for a specific active view number supplied through the parameter
-// view. It immediately returns false once it is detected that the
-// supplied view number will never become active. Otherwise, it
-// returns true as soon as the awaited view number is active. In that
-// case, the view will stay active until the returned release function
-// is invoked.
+// HoldView method returns current and expected view numbers and
+// defers view change. The returned values will denote the actual view
+// state until the returned release function is invoked.
 //
 // RequestViewChange handles synchronization of view change requests.
 // If the supplied value is greater than both the requested and
@@ -65,8 +54,7 @@ import "sync"
 // that case, the current and expected view numbers will remain the
 // same until the returned release function is invoked.
 type State interface {
-	WaitAndHoldActiveView() (view uint64, release func())
-	WaitAndHoldView(view uint64) (ok bool, release func())
+	HoldView() (current, expected uint64, release func())
 	RequestViewChange(newView uint64) bool
 	StartViewChange(newView uint64) (ok bool, release func())
 	FinishViewChange(newView uint64) (ok bool, release func())
@@ -79,44 +67,18 @@ type viewState struct {
 	currentView   uint64
 	expectedView  uint64
 	requestedView uint64
-
-	// Cond to signal on updating current/expected view
-	viewChangeStartedFinished *sync.Cond
 }
 
 // New creates a new instance of the view state.
 func New() State {
-	s := new(viewState)
-	s.viewChangeStartedFinished = sync.NewCond(s.currentExpectedViewLock.RLocker())
-
-	return s
+	return &viewState{}
 }
 
-func (s *viewState) WaitAndHoldActiveView() (view uint64, release func()) {
+func (s *viewState) HoldView() (current, expected uint64, release func()) {
 	s.currentExpectedViewLock.RLock()
 	release = s.currentExpectedViewLock.RUnlock
 
-	for s.currentView != s.expectedView {
-		s.viewChangeStartedFinished.Wait()
-	}
-
-	return s.currentView, release
-}
-
-func (s *viewState) WaitAndHoldView(view uint64) (ok bool, release func()) {
-	s.currentExpectedViewLock.RLock()
-	release = s.currentExpectedViewLock.RUnlock
-
-	for view != s.currentView || s.currentView != s.expectedView {
-		if view < s.currentView || view < s.expectedView {
-			release()
-			return false, nil
-		}
-
-		s.viewChangeStartedFinished.Wait()
-	}
-
-	return true, release
+	return s.currentView, s.expectedView, release
 }
 
 func (s *viewState) RequestViewChange(newView uint64) bool {
@@ -140,7 +102,6 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 
 	if s.expectedView < newView {
 		s.expectedView = newView
-		s.viewChangeStartedFinished.Broadcast()
 
 		return true, release
 	}
@@ -160,7 +121,6 @@ func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
 		}
 
 		s.currentView = s.expectedView
-		s.viewChangeStartedFinished.Broadcast()
 
 		return true, release
 	}
