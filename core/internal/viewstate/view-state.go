@@ -39,14 +39,12 @@ import "sync"
 // and expected view numbers will remain the same until the returned
 // release function is invoked.
 //
-// FinishViewChange synchronizes completion of view change. First, it
-// attempts to increase the expected view number to match the supplied
-// view number, same as StartViewChange. After that, if the supplied
-// value is greater than the current view number then the latter is
-// increased to match the supplied one. It returns true if the current
-// view number was updated and matches the expected view number. In
-// that case, the current and expected view numbers will remain the
-// same until the returned release function is invoked.
+// FinishViewChange synchronizes completion of view change. If the
+// supplied value is greater than the current view number then the
+// latter is increased to match the supplied one. It returns true if
+// the current view number was updated and matches the expected view
+// number. In that case, the current and expected view numbers will
+// remain the same until the returned release function is invoked.
 type State interface {
 	HoldView() (current, expected uint64, release func())
 	StartViewChange(newView uint64) (ok bool, release func())
@@ -90,15 +88,12 @@ func (s *viewState) FinishViewChange(newView uint64) (ok bool, release func()) {
 	s.Lock()
 	release = s.Unlock
 
-	if s.currentView < newView && s.expectedView <= newView {
-		// Check if the expected view needs to be updated
-		if s.expectedView < newView {
-			s.expectedView = newView
+	if s.currentView < newView {
+		s.currentView = newView
+
+		if s.currentView == s.expectedView {
+			return true, release
 		}
-
-		s.currentView = s.expectedView
-
-		return true, release
 	}
 
 	release()

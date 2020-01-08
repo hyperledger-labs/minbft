@@ -45,11 +45,10 @@ func TestViewState(t *testing.T) {
 - {view: 1, start: y, finish: y, current: 1, expected: 1, ok: n}
 - {view: 2, start: y, finish: n, current: 1, expected: 2, ok: y}
 - {view: 3, start: y, finish: n, current: 1, expected: 3, ok: y}
-- {view: 2, start: n, finish: y, current: 1, expected: 3, ok: n}
-- {view: 3, start: y, finish: n, current: 1, expected: 3, ok: n}
+- {view: 2, start: n, finish: y, current: 2, expected: 3, ok: n}
+- {view: 3, start: y, finish: n, current: 2, expected: 3, ok: n}
 - {view: 3, start: n, finish: y, current: 3, expected: 3, ok: y}
-- {view: 4, start: n, finish: y, current: 4, expected: 4, ok: y}
-- {view: 4, start: y, finish: n, current: 4, expected: 4, ok: n}
+- {view: 4, start: y, finish: y, current: 4, expected: 4, ok: y}
 `)
 	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
 		t.Fatal(err)
@@ -147,8 +146,10 @@ func TestConcurrent(t *testing.T) {
 		for view := uint64(0); view <= nrViewChanges; view++ {
 			view := view
 			runConcurrently(func() { holdView(view) })
-			runConcurrently(func() { startViewChange(view) })
-			runConcurrently(func() { finishViewChange(view) })
+			runConcurrently(func() {
+				startViewChange(view)
+				finishViewChange(view)
+			})
 		}
 	}
 
