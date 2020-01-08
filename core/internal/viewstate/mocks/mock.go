@@ -32,20 +32,35 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
-// FinishViewChange mocks base method
-func (m *MockState) FinishViewChange(arg0 uint64) (bool, bool, func()) {
+// AdvanceCurrentView mocks base method
+func (m *MockState) AdvanceCurrentView(arg0 uint64) (bool, bool, func()) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FinishViewChange", arg0)
+	ret := m.ctrl.Call(m, "AdvanceCurrentView", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(func())
 	return ret0, ret1, ret2
 }
 
-// FinishViewChange indicates an expected call of FinishViewChange
-func (mr *MockStateMockRecorder) FinishViewChange(arg0 interface{}) *gomock.Call {
+// AdvanceCurrentView indicates an expected call of AdvanceCurrentView
+func (mr *MockStateMockRecorder) AdvanceCurrentView(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishViewChange", reflect.TypeOf((*MockState)(nil).FinishViewChange), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceCurrentView", reflect.TypeOf((*MockState)(nil).AdvanceCurrentView), arg0)
+}
+
+// AdvanceExpectedView mocks base method
+func (m *MockState) AdvanceExpectedView(arg0 uint64) (bool, func()) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AdvanceExpectedView", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(func())
+	return ret0, ret1
+}
+
+// AdvanceExpectedView indicates an expected call of AdvanceExpectedView
+func (mr *MockStateMockRecorder) AdvanceExpectedView(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AdvanceExpectedView", reflect.TypeOf((*MockState)(nil).AdvanceExpectedView), arg0)
 }
 
 // HoldView mocks base method
@@ -62,19 +77,4 @@ func (m *MockState) HoldView() (uint64, uint64, func()) {
 func (mr *MockStateMockRecorder) HoldView() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HoldView", reflect.TypeOf((*MockState)(nil).HoldView))
-}
-
-// StartViewChange mocks base method
-func (m *MockState) StartViewChange(arg0 uint64) (bool, func()) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StartViewChange", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(func())
-	return ret0, ret1
-}
-
-// StartViewChange indicates an expected call of StartViewChange
-func (mr *MockStateMockRecorder) StartViewChange(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartViewChange", reflect.TypeOf((*MockState)(nil).StartViewChange), arg0)
 }

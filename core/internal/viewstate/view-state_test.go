@@ -58,14 +58,14 @@ func TestViewState(t *testing.T) {
 		assertMsg := fmt.Sprintf("Case #%d", i)
 		view := uint64(c.View)
 		if c.Start {
-			ok, release := s.StartViewChange(view)
+			ok, release := s.AdvanceExpectedView(view)
 			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				release()
 			}
 		}
 		if c.Finish {
-			ok, active, release := s.FinishViewChange(view)
+			ok, active, release := s.AdvanceCurrentView(view)
 			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				if c.Current == c.Expected {
@@ -122,31 +122,28 @@ func TestConcurrent(t *testing.T) {
 	}
 
 	startViewChange := func(view uint64) {
-		ok, release := s.StartViewChange(view)
+		ok, release := s.AdvanceExpectedView(view)
 		if !ok {
 			return
 		}
-		assert.True(t, started < view,
-			"Started view change number cannot decrease")
+		assert.True(t, started < view)
+		assert.True(t, finished < view)
 		started = view
-		assert.True(t, finished < view,
-			"Started view change number must be higher than last finished")
 		go release()
 	}
 
 	finishViewChange := func(view uint64) {
-		ok, active, release := s.FinishViewChange(view)
+		ok, active, release := s.AdvanceCurrentView(view)
 		if !ok {
 			return
 		}
-		assert.True(t, finished < view,
-			"Finished view change number cannot decrease")
-		finished = view
+		assert.True(t, finished < view)
 		if active {
 			assert.True(t, started == view)
 		} else {
 			assert.True(t, started > view)
 		}
+		finished = view
 		go release()
 	}
 

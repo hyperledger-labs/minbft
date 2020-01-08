@@ -32,16 +32,16 @@ import "sync"
 // defers view change. The returned values will denote the actual view
 // state until the returned release function is invoked.
 //
-// StartViewChange synchronizes beginning of view change. If the
-// supplied view number is greater than the expected view number then
-// the latter is increased to match the supplied one. It returns true
-// if the expected view number was updated. In that case, the current
-// and expected view numbers will remain the same until the returned
-// release function is invoked.
+// AdvanceExpectedView method synchronizes beginning of view change.
+// If the supplied view number is greater than the expected view
+// number then the latter is increased to match the supplied one. It
+// returns true if the expected view number was updated. In that case,
+// the current and expected view numbers will remain the same until
+// the returned release function is invoked.
 //
-// FinishViewChange synchronizes completion of view change. If the
-// supplied value is greater than the current view number then the
-// latter is increased to match the supplied one. The return value
+// AdvanceCurrentView method synchronizes transition into a new view.
+// If the supplied value is greater than the current view number then
+// the latter is increased to match the supplied one. The return value
 // "ok" indicates if the current view number was updated. In that
 // case, the current and expected view numbers will remain the same
 // until the returned release function is invoked. The return value
@@ -49,8 +49,8 @@ import "sync"
 // i.e. the current view has become active.
 type State interface {
 	HoldView() (current, expected uint64, release func())
-	StartViewChange(newView uint64) (ok bool, release func())
-	FinishViewChange(newView uint64) (ok, active bool, release func())
+	AdvanceExpectedView(view uint64) (ok bool, release func())
+	AdvanceCurrentView(view uint64) (ok, active bool, release func())
 }
 
 type viewState struct {
@@ -72,12 +72,12 @@ func (s *viewState) HoldView() (current, expected uint64, release func()) {
 	return s.currentView, s.expectedView, release
 }
 
-func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
+func (s *viewState) AdvanceExpectedView(view uint64) (ok bool, release func()) {
 	s.Lock()
 	release = s.Unlock
 
-	if s.expectedView < newView {
-		s.expectedView = newView
+	if s.expectedView < view {
+		s.expectedView = view
 
 		return true, release
 	}
@@ -86,12 +86,12 @@ func (s *viewState) StartViewChange(newView uint64) (ok bool, release func()) {
 	return false, nil
 }
 
-func (s *viewState) FinishViewChange(newView uint64) (ok, active bool, release func()) {
+func (s *viewState) AdvanceCurrentView(view uint64) (ok, active bool, release func()) {
 	s.Lock()
 	release = s.Unlock
 
-	if s.currentView < newView {
-		s.currentView = newView
+	if s.currentView < view {
+		s.currentView = view
 
 		if s.currentView == s.expectedView {
 			active = true
