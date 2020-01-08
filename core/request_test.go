@@ -35,6 +35,7 @@ import (
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
+	mock_viewstate "github.com/hyperledger-labs/minbft/core/internal/viewstate/mocks"
 )
 
 func TestMakeRequestProcessor(t *testing.T) {
@@ -50,13 +51,17 @@ func TestMakeRequestProcessor(t *testing.T) {
 			mock.MethodCalled("requestSeqReleaser", request)
 		}
 	}
-	applyRequest := func(request messages.Request) error {
-		args := mock.MethodCalled("requestApplier", request)
+	applyRequest := func(request messages.Request, view uint64) error {
+		args := mock.MethodCalled("requestApplier", request, view)
 		return args.Error(0)
 	}
 	pendingReq := mock_requestlist.NewMockList(ctrl)
-	process := makeRequestProcessor(captureSeq, pendingReq, applyRequest)
+	viewState := mock_viewstate.NewMockState(ctrl)
+	process := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 
+	n := randN()
+	view := randView()
+	newView := view + uint64(1+rand.Intn(int(n-1)))
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
 	mock.On("requestSeqCapturer", request).Return(false).Once()
@@ -66,14 +71,32 @@ func TestMakeRequestProcessor(t *testing.T) {
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	pendingReq.EXPECT().Add(request)
-	mock.On("requestApplier", request).Return(fmt.Errorf("Failed")).Once()
+	viewState.EXPECT().HoldView().Return(view, newView, func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	mock.On("viewReleaser").Once()
+	mock.On("requestSeqReleaser", request).Once()
+	_, err = process(request)
+	assert.NoError(t, err)
+
+	mock.On("requestSeqCapturer", request).Return(true).Once()
+	pendingReq.EXPECT().Add(request)
+	viewState.EXPECT().HoldView().Return(view, view, func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	mock.On("requestApplier", request, view).Return(fmt.Errorf("Failed")).Once()
+	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
 	assert.Error(t, err, "Failed to apply Request")
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
 	pendingReq.EXPECT().Add(request)
-	mock.On("requestApplier", request).Return(nil).Once()
+	viewState.EXPECT().HoldView().Return(view, view, func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	mock.On("requestApplier", request, view).Return(nil).Once()
+	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	new, err = process(request)
 	assert.NoError(t, err)
@@ -89,12 +112,6 @@ func TestMakeRequestApplier(t *testing.T) {
 	otherView := randOtherView(ownView)
 	id := primaryID(n, ownView)
 
-	provideView := func() (view uint64, release func()) {
-		args := mock.MethodCalled("viewProvider")
-		return args.Get(0).(uint64), func() {
-			mock.MethodCalled("viewReleaser", view)
-		}
-	}
 	handleGeneratedUIMessage := func(msg messages.CertifiedMessage) {
 		mock.MethodCalled("generatedUIMessageHandler", msg)
 	}
@@ -104,24 +121,20 @@ func TestMakeRequestApplier(t *testing.T) {
 	startPrepTimer := func(request messages.Request, view uint64) {
 		mock.MethodCalled("prepareTimerStarter", request, view)
 	}
-	apply := makeRequestApplier(id, n, provideView, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
+	apply := makeRequestApplier(id, n, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
 
 	clientID := rand.Uint32()
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(id, ownView, request)
 
-	mock.On("viewProvider").Return(otherView).Once()
 	mock.On("requestTimerStarter", request, otherView).Once()
 	mock.On("prepareTimerStarter", request, otherView).Once()
-	mock.On("viewReleaser", otherView).Once()
-	err := apply(request)
+	err := apply(request, otherView)
 	assert.NoError(t, err)
 
-	mock.On("viewProvider").Return(ownView).Once()
 	mock.On("requestTimerStarter", request, ownView).Once()
 	mock.On("generatedUIMessageHandler", prepare).Once()
-	mock.On("viewReleaser", ownView).Once()
-	err = apply(request)
+	err = apply(request, ownView)
 	assert.NoError(t, err)
 }
 

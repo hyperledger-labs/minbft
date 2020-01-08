@@ -15,154 +15,71 @@
 package viewstate
 
 import (
+	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 func TestViewState(t *testing.T) {
 	s := New()
 
-	cases := []struct {
-		desc string
+	var cases []struct {
+		View int
 
-		view int
+		Start  bool
+		Finish bool
 
-		request bool
-		start   bool
-		finish  bool
+		Current  int
+		Expected int
 
-		wait   bool
-		active bool
+		Ok bool
+	}
+	casesYAML := []byte(`
+- {view: 0, start: y, finish: y, current: 0, expected: 0, ok: n}
+- {view: 1, start: y, finish: y, current: 1, expected: 1, ok: y}
+- {view: 1, start: y, finish: y, current: 1, expected: 1, ok: n}
+- {view: 2, start: y, finish: n, current: 1, expected: 2, ok: y}
+- {view: 3, start: y, finish: n, current: 1, expected: 3, ok: y}
+- {view: 2, start: n, finish: y, current: 2, expected: 3, ok: y}
+- {view: 3, start: y, finish: n, current: 2, expected: 3, ok: n}
+- {view: 3, start: n, finish: y, current: 3, expected: 3, ok: y}
+- {view: 4, start: y, finish: y, current: 4, expected: 4, ok: y}
+`)
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
+		t.Fatal(err)
+	}
 
-		ok bool
-	}{{
-		desc:   "Wait for view #0",
-		view:   0,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:    "Request, begin and complete change to view #0",
-		view:    0,
-		request: true,
-		start:   true,
-		finish:  true,
-		ok:      false,
-	}, {
-		desc:    "Request change to view #1",
-		view:    1,
-		request: true,
-		ok:      true,
-	}, {
-		desc:    "Request change to view #1 again",
-		view:    1,
-		request: true,
-		ok:      false,
-	}, {
-		desc:   "Begin and complete change to view #1",
-		view:   1,
-		start:  true,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:   "Begin and complete change to view #1 again",
-		view:   1,
-		start:  true,
-		finish: true,
-		ok:     false,
-	}, {
-		desc:    "Request and begin change to view #2",
-		view:    2,
-		request: true,
-		start:   true,
-		ok:      true,
-	}, {
-		desc: "Wait for view #1",
-		view: 1,
-		wait: true,
-		ok:   false,
-	}, {
-		desc:    "Request and begin change to view #3",
-		view:    3,
-		request: true,
-		start:   true,
-		ok:      true,
-	}, {
-		desc:   "Complete change to view #2",
-		view:   2,
-		finish: true,
-		ok:     false,
-	}, {
-		desc: "Wait for view #2",
-		view: 2,
-		wait: true,
-		ok:   false,
-	}, {
-		desc:    "Request and begin change to view #3 again",
-		view:    3,
-		request: true,
-		start:   true,
-		ok:      false,
-	}, {
-		desc:   "Complete change to view #3",
-		view:   3,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:   "Complete change to view #4",
-		view:   4,
-		finish: true,
-		wait:   true,
-		active: true,
-		ok:     true,
-	}, {
-		desc:    "Request and begin change to view #4",
-		view:    4,
-		request: true,
-		start:   true,
-		ok:      false,
-	}}
-
-	for _, c := range cases {
-		view := uint64(c.view)
-		if c.request {
-			ok := s.RequestViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
-		}
-		if c.start {
-			ok, release := s.StartViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
+	for i, c := range cases {
+		assertMsg := fmt.Sprintf("Case #%d", i)
+		view := uint64(c.View)
+		if c.Start {
+			ok, release := s.AdvanceExpectedView(view)
+			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
 				release()
 			}
 		}
-		if c.finish {
-			ok, release := s.FinishViewChange(view)
-			require.Equal(t, c.ok, ok, c.desc)
+		if c.Finish {
+			ok, active, release := s.AdvanceCurrentView(view)
+			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
+				if c.Current == c.Expected {
+					require.True(t, active)
+				} else {
+					require.False(t, active)
+				}
 				release()
 			}
 		}
-		if c.wait {
-			ok, release := s.WaitAndHoldView(view)
-			require.Equal(t, c.ok, ok, c.desc)
-			if ok {
-				release()
-			}
-		}
-		if c.active {
-			activeView, release := s.WaitAndHoldActiveView()
-			require.Equal(t, view, activeView, c.desc)
-			release()
-		}
+		current, expected, release := s.HoldView()
+		require.EqualValues(t, c.Current, current, assertMsg)
+		require.EqualValues(t, c.Expected, expected, assertMsg)
+		release()
 	}
 }
 
@@ -182,100 +99,62 @@ func TestConcurrent(t *testing.T) {
 	}
 
 	var (
-		active    uint64
-		requested uint64
-		started   uint64
-		finished  uint64
+		started  uint64
+		finished uint64
 	)
 
 	s := New()
 
-	assertActiveView := func(view uint64) {
-		lastActive := atomic.SwapUint64(&active, view)
-		assert.True(t, lastActive <= view,
-			"Active view number cannot decrease")
-		assert.True(t, started <= view,
-			"View change cannot begin before view released")
-		assert.True(t, finished == view,
-			"View change cannot complete before view released")
-	}
-
-	waitAndHoldActiveView := func(view uint64) {
+	holdView := func(view uint64) {
 		for {
-			activeView, release := s.WaitAndHoldActiveView()
-			assertActiveView(activeView)
+			current, expected, release := s.HoldView()
+			assert.True(t, current <= expected)
+			if current == expected {
+				assert.True(t, current == finished)
+			} else if current < expected {
+				assert.True(t, expected == started)
+			}
 			go release()
-			if activeView >= view {
+			if current >= view {
 				break
 			}
 		}
 	}
 
-	waitAndHoldView := func(view uint64) {
-		ok, release := s.WaitAndHoldView(view)
-		if !ok {
-			return
-		}
-		assertActiveView(view)
-		go release()
-	}
-
-	requestViewChange := func(view uint64) {
-		lastActive := atomic.LoadUint64(&active)
-		lastRequested := atomic.LoadUint64(&requested)
-		lastFinished := atomic.LoadUint64(&finished)
-
-		if !s.RequestViewChange(view) {
-			return
-		}
-		atomic.CompareAndSwapUint64(&requested, lastRequested, view)
-		assert.True(t, lastRequested < view,
-			"Requested view change number cannot decrease")
-		assert.True(t, lastActive < view,
-			"Requested view change number must be higher than last active")
-		assert.True(t, lastFinished < view,
-			"Requested view change number must be higher than last finished")
-
-	}
-
 	startViewChange := func(view uint64) {
-		ok, release := s.StartViewChange(view)
+		ok, release := s.AdvanceExpectedView(view)
 		if !ok {
 			return
 		}
-		assert.True(t, started < view,
-			"Started view change number cannot decrease")
+		assert.True(t, started < view)
+		assert.True(t, finished < view)
 		started = view
-		assert.True(t, finished < view,
-			"Started view change number must be higher than last finished")
-		assert.True(t, active < view,
-			"Started view change number must be higher than last active")
 		go release()
 	}
 
 	finishViewChange := func(view uint64) {
-		ok, release := s.FinishViewChange(view)
+		ok, active, release := s.AdvanceCurrentView(view)
 		if !ok {
 			return
 		}
-		assert.True(t, finished < view,
-			"Finished view change number cannot decrease")
-		atomic.StoreUint64(&finished, view)
-		assert.True(t, started <= view,
-			"Finished view change number cannot be lower than last started")
-		assert.True(t, active < view,
-			"Finished view change number must be higher than last active")
+		assert.True(t, finished < view)
+		if active {
+			assert.True(t, started == view)
+		} else {
+			assert.True(t, started > view)
+		}
+		finished = view
 		go release()
 	}
 
 	for i := 0; i < nrConcurrent; i++ {
 		for view := uint64(0); view <= nrViewChanges; view++ {
 			view := view
-			runConcurrently(func() { waitAndHoldActiveView(view) })
-			runConcurrently(func() { waitAndHoldView(view) })
-			runConcurrently(func() { requestViewChange(view) })
-			runConcurrently(func() { startViewChange(view) })
-			runConcurrently(func() { finishViewChange(view) })
+			runConcurrently(func() { holdView(view) })
+			runConcurrently(func() {
+				startViewChange(view)
+				finishViewChange(view)
+			})
 		}
 	}
 

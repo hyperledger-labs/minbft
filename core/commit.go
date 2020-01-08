@@ -37,8 +37,9 @@ type commitValidator func(commit messages.Commit) error
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required side
 // effects. The supplied message is assumed to be authentic and
-// internally consistent. It is safe to invoke concurrently.
-type commitApplier func(commit messages.Commit) error
+// internally consistent. Parameter active indicates if the message
+// refers to the active view. It is safe to invoke concurrently.
+type commitApplier func(commit messages.Commit, active bool) error
 
 // commitmentCollector collects commitment on prepared Request.
 //
@@ -84,7 +85,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 // makeCommitApplier constructs an instance of commitApplier using the
 // supplied abstractions.
 func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
-	return func(commit messages.Commit) error {
+	return func(commit messages.Commit, active bool) error {
 		replicaID := commit.ReplicaID()
 		prepare := commit.Prepare()
 

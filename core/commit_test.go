@@ -105,11 +105,15 @@ func TestMakeCommitApplier(t *testing.T) {
 	commit := messageImpl.NewCommit(id, prepare)
 
 	mock.On("commitmentCollector", id, prepare).Return(fmt.Errorf("Error")).Once()
-	err := apply(commit)
+	err := apply(commit, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
 	mock.On("commitmentCollector", id, prepare).Return(nil).Once()
-	err = apply(commit)
+	err = apply(commit, false)
+	assert.NoError(t, err)
+
+	mock.On("commitmentCollector", id, prepare).Return(nil).Once()
+	err = apply(commit, true)
 	assert.NoError(t, err)
 }
 
