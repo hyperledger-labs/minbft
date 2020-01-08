@@ -102,8 +102,10 @@ type viewMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required messages
 // or side effects. The supplied message is assumed to be authentic
-// and internally consistent. It is safe to invoke concurrently.
-type replicaMessageApplier func(msg messages.ReplicaMessage) error
+// and internally consistent. Parameter active indicates if the
+// message refers to the active view. It is safe to invoke
+// concurrently.
+type replicaMessageApplier func(msg messages.ReplicaMessage, active bool) error
 
 // messageReplier provides reply to a valid message.
 //
@@ -174,8 +176,8 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	// actually be invoked only after getting fully constructed.
 	// This "thunk" delays evaluation of applyReplicaMessage
 	// variable, thus resolving this circular dependency.
-	applyReplicaMessageThunk := func(msg messages.ReplicaMessage) error {
-		return applyReplicaMessage(msg)
+	applyReplicaMessageThunk := func(msg messages.ReplicaMessage, active bool) error {
+		return applyReplicaMessage(msg, active)
 	}
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates)
@@ -417,6 +419,8 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 
 func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
+		var active bool
+
 		switch msg := msg.(type) {
 		case messages.Prepare, messages.Commit:
 			var messageView uint64
@@ -431,8 +435,8 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 			currentView, expectedView, release := viewState.HoldView()
 			defer release()
 
-			if currentView != expectedView {
-				return false, nil
+			if currentView == expectedView {
+				active = true
 			}
 
 			if messageView < currentView {
@@ -448,7 +452,7 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 			panic("Unknown message type")
 		}
 
-		if err := applyReplicaMessage(msg); err != nil {
+		if err := applyReplicaMessage(msg, active); err != nil {
 			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
@@ -459,12 +463,12 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 // makeReplicaMessageApplier constructs an instance of replicaMessageApplier using
 // the supplied abstractions.
 func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
-	return func(msg messages.ReplicaMessage) error {
+	return func(msg messages.ReplicaMessage, active bool) error {
 		switch msg := msg.(type) {
 		case messages.Prepare:
-			return applyPrepare(msg)
+			return applyPrepare(msg, active)
 		case messages.Commit:
-			return applyCommit(msg)
+			return applyCommit(msg, active)
 		case messages.Reply:
 			return nil
 		default:
@@ -502,7 +506,7 @@ func makeGeneratedMessageHandler(apply replicaMessageApplier, consume generatedM
 	return func(msg messages.ReplicaMessage) {
 		logger.Debugf("Generated %s", messageString(msg))
 
-		if err := apply(msg); err != nil {
+		if err := apply(msg, true); err != nil {
 			panic(fmt.Errorf("Failed to apply generated message: %s", err))
 		}
 

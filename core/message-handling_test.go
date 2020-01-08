@@ -384,8 +384,8 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	defer ctrl.Finish()
 
 	viewState := mock_viewstate.NewMockState(ctrl)
-	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
-		args := mock.MethodCalled("replicaMessageApplier", msg)
+	applyReplicaMessage := func(msg messages.ReplicaMessage, active bool) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg, active)
 		return args.Error(0)
 	}
 	process := makeViewMessageProcessor(viewState, applyReplicaMessage)
@@ -410,9 +410,10 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 			mock.MethodCalled("viewReleaser")
 		})
 		mock.On("viewReleaser").Once()
+		mock.On("replicaMessageApplier", msg, false).Return(nil).Once()
 		new, err := process(msg)
 		assert.NoError(t, err)
-		assert.False(t, new, "View change in progress")
+		assert.True(t, new)
 
 		viewState.EXPECT().HoldView().Return(newView, newView, func() {
 			mock.MethodCalled("viewReleaser")
@@ -432,7 +433,7 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 		viewState.EXPECT().HoldView().Return(view, view, func() {
 			mock.MethodCalled("viewReleaser")
 		})
-		mock.On("replicaMessageApplier", msg).Return(nil).Once()
+		mock.On("replicaMessageApplier", msg, true).Return(nil).Once()
 		mock.On("viewReleaser").Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
@@ -453,12 +454,12 @@ func TestMakeReplicaMessageApplier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	applyPrepare := func(msg messages.Prepare) error {
-		args := mock.MethodCalled("prepareApplier", msg)
+	applyPrepare := func(msg messages.Prepare, active bool) error {
+		args := mock.MethodCalled("prepareApplier", msg, active)
 		return args.Error(0)
 	}
-	applyCommit := func(msg messages.Commit) error {
-		args := mock.MethodCalled("commitApplier", msg)
+	applyCommit := func(msg messages.Commit, active bool) error {
+		args := mock.MethodCalled("commitApplier", msg, active)
 		return args.Error(0)
 	}
 	apply := makeReplicaMessageApplier(applyPrepare, applyCommit)
@@ -471,28 +472,39 @@ func TestMakeReplicaMessageApplier(t *testing.T) {
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockReplicaMessage(ctrl)
-		assert.Panics(t, func() { apply(msg) }, "Unknown message type")
+		assert.Panics(t, func() { apply(msg, true) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		mock.On("prepareApplier", prepare).Return(fmt.Errorf("Error")).Once()
-		err := apply(prepare)
+		mock.On("prepareApplier", prepare, true).Return(fmt.Errorf("Error")).Once()
+		err := apply(prepare, true)
 		assert.Error(t, err, "Failed to apply Prepare")
 
-		mock.On("prepareApplier", prepare).Return(nil).Once()
-		err = apply(prepare)
+		mock.On("prepareApplier", prepare, true).Return(nil).Once()
+		err = apply(prepare, true)
+		assert.NoError(t, err)
+
+		mock.On("prepareApplier", prepare, false).Return(nil).Once()
+		err = apply(prepare, false)
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("commitApplier", commit).Return(fmt.Errorf("Error")).Once()
-		err := apply(commit)
+		mock.On("commitApplier", commit, true).Return(fmt.Errorf("Error")).Once()
+		err := apply(commit, true)
 		assert.Error(t, err, "Failed to apply Commit")
 
-		mock.On("commitApplier", commit).Return(nil).Once()
-		err = apply(commit)
+		mock.On("commitApplier", commit, true).Return(nil).Once()
+		err = apply(commit, true)
+		assert.NoError(t, err)
+
+		mock.On("commitApplier", commit, false).Return(nil).Once()
+		err = apply(commit, false)
 		assert.NoError(t, err)
 	})
 	t.Run("Reply", func(t *testing.T) {
-		err := apply(reply)
+		err := apply(reply, true)
+		assert.NoError(t, err)
+
+		err = apply(reply, false)
 		assert.NoError(t, err)
 	})
 }
@@ -647,8 +659,8 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	applyReplicaMessage := func(msg messages.ReplicaMessage) error {
-		args := mock.MethodCalled("replicaMessageApplier", msg)
+	applyReplicaMessage := func(msg messages.ReplicaMessage, active bool) error {
+		args := mock.MethodCalled("replicaMessageApplier", msg, active)
 		return args.Error(0)
 	}
 	consume := func(msg messages.ReplicaMessage) {
@@ -658,10 +670,10 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 
 	msg := mock_messages.NewMockReplicaMessage(ctrl)
 
-	mock.On("replicaMessageApplier", msg).Return(fmt.Errorf("Error")).Once()
+	mock.On("replicaMessageApplier", msg, true).Return(fmt.Errorf("Error")).Once()
 	assert.Panics(t, func() { handle(msg) }, "Failed to apply generated message")
 
-	mock.On("replicaMessageApplier", msg).Return(nil).Once()
+	mock.On("replicaMessageApplier", msg, true).Return(nil).Once()
 	mock.On("generatedMessageConsumer", msg).Once()
 	handle(msg)
 }
