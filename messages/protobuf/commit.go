@@ -25,24 +25,18 @@ type commit struct {
 	pbMsg *pb.Commit
 }
 
-func newCommit() *commit {
-	return &commit{}
-}
-
-func (m *commit) init(r uint32, prep messages.Prepare) {
-	req := prep.Request()
-
-	m.pbMsg = &pb.Commit{Msg: &pb.Commit_M{
+func newCommit(r uint32, prep messages.Prepare) *commit {
+	return &commit{pbMsg: &pb.Commit{Msg: &pb.Commit_M{
 		ReplicaId: r,
 		PrimaryId: prep.ReplicaID(),
 		View:      prep.View(),
-		Request:   pb.RequestFromAPI(req),
+		Request:   pb.RequestFromAPI(prep.Request()),
 		PrimaryUi: prep.UIBytes(),
-	}}
+	}}}
 }
 
-func (m *commit) set(pbMsg *pb.Commit) {
-	m.pbMsg = pbMsg
+func newCommitFromPb(pbMsg *pb.Commit) *commit {
+	return &commit{pbMsg: pbMsg}
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
@@ -54,8 +48,7 @@ func (m *commit) ReplicaID() uint32 {
 }
 
 func (m *commit) Prepare() messages.Prepare {
-	prep := newPrepare()
-	prep.set(&pb.Prepare{
+	return newPrepareFromPb(&pb.Prepare{
 		Msg: &pb.Prepare_M{
 			ReplicaId: m.pbMsg.GetMsg().GetPrimaryId(),
 			View:      m.pbMsg.GetMsg().GetView(),
@@ -63,7 +56,6 @@ func (m *commit) Prepare() messages.Prepare {
 		},
 		ReplicaUi: m.pbMsg.GetMsg().GetPrimaryUi(),
 	})
-	return prep
 }
 
 func (m *commit) CertifiedPayload() []byte {

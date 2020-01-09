@@ -24,20 +24,16 @@ type request struct {
 	pbMsg *pb.Request
 }
 
-func newRequest() *request {
-	return &request{}
-}
-
-func (m *request) init(cl uint32, seq uint64, op []byte) {
-	m.pbMsg = &pb.Request{Msg: &pb.Request_M{
+func newRequest(cl uint32, seq uint64, op []byte) *request {
+	return &request{pbMsg: &pb.Request{Msg: &pb.Request_M{
 		ClientId: cl,
 		Seq:      seq,
 		Payload:  op,
-	}}
+	}}}
 }
 
-func (m *request) set(pbMsg *pb.Request) {
-	m.pbMsg = pbMsg
+func newRequestFromPb(pbMsg *pb.Request) *request {
+	return &request{pbMsg: pbMsg}
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {

@@ -24,21 +24,17 @@ type reply struct {
 	pbMsg *pb.Reply
 }
 
-func newReply() *reply {
-	return &reply{}
-}
-
-func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
-	m.pbMsg = &pb.Reply{Msg: &pb.Reply_M{
+func newReply(r, cl uint32, seq uint64, res []byte) *reply {
+	return &reply{pbMsg: &pb.Reply{Msg: &pb.Reply_M{
 		ReplicaId: r,
 		ClientId:  cl,
 		Seq:       seq,
 		Result:    res,
-	}}
+	}}}
 }
 
-func (m *reply) set(pbMsg *pb.Reply) {
-	m.pbMsg = pbMsg
+func newReplyFromPb(pbMsg *pb.Reply) *reply {
+	return &reply{pbMsg: pbMsg}
 }
 
 func (m *reply) MarshalBinary() ([]byte, error) {

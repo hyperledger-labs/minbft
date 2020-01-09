@@ -25,20 +25,16 @@ type prepare struct {
 	pbMsg *pb.Prepare
 }
 
-func newPrepare() *prepare {
-	return &prepare{}
-}
-
-func (m *prepare) init(r uint32, v uint64, req messages.Request) {
-	m.pbMsg = &pb.Prepare{Msg: &pb.Prepare_M{
+func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
+	return &prepare{pbMsg: &pb.Prepare{Msg: &pb.Prepare_M{
 		ReplicaId: r,
 		View:      v,
 		Request:   pb.RequestFromAPI(req),
-	}}
+	}}}
 }
 
-func (m *prepare) set(pbMsg *pb.Prepare) {
-	m.pbMsg = pbMsg
+func newPrepareFromPb(pbMsg *pb.Prepare) *prepare {
+	return &prepare{pbMsg: pbMsg}
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
@@ -54,9 +50,7 @@ func (m *prepare) View() uint64 {
 }
 
 func (m *prepare) Request() messages.Request {
-	req := newRequest()
-	req.set(m.pbMsg.GetMsg().GetRequest())
-	return req
+	return newRequestFromPb(m.pbMsg.GetMsg().GetRequest())
 }
 
 func (m *prepare) CertifiedPayload() []byte {
