@@ -26,6 +26,7 @@ import (
 // authenticated content of Request message.
 func AuthenBytesFromRequest(m *Request) []byte {
 	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, MessageType_REQUEST)
 	writeAuthenBytesFromRequest(buf, m)
 	return buf.Bytes()
 }
@@ -34,6 +35,7 @@ func AuthenBytesFromRequest(m *Request) []byte {
 // authenticated content of Reply message.
 func AuthenBytesFromReply(m *Reply) []byte {
 	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, MessageType_REPLY)
 	writeAuthenBytesFromReply(buf, m)
 	return buf.Bytes()
 }
@@ -42,6 +44,7 @@ func AuthenBytesFromReply(m *Reply) []byte {
 // authenticated content of Prepare message.
 func AuthenBytesFromPrepare(m *Prepare) []byte {
 	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, MessageType_PREPARE)
 	writeAuthenBytesFromPrepare(buf, m)
 	return buf.Bytes()
 }
@@ -50,6 +53,7 @@ func AuthenBytesFromPrepare(m *Prepare) []byte {
 // authenticated content of Commit message.
 func AuthenBytesFromCommit(m *Commit) []byte {
 	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, MessageType_COMMIT)
 	writeAuthenBytesFromCommit(buf, m)
 	return buf.Bytes()
 }
