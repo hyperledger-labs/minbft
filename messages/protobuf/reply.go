@@ -56,7 +56,7 @@ func (m *reply) Result() []byte {
 }
 
 func (m *reply) SignedPayload() []byte {
-	return pb.MarshalOrPanic(m.pbMsg.GetMsg())
+	return pb.AuthenBytesFromReply(m.pbMsg)
 }
 
 func (m *reply) Signature() []byte {

@@ -52,7 +52,7 @@ func (m *prepare) Request() messages.Request {
 }
 
 func (m *prepare) CertifiedPayload() []byte {
-	return pb.MarshalOrPanic(m.pbMsg.GetMsg())
+	return pb.AuthenBytesFromPrepare(m.pbMsg)
 }
 
 func (m *prepare) UIBytes() []byte {
