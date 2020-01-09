@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package protobuf implements protocol message interface using
+// Protocol Buffers as serialization mechanism.
 package protobuf
 
 import (
@@ -25,6 +27,7 @@ import (
 
 type impl struct{}
 
+// NewImpl returns the package's implementation of protocol messages.
 func NewImpl() messages.MessageImpl {
 	return &impl{}
 }

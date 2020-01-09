@@ -17,8 +17,10 @@
 
 syntax = "proto3";
 
+// Package pb defines MinBFT protocol messages in Protobuf format.
 package pb;
 
+// MessageType represents message type tag.
 enum MessageType {
     UNKNOWN = 0;
     REQUEST = 1;
@@ -27,6 +29,7 @@ enum MessageType {
     COMMIT = 4;
 }
 
+// Message represents arbitrary protocol message.
 message Message{
     oneof typed {
         Request request = 1;
@@ -36,30 +39,62 @@ message Message{
     }
 }
 
+// Request represents REQUEST message.
 message Request {
-    uint32 client_id = 1; // c: client id
-    uint64 seq = 2;       // seq: request sequence per client
-    bytes operation = 3;  // op: operation payload
-    bytes signature = 4;  // client signature
+    // Client identifier
+    uint32 client_id = 1;
+
+    // Request identifier (timestamp / sequence number)
+    uint64 seq = 2;
+
+    // Operation to execute on replicated state machine
+    bytes operation = 3;
+
+    // Client's signature
+    bytes signature = 4;
 }
 
+// Reply represents REPLY message.
 message Reply {
-    uint32 replica_id = 1; // s: replica id
-    uint32 client_id = 2;  // c: client id
-    uint64 seq = 3;        // seq: corresponding request sequence
-    bytes result = 4;      // res: result
-    bytes signature = 5;   // replica's signature
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // Client identifier
+    uint32 client_id = 2;
+
+    // Request identifier
+    uint64 seq = 3;
+
+    // Result of requested operation execution
+    bytes result = 4;
+
+    // Replica's signature
+    bytes signature = 5;
 }
 
+// Prepare represents PREPARE message.
 message Prepare {
-    uint32 replica_id = 1; // s_i: replica id
-    uint64 view = 2;       // v: view
-    Request request = 3;   // m: request message
-    bytes ui = 4;          // UI_i: replica UI
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // View number
+    uint64 view = 2;
+
+    // Client's REQUEST
+    Request request = 3;
+
+    // Replica's UI
+    bytes ui = 4;
 }
 
+// Commit represents COMMIT message.
 message Commit {
-    uint32 replica_id = 1; // s_j: replica id
-    Prepare prepare = 2;   // prepare message
-    bytes ui = 3;          // UI_j: replica UI
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // Primary's PREPARE
+    Prepare prepare = 2;
+
+    // Replica's UI
+    bytes ui = 3;
 }
