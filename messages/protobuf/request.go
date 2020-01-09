@@ -15,8 +15,6 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
@@ -37,7 +35,7 @@ func newRequestFromPb(pbMsg *pb.Request) *request {
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Request{Request: m.pbMsg}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *request) ClientID() uint32 {

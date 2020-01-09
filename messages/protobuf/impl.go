@@ -35,18 +35,7 @@ func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
 		return nil, xerrors.Errorf("failed to unmarshal message wrapper: %w", err)
 	}
 
-	switch t := pbMsg.Type.(type) {
-	case *pb.Message_Request:
-		return newRequestFromPb(t.Request), nil
-	case *pb.Message_Prepare:
-		return newPrepareFromPb(t.Prepare), nil
-	case *pb.Message_Commit:
-		return newCommitFromPb(t.Commit), nil
-	case *pb.Message_Reply:
-		return newReplyFromPb(t.Reply), nil
-	default:
-		return nil, xerrors.New("unknown message type")
-	}
+	return typedMessageFromPb(pbMsg)
 }
 
 func (*impl) NewRequest(cl uint32, seq uint64, op []byte) messages.Request {
@@ -63,4 +52,37 @@ func (*impl) NewCommit(r uint32, prep messages.Prepare) messages.Commit {
 
 func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
 	return newReply(r, cl, seq, res)
+}
+
+func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
+	switch t := pbMsg.Type.(type) {
+	case *pb.Message_Request:
+		return newRequestFromPb(t.Request), nil
+	case *pb.Message_Reply:
+		return newReplyFromPb(t.Reply), nil
+	case *pb.Message_Prepare:
+		return newPrepareFromPb(t.Prepare), nil
+	case *pb.Message_Commit:
+		return newCommitFromPb(t.Commit), nil
+	default:
+		return nil, xerrors.New("unknown message type")
+	}
+}
+
+func marshalMessage(m proto.Message) ([]byte, error) {
+	pbMsg := &pb.Message{}
+	switch m := m.(type) {
+	case *pb.Request:
+		pbMsg.Type = &pb.Message_Request{Request: m}
+	case *pb.Reply:
+		pbMsg.Type = &pb.Message_Reply{Reply: m}
+	case *pb.Prepare:
+		pbMsg.Type = &pb.Message_Prepare{Prepare: m}
+	case *pb.Commit:
+		pbMsg.Type = &pb.Message_Commit{Commit: m}
+	default:
+		panic("marshaling unknown message type")
+	}
+
+	return proto.Marshal(pbMsg)
 }

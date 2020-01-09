@@ -15,8 +15,6 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
@@ -38,7 +36,7 @@ func newPrepareFromPb(pbMsg *pb.Prepare) *prepare {
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Prepare{Prepare: m.pbMsg}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *prepare) ReplicaID() uint32 {

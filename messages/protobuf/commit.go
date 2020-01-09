@@ -15,8 +15,6 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
@@ -37,7 +35,7 @@ func newCommitFromPb(pbMsg *pb.Commit) *commit {
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Commit{Commit: m.pbMsg}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *commit) ReplicaID() uint32 {
