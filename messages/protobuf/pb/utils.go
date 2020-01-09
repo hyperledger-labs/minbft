@@ -38,3 +38,14 @@ func RequestFromAPI(req messages.Request) *Request {
 		Signature: req.Signature(),
 	}
 }
+
+func PrepareFromAPI(prep messages.Prepare) *Prepare {
+	return &Prepare{
+		Msg: &Prepare_M{
+			ReplicaId: prep.ReplicaID(),
+			View:      prep.View(),
+			Request:   RequestFromAPI(prep.Request()),
+		},
+		ReplicaUi: prep.UIBytes(),
+	}
+}

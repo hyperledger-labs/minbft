@@ -79,11 +79,8 @@ message Prepare {
 
 message Commit {
     message M {
-        uint64 view = 1;        // v: view
-        uint32 replica_id = 2;  // s_j: replica id
-        uint32 primary_id = 3;  // s_i: primary id
-        Request request = 4;    // m: request message
-        bytes primary_ui = 5;   // UI_i: primary UI
+        uint32 replica_id = 1; // s_j: replica id
+        Prepare prepare = 2;   // prepare message
     }
     M msg = 1;
     bytes replica_ui = 2;       // UI_j: replica UI

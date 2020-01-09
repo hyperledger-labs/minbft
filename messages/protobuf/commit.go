@@ -28,10 +28,7 @@ type commit struct {
 func newCommit(r uint32, prep messages.Prepare) *commit {
 	return &commit{pbMsg: &pb.Commit{Msg: &pb.Commit_M{
 		ReplicaId: r,
-		PrimaryId: prep.ReplicaID(),
-		View:      prep.View(),
-		Request:   pb.RequestFromAPI(prep.Request()),
-		PrimaryUi: prep.UIBytes(),
+		Prepare:   pb.PrepareFromAPI(prep),
 	}}}
 }
 
@@ -48,14 +45,7 @@ func (m *commit) ReplicaID() uint32 {
 }
 
 func (m *commit) Prepare() messages.Prepare {
-	return newPrepareFromPb(&pb.Prepare{
-		Msg: &pb.Prepare_M{
-			ReplicaId: m.pbMsg.GetMsg().GetPrimaryId(),
-			View:      m.pbMsg.GetMsg().GetView(),
-			Request:   m.pbMsg.GetMsg().GetRequest(),
-		},
-		ReplicaUi: m.pbMsg.GetMsg().GetPrimaryUi(),
-	})
+	return newPrepareFromPb(m.pbMsg.GetMsg().GetPrepare())
 }
 
 func (m *commit) CertifiedPayload() []byte {
