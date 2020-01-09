@@ -15,7 +15,7 @@
 package protobuf
 
 import (
-	fmt "fmt"
+	"golang.org/x/xerrors"
 
 	"github.com/golang/protobuf/proto"
 
@@ -32,7 +32,7 @@ func NewImpl() messages.MessageImpl {
 func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
 	msg := &pb.Message{}
 	if err := proto.Unmarshal(data, msg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal message wrapper: %s", err)
+		return nil, xerrors.Errorf("failed to unmarshal message wrapper: %w", err)
 	}
 
 	switch t := msg.Type.(type) {
@@ -53,7 +53,7 @@ func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
 		reply.set(t.Reply)
 		return reply, nil
 	default:
-		return nil, fmt.Errorf("unknown message type")
+		return nil, xerrors.New("unknown message type")
 	}
 }
 
