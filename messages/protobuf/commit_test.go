@@ -34,14 +34,25 @@ func TestCommit(t *testing.T) {
 		requirePrepEqual(t, prep, comm.Prepare())
 	})
 	t.Run("CertifiedPayload", func(t *testing.T) {
-		prep := randPrep(impl)
+		p := rand.Uint32()
+		v := rand.Uint64()
+		req := randReq(impl)
+		prepCV := rand.Uint64()
+		prep := newTestPrep(impl, p, v, req, prepCV)
 
 		r := rand.Uint32()
 		cv := rand.Uint64()
 		comm := newTestComm(impl, r, prep, cv)
 		cp := comm.CertifiedPayload()
 
-		require.NotEqual(t, cp, newTestComm(impl, r, randPrep(impl), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestComm(impl, r,
+			newTestPrep(impl, rand.Uint32(), v, req, prepCV), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestComm(impl, r,
+			newTestPrep(impl, p, rand.Uint64(), req, prepCV), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestComm(impl, r,
+			newTestPrep(impl, p, v, randReq(impl), prepCV), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestComm(impl, r,
+			newTestPrep(impl, p, v, req, rand.Uint64()), cv).CertifiedPayload())
 	})
 	t.Run("SetUIBytes", func(t *testing.T) {
 		comm := randComm(impl)

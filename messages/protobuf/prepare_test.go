@@ -36,7 +36,11 @@ func TestPrepare(t *testing.T) {
 		requireReqEqual(t, req, prep.Request())
 	})
 	t.Run("CertifiedPayload", func(t *testing.T) {
-		req := randReq(impl)
+		cl := rand.Uint32()
+		seq := rand.Uint64()
+		op := randBytes()
+		req := newTestReq(impl, cl, seq, op)
+
 		r := rand.Uint32()
 		v := rand.Uint64()
 		cv := rand.Uint64()
@@ -46,7 +50,14 @@ func TestPrepare(t *testing.T) {
 		require.NotEqual(t, cp, newTestPrep(impl, r,
 			rand.Uint64(), req, cv).CertifiedPayload())
 		require.NotEqual(t, cp, newTestPrep(impl, r,
-			v, randReq(impl), cv).CertifiedPayload())
+			v, newTestReq(impl,
+				rand.Uint32(), seq, op), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestPrep(impl, r,
+			v, newTestReq(impl,
+				cl, rand.Uint64(), op), cv).CertifiedPayload())
+		require.NotEqual(t, cp, newTestPrep(impl, r,
+			v, newTestReq(impl,
+				cl, seq, randBytes()), cv).CertifiedPayload())
 	})
 	t.Run("SetUIBytes", func(t *testing.T) {
 		prep := randPrep(impl)
