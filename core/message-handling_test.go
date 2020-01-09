@@ -67,26 +67,26 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	}{i: rand.Int()}
 
 	mock.On("messageValidator", msg).Return(fmt.Errorf("Error")).Once()
-	_, _, err := handle(msg)
+	_, _, err := handle(msg, false)
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
-	_, _, err = handle(msg)
+	_, _, err = handle(msg, false)
 	assert.Error(t, err)
 
 	nilRelyChan := (chan messages.Message)(nil)
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, fmt.Errorf("Error")).Once()
-	_, new, err := handle(msg)
+	_, new, err := handle(msg, false)
 	assert.Error(t, err)
 	assert.False(t, new)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err := handle(msg)
+	ch, new, err := handle(msg, false)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Nil(t, ch)
@@ -94,7 +94,7 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle(msg, false)
 	assert.NoError(t, err)
 	assert.True(t, new)
 	assert.Nil(t, ch)
@@ -104,7 +104,7 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle(msg, false)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Equal(t, reply, <-ch)
@@ -114,10 +114,26 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg)
+	ch, new, err = handle(msg, false)
 	assert.NoError(t, err)
 	assert.True(t, new)
 	assert.Equal(t, reply, <-ch)
+
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+	_, _, err = handle(msg, true)
+	assert.Error(t, err)
+
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	ch, new, err = handle(msg, true)
+	assert.NoError(t, err)
+	assert.False(t, new)
+	assert.Nil(t, ch)
+
+	mock.On("messageProcessor", msg).Return(true, nil).Once()
+	ch, new, err = handle(msg, true)
+	assert.NoError(t, err)
+	assert.True(t, new)
+	assert.Nil(t, ch)
 }
 
 func TestMakeMessageValidator(t *testing.T) {
@@ -246,7 +262,9 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 	defer ctrl.Finish()
 
 	n := randN()
-	id := randReplicaID(n)
+	view := randView()
+	primary := primaryID(n, view)
+	backup := randOtherReplicaID(primary, n)
 
 	processMessage := func(msg messages.Message) (new bool, err error) {
 		args := mock.MethodCalled("messageProcessor", msg)
@@ -256,27 +274,21 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("uiMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeReplicaMessageProcessor(id, processMessage, processUIMessage, logging.MustGetLogger(module))
+	process := makeReplicaMessageProcessor(processMessage, processUIMessage, logging.MustGetLogger(module))
 
-	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
+	request := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), nil)
+	prepare := messageImpl.NewPrepare(primary, viewForPrimary(n, primary), request)
+	commit := messageImpl.NewCommit(backup, prepare)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockReplicaMessage(ctrl)
-		msg.EXPECT().ReplicaID().Return(randOtherReplicaID(id, n)).AnyTimes()
+		msg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		ownPrepare := messageImpl.NewPrepare(id, viewForPrimary(n, id), request)
-		new, err := process(ownPrepare)
-		assert.NoError(t, err)
-		assert.False(t, new, "Own Prepare")
-
-		primary := randOtherReplicaID(id, n)
-		prepare := messageImpl.NewPrepare(primary, viewForPrimary(n, primary), request)
-
 		mock.On("messageProcessor", request).Return(false, fmt.Errorf("Error")).Once()
 		mock.On("uiMessageProcessor", prepare).Return(true, nil).Once()
-		_, err = process(prepare)
+		_, err := process(prepare)
 		assert.NoError(t, err)
 
 		mock.On("messageProcessor", request).Return(true, nil).Once()
@@ -286,7 +298,7 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 
 		mock.On("messageProcessor", request).Return(true, nil).Once()
 		mock.On("uiMessageProcessor", prepare).Return(true, nil).Once()
-		new, err = process(prepare)
+		new, err := process(prepare)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
@@ -297,19 +309,9 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 		assert.False(t, new)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		primary := randOtherReplicaID(id, n)
-		prepare := messageImpl.NewPrepare(primary, viewForPrimary(n, primary), request)
-
-		ownCommit := messageImpl.NewCommit(id, prepare)
-		new, err := process(ownCommit)
-		assert.NoError(t, err)
-		assert.False(t, new, "Own Commit")
-
-		commit := messageImpl.NewCommit(randOtherReplicaID(id, n), prepare)
-
 		mock.On("messageProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
 		mock.On("uiMessageProcessor", commit).Return(true, nil).Once()
-		_, err = process(commit)
+		_, err := process(commit)
 		assert.NoError(t, err)
 
 		mock.On("messageProcessor", prepare).Return(true, nil).Once()
@@ -319,7 +321,7 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 
 		mock.On("messageProcessor", prepare).Return(true, nil).Once()
 		mock.On("uiMessageProcessor", commit).Return(true, nil).Once()
-		new, err = process(commit)
+		new, err := process(commit)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
@@ -565,10 +567,10 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 	assignUI := func(msg messages.CertifiedMessage) {
 		mock.MethodCalled("uiAssigner", msg)
 	}
-	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
-		mock.MethodCalled("generatedMessageHandler", msg)
+	consumeGeneratedMessage := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageConsumer", msg)
 	}
-	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
+	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeGeneratedMessage)
 
 	msg := struct {
 		messages.CertifiedMessage
@@ -576,7 +578,7 @@ func TestMakeGeneratedUIMessageHandler(t *testing.T) {
 	}{i: rand.Int()}
 
 	mock.On("uiAssigner", msg).Once()
-	mock.On("generatedMessageHandler", msg).Once()
+	mock.On("generatedMessageConsumer", msg).Once()
 	handleGeneratedUIMessage(msg)
 }
 
@@ -632,7 +634,7 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 		return clientState
 	}
 
-	consume := makeGeneratedMessageConsumer(log, clientStates)
+	consume := makeGeneratedMessageConsumer(log, clientStates, logging.MustGetLogger(module))
 
 	t.Run("Reply", func(t *testing.T) {
 		reply := messageImpl.NewReply(rand.Uint32(), clientID, rand.Uint64(), nil)
@@ -652,30 +654,4 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 		log.EXPECT().Append(msg)
 		consume(msg)
 	})
-}
-
-func TestMakeGeneratedMessageHandler(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	applyReplicaMessage := func(msg messages.ReplicaMessage, active bool) error {
-		args := mock.MethodCalled("replicaMessageApplier", msg, active)
-		return args.Error(0)
-	}
-	consume := func(msg messages.ReplicaMessage) {
-		mock.MethodCalled("generatedMessageConsumer", msg)
-	}
-	handle := makeGeneratedMessageHandler(applyReplicaMessage, consume, logging.MustGetLogger(module))
-
-	msg := mock_messages.NewMockReplicaMessage(ctrl)
-
-	mock.On("replicaMessageApplier", msg, true).Return(fmt.Errorf("Error")).Once()
-	assert.Panics(t, func() { handle(msg) }, "Failed to apply generated message")
-
-	mock.On("replicaMessageApplier", msg, true).Return(nil).Once()
-	mock.On("generatedMessageConsumer", msg).Once()
-	handle(msg)
 }
