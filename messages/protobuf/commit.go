@@ -26,7 +26,7 @@ type commit struct {
 func newCommit(r uint32, prep messages.Prepare) *commit {
 	return &commit{pbMsg: &pb.Commit{
 		ReplicaId: r,
-		Prepare:   pb.PrepareFromAPI(prep),
+		Prepare:   pbPrepareFromAPI(prep),
 	}}
 }
 

@@ -27,7 +27,7 @@ func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
 	return &prepare{pbMsg: &pb.Prepare{
 		ReplicaId: r,
 		View:      v,
-		Request:   pb.RequestFromAPI(req),
+		Request:   pbRequestFromAPI(req),
 	}}
 }
 
@@ -65,3 +65,11 @@ func (m *prepare) SetUIBytes(uiBytes []byte) {
 
 func (prepare) ImplementsReplicaMessage() {}
 func (prepare) ImplementsPrepare()        {}
+
+func pbPrepareFromAPI(m messages.Prepare) *pb.Prepare {
+	if m, ok := m.(*prepare); ok {
+		return m.pbMsg
+	}
+
+	return pb.PrepareFromAPI(m)
+}

@@ -15,6 +15,7 @@
 package protobuf
 
 import (
+	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
@@ -64,3 +65,11 @@ func (m *request) SetSignature(signature []byte) {
 
 func (request) ImplementsClientMessage() {}
 func (request) ImplementsRequest()       {}
+
+func pbRequestFromAPI(m messages.Request) *pb.Request {
+	if m, ok := m.(*request); ok {
+		return m.pbMsg
+	}
+
+	return pb.RequestFromAPI(m)
+}
