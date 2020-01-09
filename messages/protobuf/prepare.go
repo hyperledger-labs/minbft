@@ -22,7 +22,7 @@ import (
 )
 
 type prepare struct {
-	pbMsg pb.Prepare
+	pbMsg *pb.Prepare
 }
 
 func newPrepare() *prepare {
@@ -30,7 +30,7 @@ func newPrepare() *prepare {
 }
 
 func (m *prepare) init(r uint32, v uint64, req messages.Request) {
-	m.pbMsg = pb.Prepare{Msg: &pb.Prepare_M{
+	m.pbMsg = &pb.Prepare{Msg: &pb.Prepare_M{
 		ReplicaId: r,
 		View:      v,
 		Request:   pb.RequestFromAPI(req),
@@ -38,29 +38,29 @@ func (m *prepare) init(r uint32, v uint64, req messages.Request) {
 }
 
 func (m *prepare) set(pbMsg *pb.Prepare) {
-	m.pbMsg = *pbMsg
+	m.pbMsg = pbMsg
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Prepare{Prepare: &m.pbMsg}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Prepare{Prepare: m.pbMsg}})
 }
 
 func (m *prepare) ReplicaID() uint32 {
-	return m.pbMsg.Msg.GetReplicaId()
+	return m.pbMsg.GetMsg().GetReplicaId()
 }
 
 func (m *prepare) View() uint64 {
-	return m.pbMsg.Msg.GetView()
+	return m.pbMsg.GetMsg().GetView()
 }
 
 func (m *prepare) Request() messages.Request {
 	req := newRequest()
-	req.set(m.pbMsg.Msg.GetRequest())
+	req.set(m.pbMsg.GetMsg().GetRequest())
 	return req
 }
 
 func (m *prepare) CertifiedPayload() []byte {
-	return pb.MarshalOrPanic(m.pbMsg.Msg)
+	return pb.MarshalOrPanic(m.pbMsg.GetMsg())
 }
 
 func (m *prepare) UIBytes() []byte {

@@ -21,7 +21,7 @@ import (
 )
 
 type request struct {
-	pbMsg pb.Request
+	pbMsg *pb.Request
 }
 
 func newRequest() *request {
@@ -29,7 +29,7 @@ func newRequest() *request {
 }
 
 func (m *request) init(cl uint32, seq uint64, op []byte) {
-	m.pbMsg = pb.Request{Msg: &pb.Request_M{
+	m.pbMsg = &pb.Request{Msg: &pb.Request_M{
 		ClientId: cl,
 		Seq:      seq,
 		Payload:  op,
@@ -37,27 +37,27 @@ func (m *request) init(cl uint32, seq uint64, op []byte) {
 }
 
 func (m *request) set(pbMsg *pb.Request) {
-	m.pbMsg = *pbMsg
+	m.pbMsg = pbMsg
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Request{Request: &m.pbMsg}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Request{Request: m.pbMsg}})
 }
 
 func (m *request) ClientID() uint32 {
-	return m.pbMsg.Msg.GetClientId()
+	return m.pbMsg.GetMsg().GetClientId()
 }
 
 func (m *request) Sequence() uint64 {
-	return m.pbMsg.Msg.GetSeq()
+	return m.pbMsg.GetMsg().GetSeq()
 }
 
 func (m *request) Operation() []byte {
-	return m.pbMsg.Msg.GetPayload()
+	return m.pbMsg.GetMsg().GetPayload()
 }
 
 func (m *request) SignedPayload() []byte {
-	return pb.MarshalOrPanic(m.pbMsg.Msg)
+	return pb.MarshalOrPanic(m.pbMsg.GetMsg())
 }
 
 func (m *request) Signature() []byte {
