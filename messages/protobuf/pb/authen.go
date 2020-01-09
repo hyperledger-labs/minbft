@@ -59,30 +59,26 @@ func AuthenBytesFromCommit(m *Commit) []byte {
 }
 
 func writeAuthenBytesFromRequest(buf io.Writer, m *Request) {
-	msg := m.GetMsg()
-	_ = binary.Write(buf, binary.BigEndian, msg.GetSeq())
-	_, _ = buf.Write(hashsum(msg.GetPayload()))
+	_ = binary.Write(buf, binary.BigEndian, m.GetSeq())
+	_, _ = buf.Write(hashsum(m.GetPayload()))
 }
 
 func writeAuthenBytesFromReply(buf io.Writer, m *Reply) {
-	msg := m.GetMsg()
-	_ = binary.Write(buf, binary.BigEndian, msg.GetClientId())
-	_ = binary.Write(buf, binary.BigEndian, msg.GetSeq())
-	_, _ = buf.Write(hashsum(msg.GetResult()))
+	_ = binary.Write(buf, binary.BigEndian, m.GetClientId())
+	_ = binary.Write(buf, binary.BigEndian, m.GetSeq())
+	_, _ = buf.Write(hashsum(m.GetResult()))
 }
 
 func writeAuthenBytesFromPrepare(buf io.Writer, m *Prepare) {
-	msg := m.GetMsg()
-	req := msg.GetRequest()
-	_ = binary.Write(buf, binary.BigEndian, msg.GetView())
-	_ = binary.Write(buf, binary.BigEndian, req.GetMsg().GetClientId())
+	req := m.GetRequest()
+	_ = binary.Write(buf, binary.BigEndian, m.GetView())
+	_ = binary.Write(buf, binary.BigEndian, req.GetClientId())
 	writeAuthenBytesFromRequest(buf, req)
 }
 
 func writeAuthenBytesFromCommit(buf io.Writer, m *Commit) {
-	msg := m.GetMsg()
-	prep := msg.GetPrepare()
-	_ = binary.Write(buf, binary.BigEndian, prep.GetMsg().GetReplicaId())
+	prep := m.GetPrepare()
+	_ = binary.Write(buf, binary.BigEndian, prep.GetReplicaId())
 	writeAuthenBytesFromPrepare(buf, prep)
 	_, _ = buf.Write(prep.GetReplicaUi())
 }

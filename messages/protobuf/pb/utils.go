@@ -30,22 +30,18 @@ func MarshalOrPanic(m proto.Message) []byte {
 
 func RequestFromAPI(req messages.Request) *Request {
 	return &Request{
-		Msg: &Request_M{
-			ClientId: req.ClientID(),
-			Seq:      req.Sequence(),
-			Payload:  req.Operation(),
-		},
+		ClientId:  req.ClientID(),
+		Seq:       req.Sequence(),
+		Payload:   req.Operation(),
 		Signature: req.Signature(),
 	}
 }
 
 func PrepareFromAPI(prep messages.Prepare) *Prepare {
 	return &Prepare{
-		Msg: &Prepare_M{
-			ReplicaId: prep.ReplicaID(),
-			View:      prep.View(),
-			Request:   RequestFromAPI(prep.Request()),
-		},
+		ReplicaId: prep.ReplicaID(),
+		View:      prep.View(),
+		Request:   RequestFromAPI(prep.Request()),
 		ReplicaUi: prep.UIBytes(),
 	}
 }

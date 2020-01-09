@@ -23,11 +23,11 @@ type request struct {
 }
 
 func newRequest(cl uint32, seq uint64, op []byte) *request {
-	return &request{pbMsg: &pb.Request{Msg: &pb.Request_M{
+	return &request{pbMsg: &pb.Request{
 		ClientId: cl,
 		Seq:      seq,
 		Payload:  op,
-	}}}
+	}}
 }
 
 func newRequestFromPb(pbMsg *pb.Request) *request {
@@ -39,15 +39,15 @@ func (m *request) MarshalBinary() ([]byte, error) {
 }
 
 func (m *request) ClientID() uint32 {
-	return m.pbMsg.GetMsg().GetClientId()
+	return m.pbMsg.GetClientId()
 }
 
 func (m *request) Sequence() uint64 {
-	return m.pbMsg.GetMsg().GetSeq()
+	return m.pbMsg.GetSeq()
 }
 
 func (m *request) Operation() []byte {
-	return m.pbMsg.GetMsg().GetPayload()
+	return m.pbMsg.GetPayload()
 }
 
 func (m *request) SignedPayload() []byte {

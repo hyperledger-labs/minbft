@@ -24,10 +24,10 @@ type commit struct {
 }
 
 func newCommit(r uint32, prep messages.Prepare) *commit {
-	return &commit{pbMsg: &pb.Commit{Msg: &pb.Commit_M{
+	return &commit{pbMsg: &pb.Commit{
 		ReplicaId: r,
 		Prepare:   pb.PrepareFromAPI(prep),
-	}}}
+	}}
 }
 
 func newCommitFromPb(pbMsg *pb.Commit) *commit {
@@ -39,11 +39,11 @@ func (m *commit) MarshalBinary() ([]byte, error) {
 }
 
 func (m *commit) ReplicaID() uint32 {
-	return m.pbMsg.GetMsg().GetReplicaId()
+	return m.pbMsg.GetReplicaId()
 }
 
 func (m *commit) Prepare() messages.Prepare {
-	return newPrepareFromPb(m.pbMsg.GetMsg().GetPrepare())
+	return newPrepareFromPb(m.pbMsg.GetPrepare())
 }
 
 func (m *commit) CertifiedPayload() []byte {

@@ -23,12 +23,12 @@ type reply struct {
 }
 
 func newReply(r, cl uint32, seq uint64, res []byte) *reply {
-	return &reply{pbMsg: &pb.Reply{Msg: &pb.Reply_M{
+	return &reply{pbMsg: &pb.Reply{
 		ReplicaId: r,
 		ClientId:  cl,
 		Seq:       seq,
 		Result:    res,
-	}}}
+	}}
 }
 
 func newReplyFromPb(pbMsg *pb.Reply) *reply {
@@ -40,19 +40,19 @@ func (m *reply) MarshalBinary() ([]byte, error) {
 }
 
 func (m *reply) ReplicaID() uint32 {
-	return m.pbMsg.GetMsg().GetReplicaId()
+	return m.pbMsg.GetReplicaId()
 }
 
 func (m *reply) ClientID() uint32 {
-	return m.pbMsg.GetMsg().GetClientId()
+	return m.pbMsg.GetClientId()
 }
 
 func (m *reply) Sequence() uint64 {
-	return m.pbMsg.GetMsg().GetSeq()
+	return m.pbMsg.GetSeq()
 }
 
 func (m *reply) Result() []byte {
-	return m.pbMsg.GetMsg().GetResult()
+	return m.pbMsg.GetResult()
 }
 
 func (m *reply) SignedPayload() []byte {
