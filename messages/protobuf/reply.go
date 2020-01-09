@@ -21,7 +21,7 @@ import (
 )
 
 type reply struct {
-	pb.Reply
+	pbMsg pb.Reply
 }
 
 func newReply() *reply {
@@ -29,7 +29,7 @@ func newReply() *reply {
 }
 
 func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
-	m.Reply = pb.Reply{Msg: &pb.Reply_M{
+	m.pbMsg = pb.Reply{Msg: &pb.Reply_M{
 		ReplicaId: r,
 		ClientId:  cl,
 		Seq:       seq,
@@ -38,39 +38,39 @@ func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
 }
 
 func (m *reply) set(pbMsg *pb.Reply) {
-	m.Reply = *pbMsg
+	m.pbMsg = *pbMsg
 }
 
 func (m *reply) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&pb.Message{Type: &pb.Message_Reply{Reply: &m.Reply}})
+	return proto.Marshal(&pb.Message{Type: &pb.Message_Reply{Reply: &m.pbMsg}})
 }
 
 func (m *reply) ReplicaID() uint32 {
-	return m.Msg.GetReplicaId()
+	return m.pbMsg.Msg.GetReplicaId()
 }
 
 func (m *reply) ClientID() uint32 {
-	return m.Msg.GetClientId()
+	return m.pbMsg.Msg.GetClientId()
 }
 
 func (m *reply) Sequence() uint64 {
-	return m.Msg.GetSeq()
+	return m.pbMsg.Msg.GetSeq()
 }
 
 func (m *reply) Result() []byte {
-	return m.Msg.GetResult()
+	return m.pbMsg.Msg.GetResult()
 }
 
 func (m *reply) SignedPayload() []byte {
-	return pb.MarshalOrPanic(m.Msg)
+	return pb.MarshalOrPanic(m.pbMsg.Msg)
 }
 
 func (m *reply) Signature() []byte {
-	return m.Reply.Signature
+	return m.pbMsg.Signature
 }
 
 func (m *reply) SetSignature(signature []byte) {
-	m.Reply.Signature = signature
+	m.pbMsg.Signature = signature
 }
 
 func (reply) ImplementsReplicaMessage() {}
