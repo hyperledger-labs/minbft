@@ -32,7 +32,7 @@ func RequestFromAPI(req messages.Request) *Request {
 	return &Request{
 		ClientId:  req.ClientID(),
 		Seq:       req.Sequence(),
-		Payload:   req.Operation(),
+		Operation: req.Operation(),
 		Signature: req.Signature(),
 	}
 }
@@ -42,6 +42,6 @@ func PrepareFromAPI(prep messages.Prepare) *Prepare {
 		ReplicaId: prep.ReplicaID(),
 		View:      prep.View(),
 		Request:   RequestFromAPI(prep.Request()),
-		ReplicaUi: prep.UIBytes(),
+		Ui:        prep.UIBytes(),
 	}
 }

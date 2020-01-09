@@ -28,7 +28,7 @@ enum MessageType {
 }
 
 message Message{
-    oneof type {
+    oneof typed {
         Request request = 1;
         Reply reply = 2;
         Prepare prepare = 3;
@@ -39,7 +39,7 @@ message Message{
 message Request {
     uint32 client_id = 1; // c: client id
     uint64 seq = 2;       // seq: request sequence per client
-    bytes payload = 3;    // op: operation payload
+    bytes operation = 3;  // op: operation payload
     bytes signature = 4;  // client signature
 }
 
@@ -55,11 +55,11 @@ message Prepare {
     uint32 replica_id = 1; // s_i: replica id
     uint64 view = 2;       // v: view
     Request request = 3;   // m: request message
-    bytes replica_ui = 4;  // UI_i: replica UI
+    bytes ui = 4;          // UI_i: replica UI
 }
 
 message Commit {
     uint32 replica_id = 1; // s_j: replica id
     Prepare prepare = 2;   // prepare message
-    bytes replica_ui = 3;  // UI_j: replica UI
+    bytes ui = 3;          // UI_j: replica UI
 }

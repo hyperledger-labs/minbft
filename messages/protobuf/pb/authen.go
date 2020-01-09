@@ -60,7 +60,7 @@ func AuthenBytesFromCommit(m *Commit) []byte {
 
 func writeAuthenBytesFromRequest(buf io.Writer, m *Request) {
 	_ = binary.Write(buf, binary.BigEndian, m.GetSeq())
-	_, _ = buf.Write(hashsum(m.GetPayload()))
+	_, _ = buf.Write(hashsum(m.GetOperation()))
 }
 
 func writeAuthenBytesFromReply(buf io.Writer, m *Reply) {
@@ -80,7 +80,7 @@ func writeAuthenBytesFromCommit(buf io.Writer, m *Commit) {
 	prep := m.GetPrepare()
 	_ = binary.Write(buf, binary.BigEndian, prep.GetReplicaId())
 	writeAuthenBytesFromPrepare(buf, prep)
-	_, _ = buf.Write(prep.GetReplicaUi())
+	_, _ = buf.Write(prep.GetUi())
 }
 
 func hashsum(data []byte) []byte {

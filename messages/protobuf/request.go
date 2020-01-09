@@ -25,9 +25,9 @@ type request struct {
 
 func newRequest(cl uint32, seq uint64, op []byte) *request {
 	return &request{pbMsg: &pb.Request{
-		ClientId: cl,
-		Seq:      seq,
-		Payload:  op,
+		ClientId:  cl,
+		Seq:       seq,
+		Operation: op,
 	}}
 }
 
@@ -48,7 +48,7 @@ func (m *request) Sequence() uint64 {
 }
 
 func (m *request) Operation() []byte {
-	return m.pbMsg.GetPayload()
+	return m.pbMsg.GetOperation()
 }
 
 func (m *request) SignedPayload() []byte {

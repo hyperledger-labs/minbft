@@ -51,11 +51,11 @@ func (m *commit) CertifiedPayload() []byte {
 }
 
 func (m *commit) UIBytes() []byte {
-	return m.pbMsg.ReplicaUi
+	return m.pbMsg.Ui
 }
 
 func (m *commit) SetUIBytes(uiBytes []byte) {
-	m.pbMsg.ReplicaUi = uiBytes
+	m.pbMsg.Ui = uiBytes
 }
 
 func (commit) ImplementsReplicaMessage() {}

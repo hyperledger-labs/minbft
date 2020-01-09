@@ -55,7 +55,7 @@ func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
 }
 
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
-	switch t := pbMsg.Type.(type) {
+	switch t := pbMsg.Typed.(type) {
 	case *pb.Message_Request:
 		return newRequestFromPb(t.Request), nil
 	case *pb.Message_Reply:
@@ -73,13 +73,13 @@ func marshalMessage(m proto.Message) ([]byte, error) {
 	pbMsg := &pb.Message{}
 	switch m := m.(type) {
 	case *pb.Request:
-		pbMsg.Type = &pb.Message_Request{Request: m}
+		pbMsg.Typed = &pb.Message_Request{Request: m}
 	case *pb.Reply:
-		pbMsg.Type = &pb.Message_Reply{Reply: m}
+		pbMsg.Typed = &pb.Message_Reply{Reply: m}
 	case *pb.Prepare:
-		pbMsg.Type = &pb.Message_Prepare{Prepare: m}
+		pbMsg.Typed = &pb.Message_Prepare{Prepare: m}
 	case *pb.Commit:
-		pbMsg.Type = &pb.Message_Commit{Commit: m}
+		pbMsg.Typed = &pb.Message_Commit{Commit: m}
 	default:
 		panic("marshaling unknown message type")
 	}
