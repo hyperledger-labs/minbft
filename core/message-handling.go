@@ -469,8 +469,6 @@ func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitAp
 			return applyPrepare(msg, active)
 		case messages.Commit:
 			return applyCommit(msg, active)
-		case messages.Reply:
-			return nil
 		default:
 			panic("Unknown message type")
 		}

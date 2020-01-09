@@ -472,7 +472,6 @@ func TestMakeReplicaMessageApplier(t *testing.T) {
 	request := messageImpl.NewRequest(0, reqSeq, nil)
 	prepare := messageImpl.NewPrepare(0, 0, request)
 	commit := messageImpl.NewCommit(1, prepare)
-	reply := messageImpl.NewReply(1, 0, reqSeq, nil)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockReplicaMessage(ctrl)
@@ -502,13 +501,6 @@ func TestMakeReplicaMessageApplier(t *testing.T) {
 
 		mock.On("commitApplier", commit, false).Return(nil).Once()
 		err = apply(commit, false)
-		assert.NoError(t, err)
-	})
-	t.Run("Reply", func(t *testing.T) {
-		err := apply(reply, true)
-		assert.NoError(t, err)
-
-		err = apply(reply, false)
 		assert.NoError(t, err)
 	})
 }
