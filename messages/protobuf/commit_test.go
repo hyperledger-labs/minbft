@@ -34,14 +34,18 @@ func TestCommit(t *testing.T) {
 		requirePrepEqual(t, prep, comm.Prepare())
 	})
 	t.Run("CertifiedPayload", func(t *testing.T) {
-		comm := randComm(impl)
-		r := comm.ReplicaID()
+		prep := randPrep(impl)
+
+		r := rand.Uint32()
+		cv := rand.Uint64()
+		comm := newTestComm(impl, r, prep, cv)
 		cp := comm.CertifiedPayload()
-		require.NotEqual(t, cp, newTestComm(impl, r, randPrep(impl)).CertifiedPayload())
+
+		require.NotEqual(t, cp, newTestComm(impl, r, randPrep(impl), cv).CertifiedPayload())
 	})
 	t.Run("SetUIBytes", func(t *testing.T) {
 		comm := randComm(impl)
-		uiBytes := newTestUI(comm.CertifiedPayload())
+		uiBytes := randUI(comm.CertifiedPayload())
 		comm.SetUIBytes(uiBytes)
 		require.Equal(t, uiBytes, comm.UIBytes())
 	})
@@ -52,12 +56,12 @@ func TestCommit(t *testing.T) {
 }
 
 func randComm(impl messages.MessageImpl) messages.Commit {
-	return newTestComm(impl, rand.Uint32(), randPrep(impl))
+	return newTestComm(impl, rand.Uint32(), randPrep(impl), rand.Uint64())
 }
 
-func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare) messages.Commit {
+func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv uint64) messages.Commit {
 	comm := impl.NewCommit(r, prep)
-	uiBytes := newTestUI(comm.CertifiedPayload())
+	uiBytes := newTestUI(cv, comm.CertifiedPayload())
 	comm.SetUIBytes(uiBytes)
 	return comm
 }
