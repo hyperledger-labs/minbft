@@ -256,7 +256,7 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("uiMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeReplicaMessageProcessor(id, processMessage, processUIMessage)
+	process := makeReplicaMessageProcessor(id, processMessage, processUIMessage, logging.MustGetLogger(module))
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
@@ -275,8 +275,9 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 		prepare := messageImpl.NewPrepare(primary, viewForPrimary(n, primary), request)
 
 		mock.On("messageProcessor", request).Return(false, fmt.Errorf("Error")).Once()
+		mock.On("uiMessageProcessor", prepare).Return(true, nil).Once()
 		_, err = process(prepare)
-		assert.Error(t, err, "Failed to process embedded Request")
+		assert.NoError(t, err)
 
 		mock.On("messageProcessor", request).Return(true, nil).Once()
 		mock.On("uiMessageProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
@@ -307,8 +308,9 @@ func TestMakeReplicaMessageProcessor(t *testing.T) {
 		commit := messageImpl.NewCommit(randOtherReplicaID(id, n), prepare)
 
 		mock.On("messageProcessor", prepare).Return(false, fmt.Errorf("Error")).Once()
+		mock.On("uiMessageProcessor", commit).Return(true, nil).Once()
 		_, err = process(commit)
-		assert.Error(t, err, "Failed to process embedded Prepare")
+		assert.NoError(t, err)
 
 		mock.On("messageProcessor", prepare).Return(true, nil).Once()
 		mock.On("uiMessageProcessor", commit).Return(false, fmt.Errorf("Error")).Once()

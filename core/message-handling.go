@@ -217,7 +217,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyReplicaMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
-	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage)
+	processReplicaMessage := makeReplicaMessageProcessor(id, processMessageThunk, processUIMessage, logger)
 	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
@@ -384,7 +384,7 @@ func makeMessageProcessor(processRequest requestProcessor, processReplicaMessage
 	}
 }
 
-func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIMessage uiMessageProcessor) replicaMessageProcessor {
+func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIMessage uiMessageProcessor, logger *logging.Logger) replicaMessageProcessor {
 	return func(msg messages.ReplicaMessage) (new bool, err error) {
 		if msg.ReplicaID() == id {
 			return false, nil
@@ -392,7 +392,8 @@ func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIM
 
 		for _, m := range messages.EmbeddedMessages(msg) {
 			if _, err := process(m); err != nil {
-				return false, fmt.Errorf("Failed to process embedded message: %s", err)
+				logger.Warningf("Failed to process %s extracted from %s: %s",
+					messageString(m), messageString(msg), err)
 			}
 		}
 
