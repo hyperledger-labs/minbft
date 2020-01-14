@@ -15,66 +15,47 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type commit struct {
-	Commit
+	pbMsg *pb.Commit
 }
 
-func newCommit() *commit {
-	return &commit{}
-}
-
-func (m *commit) init(r uint32, prep messages.Prepare) {
-	req := prep.Request()
-
-	m.Commit = Commit{Msg: &Commit_M{
+func newCommit(r uint32, prep messages.Prepare) *commit {
+	return &commit{pbMsg: &pb.Commit{
 		ReplicaId: r,
-		PrimaryId: prep.ReplicaID(),
-		View:      prep.View(),
-		Request:   pbRequestFromAPI(req),
-		PrimaryUi: prep.UIBytes(),
+		Prepare:   pbPrepareFromAPI(prep),
 	}}
 }
 
-func (m *commit) set(pbMsg *Commit) {
-	m.Commit = *pbMsg
+func newCommitFromPb(pbMsg *pb.Commit) *commit {
+	return &commit{pbMsg: pbMsg}
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Commit{Commit: &m.Commit}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *commit) ReplicaID() uint32 {
-	return m.Msg.GetReplicaId()
+	return m.pbMsg.GetReplicaId()
 }
 
 func (m *commit) Prepare() messages.Prepare {
-	prep := newPrepare()
-	prep.set(&Prepare{
-		Msg: &Prepare_M{
-			ReplicaId: m.Msg.GetPrimaryId(),
-			View:      m.Msg.GetView(),
-			Request:   m.Msg.GetRequest(),
-		},
-		ReplicaUi: m.Msg.GetPrimaryUi(),
-	})
-	return prep
+	return newPrepareFromPb(m.pbMsg.GetPrepare())
 }
 
 func (m *commit) CertifiedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.AuthenBytesFromCommit(m.pbMsg)
 }
 
 func (m *commit) UIBytes() []byte {
-	return m.ReplicaUi
+	return m.pbMsg.Ui
 }
 
 func (m *commit) SetUIBytes(uiBytes []byte) {
-	m.ReplicaUi = uiBytes
+	m.pbMsg.Ui = uiBytes
 }
 
 func (commit) ImplementsReplicaMessage() {}

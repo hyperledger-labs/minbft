@@ -1,0 +1,100 @@
+// Copyright (c) 2018 NEC Laboratories Europe GmbH.
+//
+// Authors: Wenting Li <wenting.li@neclab.eu>
+//          Sergey Fedorov <sergey.fedorov@neclab.eu>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+// Package pb defines MinBFT protocol messages in Protobuf format.
+package pb;
+
+// MessageType represents message type tag.
+enum MessageType {
+    UNKNOWN = 0;
+    REQUEST = 1;
+    REPLY = 2;
+    PREPARE = 3;
+    COMMIT = 4;
+}
+
+// Message represents arbitrary protocol message.
+message Message{
+    oneof typed {
+        Request request = 1;
+        Reply reply = 2;
+        Prepare prepare = 3;
+        Commit commit = 4;
+    }
+}
+
+// Request represents REQUEST message.
+message Request {
+    // Client identifier
+    uint32 client_id = 1;
+
+    // Request identifier (timestamp / sequence number)
+    uint64 seq = 2;
+
+    // Operation to execute on replicated state machine
+    bytes operation = 3;
+
+    // Client's signature
+    bytes signature = 4;
+}
+
+// Reply represents REPLY message.
+message Reply {
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // Client identifier
+    uint32 client_id = 2;
+
+    // Request identifier
+    uint64 seq = 3;
+
+    // Result of requested operation execution
+    bytes result = 4;
+
+    // Replica's signature
+    bytes signature = 5;
+}
+
+// Prepare represents PREPARE message.
+message Prepare {
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // View number
+    uint64 view = 2;
+
+    // Client's REQUEST
+    Request request = 3;
+
+    // Replica's UI
+    bytes ui = 4;
+}
+
+// Commit represents COMMIT message.
+message Commit {
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // Primary's PREPARE
+    Prepare prepare = 2;
+
+    // Replica's UI
+    bytes ui = 3;
+}

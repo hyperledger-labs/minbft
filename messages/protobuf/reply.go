@@ -15,19 +15,15 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type reply struct {
-	Reply
+	pbMsg *pb.Reply
 }
 
-func newReply() *reply {
-	return &reply{}
-}
-
-func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
-	m.Reply = Reply{Msg: &Reply_M{
+func newReply(r, cl uint32, seq uint64, res []byte) *reply {
+	return &reply{pbMsg: &pb.Reply{
 		ReplicaId: r,
 		ClientId:  cl,
 		Seq:       seq,
@@ -35,40 +31,40 @@ func (m *reply) init(r, cl uint32, seq uint64, res []byte) {
 	}}
 }
 
-func (m *reply) set(pbMsg *Reply) {
-	m.Reply = *pbMsg
+func newReplyFromPb(pbMsg *pb.Reply) *reply {
+	return &reply{pbMsg: pbMsg}
 }
 
 func (m *reply) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Reply{Reply: &m.Reply}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *reply) ReplicaID() uint32 {
-	return m.Msg.GetReplicaId()
+	return m.pbMsg.GetReplicaId()
 }
 
 func (m *reply) ClientID() uint32 {
-	return m.Msg.GetClientId()
+	return m.pbMsg.GetClientId()
 }
 
 func (m *reply) Sequence() uint64 {
-	return m.Msg.GetSeq()
+	return m.pbMsg.GetSeq()
 }
 
 func (m *reply) Result() []byte {
-	return m.Msg.GetResult()
+	return m.pbMsg.GetResult()
 }
 
 func (m *reply) SignedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.AuthenBytesFromReply(m.pbMsg)
 }
 
 func (m *reply) Signature() []byte {
-	return m.Reply.Signature
+	return m.pbMsg.Signature
 }
 
 func (m *reply) SetSignature(signature []byte) {
-	m.Reply.Signature = signature
+	m.pbMsg.Signature = signature
 }
 
 func (reply) ImplementsReplicaMessage() {}

@@ -12,70 +12,80 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package protobuf implements protocol message interface using
+// Protocol Buffers as serialization mechanism.
 package protobuf
 
 import (
-	fmt "fmt"
+	"golang.org/x/xerrors"
 
 	"github.com/golang/protobuf/proto"
 
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type impl struct{}
 
+// NewImpl returns the package's implementation of protocol messages.
 func NewImpl() messages.MessageImpl {
 	return &impl{}
 }
 
 func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
-	msg := &Message{}
-	if err := proto.Unmarshal(data, msg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal message wrapper: %s", err)
+	pbMsg := &pb.Message{}
+	if err := proto.Unmarshal(data, pbMsg); err != nil {
+		return nil, xerrors.Errorf("failed to unmarshal message wrapper: %w", err)
 	}
 
-	switch t := msg.Type.(type) {
-	case *Message_Request:
-		req := newRequest()
-		req.set(t.Request)
-		return req, nil
-	case *Message_Prepare:
-		prep := newPrepare()
-		prep.set(t.Prepare)
-		return prep, nil
-	case *Message_Commit:
-		comm := newCommit()
-		comm.set(t.Commit)
-		return comm, nil
-	case *Message_Reply:
-		reply := newReply()
-		reply.set(t.Reply)
-		return reply, nil
-	default:
-		return nil, fmt.Errorf("unknown message type")
-	}
+	return typedMessageFromPb(pbMsg)
 }
 
 func (*impl) NewRequest(cl uint32, seq uint64, op []byte) messages.Request {
-	m := newRequest()
-	m.init(cl, seq, op)
-	return m
+	return newRequest(cl, seq, op)
 }
 
 func (*impl) NewPrepare(r uint32, v uint64, req messages.Request) messages.Prepare {
-	m := newPrepare()
-	m.init(r, v, req)
-	return m
+	return newPrepare(r, v, req)
 }
 
 func (*impl) NewCommit(r uint32, prep messages.Prepare) messages.Commit {
-	m := newCommit()
-	m.init(r, prep)
-	return m
+	return newCommit(r, prep)
 }
 
 func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
-	m := newReply()
-	m.init(r, cl, seq, res)
-	return m
+	return newReply(r, cl, seq, res)
+}
+
+func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
+	switch t := pbMsg.Typed.(type) {
+	case *pb.Message_Request:
+		return newRequestFromPb(t.Request), nil
+	case *pb.Message_Reply:
+		return newReplyFromPb(t.Reply), nil
+	case *pb.Message_Prepare:
+		return newPrepareFromPb(t.Prepare), nil
+	case *pb.Message_Commit:
+		return newCommitFromPb(t.Commit), nil
+	default:
+		return nil, xerrors.New("unknown message type")
+	}
+}
+
+func marshalMessage(m proto.Message) ([]byte, error) {
+	pbMsg := &pb.Message{}
+	switch m := m.(type) {
+	case *pb.Request:
+		pbMsg.Typed = &pb.Message_Request{Request: m}
+	case *pb.Reply:
+		pbMsg.Typed = &pb.Message_Reply{Reply: m}
+	case *pb.Prepare:
+		pbMsg.Typed = &pb.Message_Prepare{Prepare: m}
+	case *pb.Commit:
+		pbMsg.Typed = &pb.Message_Commit{Commit: m}
+	default:
+		panic("marshaling unknown message type")
+	}
+
+	return proto.Marshal(pbMsg)
 }

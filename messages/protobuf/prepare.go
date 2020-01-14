@@ -15,60 +15,61 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type prepare struct {
-	Prepare
+	pbMsg *pb.Prepare
 }
 
-func newPrepare() *prepare {
-	return &prepare{}
-}
-
-func (m *prepare) init(r uint32, v uint64, req messages.Request) {
-	m.Prepare = Prepare{Msg: &Prepare_M{
+func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
+	return &prepare{pbMsg: &pb.Prepare{
 		ReplicaId: r,
 		View:      v,
 		Request:   pbRequestFromAPI(req),
 	}}
 }
 
-func (m *prepare) set(pbMsg *Prepare) {
-	m.Prepare = *pbMsg
+func newPrepareFromPb(pbMsg *pb.Prepare) *prepare {
+	return &prepare{pbMsg: pbMsg}
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Prepare{Prepare: &m.Prepare}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *prepare) ReplicaID() uint32 {
-	return m.Msg.GetReplicaId()
+	return m.pbMsg.GetReplicaId()
 }
 
 func (m *prepare) View() uint64 {
-	return m.Msg.GetView()
+	return m.pbMsg.GetView()
 }
 
 func (m *prepare) Request() messages.Request {
-	req := newRequest()
-	req.set(m.Msg.GetRequest())
-	return req
+	return newRequestFromPb(m.pbMsg.GetRequest())
 }
 
 func (m *prepare) CertifiedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.AuthenBytesFromPrepare(m.pbMsg)
 }
 
 func (m *prepare) UIBytes() []byte {
-	return m.ReplicaUi
+	return m.pbMsg.Ui
 }
 
 func (m *prepare) SetUIBytes(uiBytes []byte) {
-	m.ReplicaUi = uiBytes
+	m.pbMsg.Ui = uiBytes
 }
 
 func (prepare) ImplementsReplicaMessage() {}
 func (prepare) ImplementsPrepare()        {}
+
+func pbPrepareFromAPI(m messages.Prepare) *pb.Prepare {
+	if m, ok := m.(*prepare); ok {
+		return m.pbMsg
+	}
+
+	return pb.PrepareFromAPI(m)
+}

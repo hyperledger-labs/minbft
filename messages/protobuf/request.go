@@ -15,56 +15,61 @@
 package protobuf
 
 import (
-	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
 
 type request struct {
-	Request
+	pbMsg *pb.Request
 }
 
-func newRequest() *request {
-	return &request{}
-}
-
-func (m *request) init(cl uint32, seq uint64, op []byte) {
-	m.Request = Request{Msg: &Request_M{
-		ClientId: cl,
-		Seq:      seq,
-		Payload:  op,
+func newRequest(cl uint32, seq uint64, op []byte) *request {
+	return &request{pbMsg: &pb.Request{
+		ClientId:  cl,
+		Seq:       seq,
+		Operation: op,
 	}}
 }
 
-func (m *request) set(pbMsg *Request) {
-	m.Request = *pbMsg
+func newRequestFromPb(pbMsg *pb.Request) *request {
+	return &request{pbMsg: pbMsg}
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {
-	return proto.Marshal(&Message{Type: &Message_Request{Request: &m.Request}})
+	return marshalMessage(m.pbMsg)
 }
 
 func (m *request) ClientID() uint32 {
-	return m.Msg.GetClientId()
+	return m.pbMsg.GetClientId()
 }
 
 func (m *request) Sequence() uint64 {
-	return m.Msg.GetSeq()
+	return m.pbMsg.GetSeq()
 }
 
 func (m *request) Operation() []byte {
-	return m.Msg.GetPayload()
+	return m.pbMsg.GetOperation()
 }
 
 func (m *request) SignedPayload() []byte {
-	return MarshalOrPanic(m.Msg)
+	return pb.AuthenBytesFromRequest(m.pbMsg)
 }
 
 func (m *request) Signature() []byte {
-	return m.Request.Signature
+	return m.pbMsg.Signature
 }
 
 func (m *request) SetSignature(signature []byte) {
-	m.Request.Signature = signature
+	m.pbMsg.Signature = signature
 }
 
 func (request) ImplementsClientMessage() {}
 func (request) ImplementsRequest()       {}
+
+func pbRequestFromAPI(m messages.Request) *pb.Request {
+	if m, ok := m.(*request); ok {
+		return m.pbMsg
+	}
+
+	return pb.RequestFromAPI(m)
+}
