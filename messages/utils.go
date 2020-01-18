@@ -50,7 +50,7 @@ func Stringify(msg Message) string {
 
 	switch msg := msg.(type) {
 	case Request:
-		return fmt.Sprintf("<REQUEST client=%d seq=%d payload=%q>",
+		return fmt.Sprintf("<REQUEST client=%d seq=%d operation=%q>",
 			msg.ClientID(), msg.Sequence(),
 			shortString(string(msg.Operation()), maxStringWidth))
 	case Reply:
