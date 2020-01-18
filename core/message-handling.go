@@ -237,7 +237,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 				continue
 			}
 
-			msgStr := messageString(msg)
+			msgStr := messages.Stringify(msg)
 
 			logger.Debugf("Received %s", msgStr)
 
@@ -393,7 +393,7 @@ func makeReplicaMessageProcessor(id uint32, process messageProcessor, processUIM
 		for _, m := range messages.EmbeddedMessages(msg) {
 			if _, err := process(m); err != nil {
 				logger.Warningf("Failed to process %s extracted from %s: %s",
-					messageString(m), messageString(msg), err)
+					messages.Stringify(m), messages.Stringify(msg), err)
 			}
 		}
 
@@ -505,7 +505,7 @@ func makeMessageReplier(replyRequest requestReplier) messageReplier {
 // generatedMessageHandler using the supplied abstractions.
 func makeGeneratedMessageHandler(apply replicaMessageApplier, consume generatedMessageConsumer, logger *logging.Logger) generatedMessageHandler {
 	return func(msg messages.ReplicaMessage) {
-		logger.Debugf("Generated %s", messageString(msg))
+		logger.Debugf("Generated %s", messages.Stringify(msg))
 
 		if err := apply(msg, true); err != nil {
 			panic(fmt.Errorf("Failed to apply generated message: %s", err))

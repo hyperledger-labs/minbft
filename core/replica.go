@@ -27,9 +27,8 @@ import (
 )
 
 const (
-	module            = "minbft"
-	defaultLogPrefix  = `%{color}[%{module}] %{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset}`
-	logMaxStringWidth = 256
+	module           = "minbft"
+	defaultLogPrefix = `%{color}[%{module}] %{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset}`
 )
 
 var messageImpl = protobufMessages.NewImpl()
