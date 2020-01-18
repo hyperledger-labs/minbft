@@ -50,20 +50,20 @@ func Stringify(msg Message) string {
 
 	switch msg := msg.(type) {
 	case Request:
-		return fmt.Sprintf("REQUEST<client=%d seq=%d payload=%s>",
+		return fmt.Sprintf("<REQUEST client=%d seq=%d payload=%s>",
 			msg.ClientID(), msg.Sequence(),
 			shortString(string(msg.Operation()), maxStringWidth))
 	case Reply:
-		return fmt.Sprintf("REPLY<replica=%d seq=%d result=%s>",
+		return fmt.Sprintf("<REPLY replica=%d seq=%d result=%s>",
 			msg.ReplicaID(), msg.Sequence(),
 			shortString(string(msg.Result()), maxStringWidth))
 	case Prepare:
 		req := msg.Request()
-		return fmt.Sprintf("PREPARE<cv=%d replica=%d view=%d client=%d seq=%d>",
+		return fmt.Sprintf("<PREPARE cv=%d replica=%d view=%d client=%d seq=%d>",
 			cv, msg.ReplicaID(), msg.View(),
 			req.ClientID(), req.Sequence())
 	case Commit:
-		return fmt.Sprintf("COMMIT<cv=%d replica=%d prepare=%s>",
+		return fmt.Sprintf("<COMMIT cv=%d replica=%d prepare=%s>",
 			cv, msg.ReplicaID(), Stringify(msg.Prepare()))
 	}
 
