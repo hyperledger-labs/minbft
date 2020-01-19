@@ -64,6 +64,7 @@ func (m *prepare) SetUIBytes(uiBytes []byte) {
 }
 
 func (prepare) ImplementsReplicaMessage() {}
+func (prepare) ImplementsPeerMessage()    {}
 func (prepare) ImplementsPrepare()        {}
 
 func pbPrepareFromAPI(m messages.Prepare) *pb.Prepare {

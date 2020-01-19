@@ -205,7 +205,7 @@ func TestMakeMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("requestProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	processPeerMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
+	processPeerMessage := func(msg messages.PeerMessage) (new bool, err error) {
 		args := mock.MethodCalled("peerMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
@@ -233,22 +233,22 @@ func TestMakeMessageProcessor(t *testing.T) {
 		assert.True(t, new)
 	})
 	t.Run("PeerMessage", func(t *testing.T) {
-		replicaMsg := struct {
-			messages.ReplicaMessage
+		peerMsg := struct {
+			messages.PeerMessage
 			i int
 		}{i: rand.Int()}
 
-		mock.On("peerMessageProcessor", replicaMsg).Return(false, fmt.Errorf("")).Once()
-		_, err := process(replicaMsg)
+		mock.On("peerMessageProcessor", peerMsg).Return(false, fmt.Errorf("")).Once()
+		_, err := process(peerMsg)
 		assert.Error(t, err, "Failed to process replica message")
 
-		mock.On("peerMessageProcessor", replicaMsg).Return(false, nil).Once()
-		new, err := process(replicaMsg)
+		mock.On("peerMessageProcessor", peerMsg).Return(false, nil).Once()
+		new, err := process(peerMsg)
 		assert.NoError(t, err)
 		assert.False(t, new)
 
-		mock.On("peerMessageProcessor", replicaMsg).Return(true, nil).Once()
-		new, err = process(replicaMsg)
+		mock.On("peerMessageProcessor", peerMsg).Return(true, nil).Once()
+		new, err = process(peerMsg)
 		assert.NoError(t, err)
 		assert.True(t, new)
 	})
@@ -281,7 +281,7 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 	commit := messageImpl.NewCommit(backup, prepare)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockReplicaMessage(ctrl)
+		msg := mock_messages.NewMockPeerMessage(ctrl)
 		msg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
@@ -343,14 +343,18 @@ func TestMakeUIMessageProcessor(t *testing.T) {
 			mock.MethodCalled("uiReleaser", msg)
 		}
 	}
-	processViewMessage := func(msg messages.ReplicaMessage) (new bool, err error) {
+	processViewMessage := func(msg messages.PeerMessage) (new bool, err error) {
 		args := mock.MethodCalled("viewMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
 	process := makeUIMessageProcessor(captureUI, processViewMessage)
 
-	uiMsg := struct {
+	type certifiedPeerMessage interface {
 		messages.CertifiedMessage
+		ImplementsPeerMessage()
+	}
+	uiMsg := struct {
+		certifiedPeerMessage
 		i int
 	}{i: rand.Int()}
 
@@ -388,7 +392,7 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	defer ctrl.Finish()
 
 	viewState := mock_viewstate.NewMockState(ctrl)
-	applyPeerMessage := func(msg messages.ReplicaMessage, active bool) error {
+	applyPeerMessage := func(msg messages.PeerMessage, active bool) error {
 		args := mock.MethodCalled("peerMessageApplier", msg, active)
 		return args.Error(0)
 	}
@@ -405,11 +409,11 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	commit := messageImpl.NewCommit(randOtherReplicaID(primary, n), prepare)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockReplicaMessage(ctrl)
+		msg := mock_messages.NewMockPeerMessage(ctrl)
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 
-	testPeerMessage := func(t *testing.T, msg messages.ReplicaMessage) {
+	testPeerMessage := func(t *testing.T, msg messages.PeerMessage) {
 		viewState.EXPECT().HoldView().Return(view, newView, func() {
 			mock.MethodCalled("viewReleaser")
 		})
@@ -474,7 +478,7 @@ func TestMakePeerMessageApplier(t *testing.T) {
 	commit := messageImpl.NewCommit(1, prepare)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockReplicaMessage(ctrl)
+		msg := mock_messages.NewMockPeerMessage(ctrl)
 		assert.Panics(t, func() { apply(msg, true) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
