@@ -219,7 +219,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 				continue
 			}
 
-			msgStr := messageString(msg)
+			msgStr := messages.Stringify(msg)
 
 			logger.Debugf("Received %s", msgStr)
 
@@ -289,7 +289,7 @@ func handleGeneratedPeerMessages(log messagelog.MessageLog, handle incomingMessa
 		if err != nil {
 			panic(err)
 		} else if new {
-			logger.Debugf("Handled %s", messageString(msg))
+			logger.Debugf("Handled %s", messages.Stringify(msg))
 		}
 	}
 }
@@ -392,7 +392,7 @@ func makeReplicaMessageProcessor(process messageProcessor, processUIMessage uiMe
 		for _, m := range messages.EmbeddedMessages(msg) {
 			if _, err := process(m); err != nil {
 				logger.Warningf("Failed to process %s extracted from %s: %s",
-					messageString(m), messageString(msg), err)
+					messages.Stringify(m), messages.Stringify(msg), err)
 			}
 		}
 
@@ -514,7 +514,7 @@ func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume generatedMessage
 
 func makeGeneratedMessageConsumer(log messagelog.MessageLog, provider clientstate.Provider, logger *logging.Logger) generatedMessageConsumer {
 	return func(msg messages.ReplicaMessage) {
-		logger.Debugf("Generated %s", messageString(msg))
+		logger.Debugf("Generated %s", messages.Stringify(msg))
 
 		switch msg := msg.(type) {
 		case messages.Reply:

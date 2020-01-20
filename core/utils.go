@@ -72,40 +72,6 @@ func isPrimary(view uint64, id uint32, n uint32) bool {
 	return uint64(id) == view%uint64(n)
 }
 
-func shortString(msg string, max int) string {
-	if len(msg) > max {
-		return msg[0:max-1] + "..."
-	}
-	return msg
-}
-
-func messageString(msg interface{}) string {
-	var cv uint64
-	if msg, ok := msg.(messages.CertifiedMessage); ok {
-		if ui, err := parseMessageUI(msg); err == nil {
-			cv = ui.Counter
-		}
-	}
-
-	switch msg := msg.(type) {
-	case messages.Request:
-		return fmt.Sprintf("REQUEST<client=%d seq=%d payload=%s>",
-			msg.ClientID(), msg.Sequence(), shortString(string(msg.Operation()), logMaxStringWidth))
-	case messages.Reply:
-		return fmt.Sprintf("REPLY<replica=%d seq=%d result=%s>",
-			msg.ReplicaID(), msg.Sequence(), shortString(string(msg.Result()), logMaxStringWidth))
-	case messages.Prepare:
-		req := msg.Request()
-		return fmt.Sprintf("PREPARE<cv=%d replica=%d view=%d client=%d seq=%d>",
-			cv, msg.ReplicaID(), msg.View(),
-			req.ClientID(), req.Sequence())
-	case messages.Commit:
-		return fmt.Sprintf("COMMIT<cv=%d replica=%d prepare=%s>",
-			cv, msg.ReplicaID(), messageString(msg.Prepare()))
-	}
-	return "(unknown message)"
-}
-
 func makeLogger(id uint32, opts options) *logging.Logger {
 	logger := logging.MustGetLogger(module)
 	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
