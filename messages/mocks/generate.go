@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/messages Message,ClientMessage,ReplicaMessage,CertifiedMessage,SignedMessage
+//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/messages Message,ClientMessage,ReplicaMessage,PeerMessage,CertifiedMessage,SignedMessage
 
 package mock_messages //nolint

@@ -21,14 +21,12 @@ import (
 )
 
 // EmbeddedMessages returns messages embedded into the specified one.
-func EmbeddedMessages(msg ReplicaMessage) []Message {
+func EmbeddedMessages(msg PeerMessage) []Message {
 	switch msg := msg.(type) {
 	case Prepare:
 		return []Message{msg.Request()}
 	case Commit:
 		return []Message{msg.Prepare()}
-	case Reply:
-		return nil
 	default:
 		panic("Unknown message type")
 	}

@@ -49,6 +49,12 @@ type ReplicaMessage interface {
 	ImplementsReplicaMessage()
 }
 
+// PeerMessage represents a message exchanged between replicas.
+type PeerMessage interface {
+	ReplicaMessage
+	ImplementsPeerMessage()
+}
+
 // CertifiedMessage represents a message certified with a UI.
 //
 // CertifiedPayload returns the serialized message content certified
@@ -82,12 +88,14 @@ type Prepare interface {
 	CertifiedMessage
 	View() uint64
 	Request() Request
+	ImplementsPeerMessage()
 	ImplementsPrepare()
 }
 
 type Commit interface {
 	CertifiedMessage
 	Prepare() Prepare
+	ImplementsPeerMessage()
 	ImplementsCommit()
 }
 

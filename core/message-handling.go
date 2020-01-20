@@ -72,12 +72,12 @@ type messageValidator func(msg messages.Message) error
 // if the message had any effect. It is safe to invoke concurrently.
 type messageProcessor func(msg messages.Message) (new bool, err error)
 
-// replicaMessageProcessor processes a valid replica message.
+// peerMessageProcessor processes a valid peer message.
 //
-// It continues processing of the supplied replica message. The return
+// It continues processing of the supplied peer message. The return
 // value new indicates if the message had any effect. It is safe to
 // invoke concurrently.
-type replicaMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
+type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 
 // uiMessageProcessor processes a valid message with UI.
 //
@@ -95,10 +95,9 @@ type uiMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error
 // corresponding view, or not processed at all. The return value new
 // indicates if the message had any effect. It is safe to invoke
 // concurrently.
-type viewMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error)
+type viewMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 
-// replicaMessageApplier applies a replica message to current replica
-// state.
+// peerMessageApplier applies a peer message to current replica state.
 //
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required messages
@@ -106,7 +105,7 @@ type viewMessageProcessor func(msg messages.ReplicaMessage) (new bool, err error
 // and internally consistent. Parameter active indicates if the
 // message refers to the active view. It is safe to invoke
 // concurrently.
-type replicaMessageApplier func(msg messages.ReplicaMessage, active bool) error
+type peerMessageApplier func(msg messages.PeerMessage, active bool) error
 
 // messageReplier provides reply to a valid message.
 //
@@ -181,7 +180,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
-	applyReplicaMessage := makeReplicaMessageApplier(applyPrepare, applyCommit)
+	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit)
 	applyRequest := makeRequestApplier(id, n, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
 
 	var processMessage messageProcessor
@@ -197,10 +196,10 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
-	processViewMessage := makeViewMessageProcessor(viewState, applyReplicaMessage)
+	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
-	processReplicaMessage := makeReplicaMessageProcessor(processMessageThunk, processUIMessage, logger)
-	processMessage = makeMessageProcessor(processRequest, processReplicaMessage)
+	processPeerMessage := makePeerMessageProcessor(processMessageThunk, processUIMessage, logger)
+	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
 	replyMessage := makeMessageReplier(replyRequest)
@@ -374,21 +373,21 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 
 // makeMessageProcessor constructs an instance of messageProcessor
 // using the supplied abstractions.
-func makeMessageProcessor(processRequest requestProcessor, processReplicaMessage replicaMessageProcessor) messageProcessor {
+func makeMessageProcessor(processRequest requestProcessor, processPeerMessage peerMessageProcessor) messageProcessor {
 	return func(msg messages.Message) (new bool, err error) {
 		switch msg := msg.(type) {
 		case messages.Request:
 			return processRequest(msg)
-		case messages.ReplicaMessage:
-			return processReplicaMessage(msg)
+		case messages.PeerMessage:
+			return processPeerMessage(msg)
 		default:
 			panic("Unknown message type")
 		}
 	}
 }
 
-func makeReplicaMessageProcessor(process messageProcessor, processUIMessage uiMessageProcessor, logger *logging.Logger) replicaMessageProcessor {
-	return func(msg messages.ReplicaMessage) (new bool, err error) {
+func makePeerMessageProcessor(process messageProcessor, processUIMessage uiMessageProcessor, logger *logging.Logger) peerMessageProcessor {
+	return func(msg messages.PeerMessage) (new bool, err error) {
 		for _, m := range messages.EmbeddedMessages(msg) {
 			if _, err := process(m); err != nil {
 				logger.Warningf("Failed to process %s extracted from %s: %s",
@@ -413,12 +412,17 @@ func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessage
 		}
 		defer release()
 
-		return processViewMessage(msg)
+		switch msg := msg.(type) {
+		case messages.PeerMessage:
+			return processViewMessage(msg)
+		default:
+			panic("Unknown message type")
+		}
 	}
 }
 
-func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage replicaMessageApplier) viewMessageProcessor {
-	return func(msg messages.ReplicaMessage) (new bool, err error) {
+func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMessageApplier) viewMessageProcessor {
+	return func(msg messages.PeerMessage) (new bool, err error) {
 		var active bool
 
 		switch msg := msg.(type) {
@@ -452,7 +456,7 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 			panic("Unknown message type")
 		}
 
-		if err := applyReplicaMessage(msg, active); err != nil {
+		if err := applyPeerMessage(msg, active); err != nil {
 			return false, fmt.Errorf("Failed to apply message: %s", err)
 		}
 
@@ -460,10 +464,10 @@ func makeViewMessageProcessor(viewState viewstate.State, applyReplicaMessage rep
 	}
 }
 
-// makeReplicaMessageApplier constructs an instance of replicaMessageApplier using
+// makePeerMessageApplier constructs an instance of peerMessageApplier using
 // the supplied abstractions.
-func makeReplicaMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) replicaMessageApplier {
-	return func(msg messages.ReplicaMessage, active bool) error {
+func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) peerMessageApplier {
+	return func(msg messages.PeerMessage, active bool) error {
 		switch msg := msg.(type) {
 		case messages.Prepare:
 			return applyPrepare(msg, active)

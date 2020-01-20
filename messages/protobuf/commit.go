@@ -59,4 +59,5 @@ func (m *commit) SetUIBytes(uiBytes []byte) {
 }
 
 func (commit) ImplementsReplicaMessage() {}
+func (commit) ImplementsPeerMessage()    {}
 func (commit) ImplementsCommit()         {}
