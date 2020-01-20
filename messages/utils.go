@@ -27,6 +27,8 @@ func EmbeddedMessages(msg PeerMessage) []Message {
 		return []Message{msg.Request()}
 	case Commit:
 		return []Message{msg.Prepare()}
+	case ReqViewChange:
+		return nil
 	default:
 		panic("Unknown message type")
 	}
@@ -63,6 +65,9 @@ func Stringify(msg Message) string {
 	case Commit:
 		return fmt.Sprintf("<COMMIT cv=%d replica=%d prepare=%s>",
 			cv, msg.ReplicaID(), Stringify(msg.Prepare()))
+	case ReqViewChange:
+		return fmt.Sprintf("<REQ-VIEW-CHANGE replica=%d newView=%d>",
+			msg.ReplicaID(), msg.NewView())
 	}
 
 	return "(unknown message)"

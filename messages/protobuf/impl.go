@@ -57,6 +57,10 @@ func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
 	return newReply(r, cl, seq, res)
 }
 
+func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
+	panic("not implemented")
+}
+
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	switch t := pbMsg.Typed.(type) {
 	case *pb.Message_Request:

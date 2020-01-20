@@ -26,6 +26,7 @@ type MessageImpl interface {
 	NewPrepare(replicaID uint32, view uint64, request Request) Prepare
 	NewCommit(replicaID uint32, prepare Prepare) Commit
 	NewReply(replicaID, clientID uint32, sequence uint64, result []byte) Reply
+	NewReqViewChange(replicaID uint32, newView uint64) ReqViewChange
 }
 
 type Message interface {
@@ -106,4 +107,12 @@ type Reply interface {
 	Sequence() uint64
 	Result() []byte
 	ImplementsReply()
+}
+
+type ReqViewChange interface {
+	ReplicaMessage
+	SignedMessage
+	NewView() uint64
+	ImplementsPeerMessage()
+	ImplementsReqViewChange()
 }
