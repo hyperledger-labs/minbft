@@ -216,7 +216,7 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID, operation executor, message signer, and
 // reply consumer.
-func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMessageSigner, handleGeneratedMessage generatedMessageHandler) requestExecutor {
+func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMessageSigner, consumeGeneratedMessage generatedMessageConsumer) requestExecutor {
 	return func(request messages.Request) {
 		resultChan := executor(request.Operation())
 		go func() {
@@ -224,7 +224,7 @@ func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMe
 
 			reply := messageImpl.NewReply(id, request.ClientID(), request.Sequence(), result)
 			signer(reply)
-			handleGeneratedMessage(reply)
+			consumeGeneratedMessage(reply)
 		}()
 	}
 }
