@@ -58,6 +58,15 @@ func AuthenBytesFromCommit(m *Commit) []byte {
 	return buf.Bytes()
 }
 
+// AuthenBytesFromReqViewChange returns serialized representation of
+// authenticated content of ReqViewChange messages.
+func AuthenBytesFromReqViewChange(m *ReqViewChange) []byte {
+	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, MessageType_REQ_VIEW_CHANGE)
+	writeAuthenBytesFromReqViewChange(buf, m)
+	return buf.Bytes()
+}
+
 func writeAuthenBytesFromRequest(buf io.Writer, m *Request) {
 	_ = binary.Write(buf, binary.BigEndian, m.GetSeq())
 	_, _ = buf.Write(hashsum(m.GetOperation()))
@@ -81,6 +90,10 @@ func writeAuthenBytesFromCommit(buf io.Writer, m *Commit) {
 	_ = binary.Write(buf, binary.BigEndian, prep.GetReplicaId())
 	writeAuthenBytesFromPrepare(buf, prep)
 	_, _ = buf.Write(prep.GetUi())
+}
+
+func writeAuthenBytesFromReqViewChange(buf io.Writer, m *ReqViewChange) {
+	_ = binary.Write(buf, binary.BigEndian, m.GetNewView())
 }
 
 func hashsum(data []byte) []byte {

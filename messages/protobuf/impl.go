@@ -57,6 +57,10 @@ func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {
 	return newReply(r, cl, seq, res)
 }
 
+func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
+	return newReqViewChange(r, nv)
+}
+
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	switch t := pbMsg.Typed.(type) {
 	case *pb.Message_Request:
@@ -67,6 +71,8 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 		return newPrepareFromPb(t.Prepare), nil
 	case *pb.Message_Commit:
 		return newCommitFromPb(t.Commit), nil
+	case *pb.Message_ReqViewChange:
+		return newReqViewChangeFromPb(t.ReqViewChange), nil
 	default:
 		return nil, xerrors.New("unknown message type")
 	}
@@ -83,6 +89,8 @@ func marshalMessage(m proto.Message) ([]byte, error) {
 		pbMsg.Typed = &pb.Message_Prepare{Prepare: m}
 	case *pb.Commit:
 		pbMsg.Typed = &pb.Message_Commit{Commit: m}
+	case *pb.ReqViewChange:
+		pbMsg.Typed = &pb.Message_ReqViewChange{ReqViewChange: m}
 	default:
 		panic("marshaling unknown message type")
 	}

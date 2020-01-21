@@ -27,6 +27,7 @@ enum MessageType {
     REPLY = 2;
     PREPARE = 3;
     COMMIT = 4;
+    REQ_VIEW_CHANGE = 5;
 }
 
 // Message represents arbitrary protocol message.
@@ -36,6 +37,7 @@ message Message{
         Reply reply = 2;
         Prepare prepare = 3;
         Commit commit = 4;
+        ReqViewChange req_view_change = 5;
     }
 }
 
@@ -97,4 +99,16 @@ message Commit {
 
     // Replica's UI
     bytes ui = 3;
+}
+
+// ReqViewChange represents REQ-VIEW-CHANGE message.
+message ReqViewChange {
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // New view number
+    uint64 new_view = 2;
+
+    // Replica's signature
+    bytes signature = 3;
 }
