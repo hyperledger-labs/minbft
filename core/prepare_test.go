@@ -91,13 +91,13 @@ func TestMakePrepareApplier(t *testing.T) {
 		args := mock.MethodCalled("commitmentCollector", id, prepare)
 		return args.Error(0)
 	}
-	handleGeneratedUIMessage := func(msg messages.CertifiedMessage) {
-		mock.MethodCalled("generatedUIMessageHandler", msg)
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageHandler", msg)
 	}
 	stopPrepTimer := func(request messages.Request) {
 		mock.MethodCalled("prepareTimerStopper", request)
 	}
-	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
+	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
 
 	clientID := rand.Uint32()
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
@@ -131,7 +131,7 @@ func TestMakePrepareApplier(t *testing.T) {
 	mock.On("requestSeqPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
 	mock.On("prepareTimerStopper", request).Once()
-	mock.On("generatedUIMessageHandler", commit).Once()
+	mock.On("generatedMessageHandler", commit).Once()
 	err = apply(prepare, true)
 	assert.NoError(t, err)
 

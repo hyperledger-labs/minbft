@@ -553,32 +553,45 @@ func TestMakeMessageReplier(t *testing.T) {
 	})
 }
 
-func TestMakeGeneratedUIMessageHandler(t *testing.T) {
+func TestMakeGeneratedMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	sign := func(msg messages.SignedMessage) {
+		mock.MethodCalled("messageSigner", msg)
+	}
 	assignUI := func(msg messages.CertifiedMessage) {
 		mock.MethodCalled("uiAssigner", msg)
 	}
 	consumeGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageConsumer", msg)
 	}
-	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeGeneratedMessage)
+	handle := makeGeneratedMessageHandler(sign, assignUI, consumeGeneratedMessage)
 
-	msg := struct {
+	certifiedMsg := struct {
 		messages.CertifiedMessage
 		i int
 	}{i: rand.Int()}
 
-	mock.On("uiAssigner", msg).Once()
-	mock.On("generatedMessageConsumer", msg).Once()
-	handleGeneratedUIMessage(msg)
+	signedMsg := struct {
+		messages.SignedMessage
+		messages.ReplicaMessage
+		i int
+	}{i: rand.Int()}
+
+	mock.On("uiAssigner", certifiedMsg).Once()
+	mock.On("generatedMessageConsumer", certifiedMsg).Once()
+	handle(certifiedMsg)
+
+	mock.On("messageSigner", signedMsg).Once()
+	mock.On("generatedMessageConsumer", signedMsg).Once()
+	handle(signedMsg)
 }
 
-func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
+func TestMakeGeneratedMessageHandlerConcurrent(t *testing.T) {
 	const nrMessages = 10
 	const nrConcurrent = 5
 
@@ -597,7 +610,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		log = append(log, msg.(*uiMsg))
 	}
-	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, handleGeneratedMessage)
+	handle := makeGeneratedMessageHandler(nil, assignUI, handleGeneratedMessage)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(nrConcurrent)
@@ -605,7 +618,7 @@ func TestMakeGeneratedUIMessageHandlerConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < nrMessages; i++ {
-				handleGeneratedUIMessage(&uiMsg{})
+				handle(&uiMsg{})
 			}
 		}()
 	}
