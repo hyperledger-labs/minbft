@@ -26,17 +26,17 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// replicaMessageSigner generates and attaches a normal replica
-// signature to the supplied message modifying it directly.
-type replicaMessageSigner func(msg messages.SignedMessage)
+// messageSigner generates and attaches a normal replica signature to
+// the supplied message modifying it directly.
+type messageSigner func(msg messages.SignedMessage)
 
 // messageSignatureVerifier verifies the signature attached to a
 // message against the message data.
 type messageSignatureVerifier func(msg messages.SignedMessage) error
 
-// makeReplicaMessageSigner constructs an instance of messageSigner
-// using the supplied external interface for message authentication.
-func makeReplicaMessageSigner(authen api.Authenticator) replicaMessageSigner {
+// makeMessageSigner constructs an instance of messageSigner using the
+// supplied external interface for message authentication.
+func makeMessageSigner(authen api.Authenticator) messageSigner {
 	return func(msg messages.SignedMessage) {
 		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, msg.SignedPayload())
 		if err != nil {

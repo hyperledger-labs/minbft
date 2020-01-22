@@ -31,12 +31,12 @@ import (
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
-func TestMakeReplicaMessageSigner(t *testing.T) {
+func TestMakeMessageSigner(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	signer := makeReplicaMessageSigner(authen)
+	signer := makeMessageSigner(authen)
 
 	payload := make([]byte, 1)
 	signature := make([]byte, 1)

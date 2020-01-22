@@ -146,7 +146,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
-	signMessage := makeReplicaMessageSigner(stack)
+	signMessage := makeMessageSigner(stack)
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
