@@ -167,7 +167,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
-	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, consumeGeneratedMessage)
+	executeRequest := makeRequestExecutor(id, executeOperation, handleGeneratedMessage)
 	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)

@@ -169,35 +169,26 @@ func TestMakeRequestExecutor(t *testing.T) {
 
 	expectedOperation := make([]byte, 1)
 	expectedResult := make([]byte, 1)
-	expectedSignature := make([]byte, 1)
 	rand.Read(expectedOperation)
 	rand.Read(expectedResult)
-	rand.Read(expectedSignature)
 
 	request := messageImpl.NewRequest(clientID, seq, expectedOperation)
-	expectedUnsignedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
-	expectedSignedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
-	expectedSignedReply.SetSignature(expectedSignature)
+	expectedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
 
 	execute := func(operation []byte) <-chan []byte {
 		args := mock.MethodCalled("operationExecutor", operation)
 		return args.Get(0).(chan []byte)
 	}
-	sign := func(msg messages.SignedMessage) {
-		mock.MethodCalled("replicaMessageSigner", msg)
-		msg.SetSignature(expectedSignature)
-	}
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-	requestExecutor := makeRequestExecutor(replicaID, execute, sign, handleGeneratedMessage)
+	requestExecutor := makeRequestExecutor(replicaID, execute, handleGeneratedMessage)
 
 	resultChan := make(chan []byte, 1)
 	resultChan <- expectedResult
 	done := make(chan struct{})
 	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
-	mock.On("replicaMessageSigner", expectedUnsignedReply).Once()
-	mock.On("generatedMessageHandler", expectedSignedReply).Run(
+	mock.On("generatedMessageHandler", expectedReply).Run(
 		func(testifymock.Arguments) { close(done) },
 	).Once()
 	requestExecutor(request)
