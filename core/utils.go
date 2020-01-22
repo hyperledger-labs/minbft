@@ -40,7 +40,7 @@ func makeMessageSigner(authen api.Authenticator) messageSigner {
 	return func(msg messages.SignedMessage) {
 		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, msg.SignedPayload())
 		if err != nil {
-			panic(err) // Supplied Authenticator must be able to sing
+			panic(err) // Supplied Authenticator must be able to sign
 		}
 		msg.SetSignature(signature)
 	}
@@ -58,6 +58,9 @@ func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVeri
 		case messages.ClientMessage:
 			role = api.ClientAuthen
 			id = msg.ClientID()
+		case messages.ReplicaMessage:
+			role = api.ReplicaAuthen
+			id = msg.ReplicaID()
 		default:
 			panic("Message with no signer ID")
 		}
