@@ -116,12 +116,12 @@ type peerMessageApplier func(msg messages.PeerMessage, active bool) error
 // concurrently.
 type messageReplier func(msg messages.Message) (reply <-chan messages.Message, err error)
 
-// generatedUIMessageHandler assigns UI and handles generated message.
+// generatedMessageHandler finalizes and handles generated message.
 //
-// It assigns and attaches a UI to the supplied message, then takes
-// further steps to handle the message. It is safe to invoke
-// concurrently.
-type generatedUIMessageHandler func(msg messages.CertifiedMessage)
+// It finalizes the supplied message by attaching an authentication
+// tag to the message, then takes further steps to handle the message.
+// It is safe to invoke concurrently.
+type generatedMessageHandler func(msg messages.ReplicaMessage)
 
 // generatedMessageConsumer receives generated message.
 //
@@ -146,7 +146,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	}
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
-	signMessage := makeReplicaMessageSigner(stack)
+	signMessage := makeMessageSigner(stack)
 	verifyUI := makeUIVerifier(stack)
 	assignUI := makeUIAssigner(stack)
 
@@ -163,11 +163,11 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	captureUI := makeUICapturer(peerStates)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
-	handleGeneratedUIMessage := makeGeneratedUIMessageHandler(assignUI, consumeGeneratedMessage)
+	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
 
 	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
-	executeRequest := makeRequestExecutor(id, executeOperation, signMessage, consumeGeneratedMessage)
+	executeRequest := makeRequestExecutor(id, executeOperation, handleGeneratedMessage)
 	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
@@ -179,9 +179,9 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	applyCommit := makeCommitApplier(collectCommitment)
-	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedUIMessage, stopPrepTimer)
+	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
 	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, handleGeneratedUIMessage, startReqTimer, startPrepTimer)
+	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 
 	var processMessage messageProcessor
 
@@ -502,16 +502,22 @@ func makeMessageReplier(replyRequest requestReplier) messageReplier {
 	}
 }
 
-// makeGeneratedUIMessageHandler constructs generatedUIMessageHandler
+// makeGeneratedMessageHandler constructs generatedMessageHandler
 // using the supplied abstractions.
-func makeGeneratedUIMessageHandler(assignUI uiAssigner, consume generatedMessageConsumer) generatedUIMessageHandler {
-	var lock sync.Mutex
+func makeGeneratedMessageHandler(sign messageSigner, assignUI uiAssigner, consume generatedMessageConsumer) generatedMessageHandler {
+	var uiLock sync.Mutex
 
-	return func(msg messages.CertifiedMessage) {
-		lock.Lock()
-		defer lock.Unlock()
+	return func(msg messages.ReplicaMessage) {
+		switch msg := msg.(type) {
+		case messages.CertifiedMessage:
+			uiLock.Lock()
+			defer uiLock.Unlock()
 
-		assignUI(msg)
+			assignUI(msg)
+		case messages.SignedMessage:
+			sign(msg)
+		}
+
 		consume(msg)
 	}
 }

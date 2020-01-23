@@ -183,7 +183,7 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 	}
 }
 
-func makeRequestApplier(id, n uint32, handleGeneratedUIMessage generatedUIMessageHandler, startReqTimer requestTimerStarter, startPrepTimer prepareTimerStarter) requestApplier {
+func makeRequestApplier(id, n uint32, handleGeneratedMessage generatedMessageHandler, startReqTimer requestTimerStarter, startPrepTimer prepareTimerStarter) requestApplier {
 	return func(request messages.Request, view uint64) error {
 		// The primary has to start request timer, as well.
 		// Suppose, the primary is correct, but its messages
@@ -194,8 +194,7 @@ func makeRequestApplier(id, n uint32, handleGeneratedUIMessage generatedUIMessag
 		startReqTimer(request, view)
 
 		if isPrimary(view, id, n) {
-			prepare := messageImpl.NewPrepare(id, view, request)
-			handleGeneratedUIMessage(prepare)
+			handleGeneratedMessage(messageImpl.NewPrepare(id, view, request))
 		} else {
 			startPrepTimer(request, view)
 		}
@@ -216,15 +215,14 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID, operation executor, message signer, and
 // reply consumer.
-func makeRequestExecutor(id uint32, executor operationExecutor, signer replicaMessageSigner, consumeGeneratedMessage generatedMessageConsumer) requestExecutor {
+func makeRequestExecutor(id uint32, executor operationExecutor, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request messages.Request) {
 		resultChan := executor(request.Operation())
 		go func() {
 			result := <-resultChan
 
 			reply := messageImpl.NewReply(id, request.ClientID(), request.Sequence(), result)
-			signer(reply)
-			consumeGeneratedMessage(reply)
+			handleGeneratedMessage(reply)
 		}()
 	}
 }

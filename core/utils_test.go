@@ -31,12 +31,12 @@ import (
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
-func TestMakeReplicaMessageSigner(t *testing.T) {
+func TestMakeMessageSigner(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	signer := makeReplicaMessageSigner(authen)
+	signer := makeMessageSigner(authen)
 
 	payload := make([]byte, 1)
 	signature := make([]byte, 1)
@@ -59,9 +59,10 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 	defer ctrl.Finish()
 
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	verifier := makeMessageSignatureVerifier(authen)
+	verify := makeMessageSignatureVerifier(authen)
 
 	clientID := rand.Uint32()
+	replicaID := rand.Uint32()
 	payload := make([]byte, 1)
 	signature := make([]byte, 1)
 	rand.Read(payload)
@@ -77,15 +78,33 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 		messages.SignedMessage
 	}{clientMsg, signedMsg}
 
-	assert.Panics(t, func() { verifier(signedMsg) }, "Message with no signer ID")
+	replicaMsg := mock_messages.NewMockReplicaMessage(ctrl)
+	replicaMsg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
+
+	signedReplicaMsg := &struct {
+		messages.ReplicaMessage
+		messages.SignedMessage
+	}{replicaMsg, signedMsg}
+
+	assert.Panics(t, func() { verify(signedMsg) }, "Message with no signer ID")
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
 		payload, signature).Return(fmt.Errorf(""))
-	err := verifier(msg)
+	err := verify(msg)
 	assert.Error(t, err)
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
 		payload, signature).Return(nil)
-	err = verifier(msg)
+	err = verify(msg)
+	assert.NoError(t, err)
+
+	authen.EXPECT().VerifyMessageAuthenTag(api.ReplicaAuthen, replicaID,
+		payload, signature).Return(fmt.Errorf(""))
+	err = verify(signedReplicaMsg)
+	assert.Error(t, err)
+
+	authen.EXPECT().VerifyMessageAuthenTag(api.ReplicaAuthen, replicaID,
+		payload, signature).Return(nil)
+	err = verify(signedReplicaMsg)
 	assert.NoError(t, err)
 }
