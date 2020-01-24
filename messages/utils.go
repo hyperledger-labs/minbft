@@ -20,20 +20,6 @@ import (
 	"github.com/hyperledger-labs/minbft/usig"
 )
 
-// EmbeddedMessages returns messages embedded into the specified one.
-func EmbeddedMessages(msg PeerMessage) []Message {
-	switch msg := msg.(type) {
-	case Prepare:
-		return []Message{msg.Request()}
-	case Commit:
-		return []Message{msg.Prepare()}
-	case ReqViewChange:
-		return nil
-	default:
-		panic("Unknown message type")
-	}
-}
-
 const maxStringWidth = 256
 
 // Stringify returns a human-readable string representing the message
