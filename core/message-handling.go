@@ -141,9 +141,6 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
-	handleReqTimeout := func(view uint64) {
-		logger.Panic("Request timed out, but view change not implemented")
-	}
 
 	verifyMessageSignature := makeMessageSignatureVerifier(stack)
 	signMessage := makeMessageSigner(stack)
@@ -158,12 +155,17 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
 	pendingReq := requestlist.New()
-	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
-	stopReqTimer := makeRequestTimerStopper(clientStates)
 	captureUI := makeUICapturer(peerStates)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
+
+	requestViewChange := makeViewChangeRequestor(id, viewState, handleGeneratedMessage)
+	handleReqTimeout := makeRequestTimeoutHandler(requestViewChange, logger)
+	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
+	stopReqTimer := makeRequestTimerStopper(clientStates)
+	startPrepTimer := makePrepareTimerStarter(clientStates, logger)
+	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	countCommitment := makeCommitmentCounter(f)
 	executeOperation := makeOperationExecutor(stack)
@@ -174,9 +176,6 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
-
-	startPrepTimer := makePrepareTimerStarter(clientStates, logger)
-	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
@@ -365,6 +364,8 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 			return validatePrepare(msg)
 		case messages.Commit:
 			return validateCommit(msg)
+		case messages.ReqViewChange:
+			return fmt.Errorf("Not implemented")
 		default:
 			panic("Unknown message type")
 		}
