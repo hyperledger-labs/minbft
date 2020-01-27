@@ -55,10 +55,6 @@ func (m *reply) Result() []byte {
 	return m.pbMsg.GetResult()
 }
 
-func (m *reply) SignedPayload() []byte {
-	return pb.AuthenBytesFromReply(m.pbMsg)
-}
-
 func (m *reply) Signature() []byte {
 	return m.pbMsg.Signature
 }

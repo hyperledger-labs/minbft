@@ -35,33 +35,9 @@ func TestPrepare(t *testing.T) {
 		require.Equal(t, v, prep.View())
 		requireReqEqual(t, req, prep.Request())
 	})
-	t.Run("CertifiedPayload", func(t *testing.T) {
-		cl := rand.Uint32()
-		seq := rand.Uint64()
-		op := randBytes()
-		req := newTestReq(impl, cl, seq, op)
-
-		r := rand.Uint32()
-		v := rand.Uint64()
-		cv := rand.Uint64()
-		prep := newTestPrep(impl, r, v, req, cv)
-		cp := prep.CertifiedPayload()
-
-		require.NotEqual(t, cp, newTestPrep(impl, r,
-			rand.Uint64(), req, cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestPrep(impl, r,
-			v, newTestReq(impl,
-				rand.Uint32(), seq, op), cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestPrep(impl, r,
-			v, newTestReq(impl,
-				cl, rand.Uint64(), op), cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestPrep(impl, r,
-			v, newTestReq(impl,
-				cl, seq, randBytes()), cv).CertifiedPayload())
-	})
 	t.Run("SetUIBytes", func(t *testing.T) {
 		prep := randPrep(impl)
-		uiBytes := randUI(prep.CertifiedPayload())
+		uiBytes := randUI(messages.AuthenBytes(prep))
 		prep.SetUIBytes(uiBytes)
 		require.Equal(t, uiBytes, prep.UIBytes())
 	})
@@ -77,7 +53,7 @@ func randPrep(impl messages.MessageImpl) messages.Prepare {
 
 func newTestPrep(impl messages.MessageImpl, r uint32, v uint64, req messages.Request, cv uint64) messages.Prepare {
 	prep := impl.NewPrepare(r, v, req)
-	uiBytes := newTestUI(cv, prep.CertifiedPayload())
+	uiBytes := newTestUI(cv, messages.AuthenBytes(prep))
 	prep.SetUIBytes(uiBytes)
 	return prep
 }
@@ -86,6 +62,5 @@ func requirePrepEqual(t *testing.T, prep1, prep2 messages.Prepare) {
 	require.Equal(t, prep1.ReplicaID(), prep2.ReplicaID())
 	require.Equal(t, prep1.View(), prep2.View())
 	requireReqEqual(t, prep1.Request(), prep2.Request())
-	require.Equal(t, prep1.CertifiedPayload(), prep2.CertifiedPayload())
 	require.Equal(t, prep1.UIBytes(), prep2.UIBytes())
 }

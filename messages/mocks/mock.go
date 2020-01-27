@@ -274,20 +274,6 @@ func (m *MockCertifiedMessage) EXPECT() *MockCertifiedMessageMockRecorder {
 	return m.recorder
 }
 
-// CertifiedPayload mocks base method
-func (m *MockCertifiedMessage) CertifiedPayload() []byte {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CertifiedPayload")
-	ret0, _ := ret[0].([]byte)
-	return ret0
-}
-
-// CertifiedPayload indicates an expected call of CertifiedPayload
-func (mr *MockCertifiedMessageMockRecorder) CertifiedPayload() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CertifiedPayload", reflect.TypeOf((*MockCertifiedMessage)(nil).CertifiedPayload))
-}
-
 // ImplementsReplicaMessage mocks base method
 func (m *MockCertifiedMessage) ImplementsReplicaMessage() {
 	m.ctrl.T.Helper()
@@ -402,18 +388,4 @@ func (m *MockSignedMessage) Signature() []byte {
 func (mr *MockSignedMessageMockRecorder) Signature() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Signature", reflect.TypeOf((*MockSignedMessage)(nil).Signature))
-}
-
-// SignedPayload mocks base method
-func (m *MockSignedMessage) SignedPayload() []byte {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SignedPayload")
-	ret0, _ := ret[0].([]byte)
-	return ret0
-}
-
-// SignedPayload indicates an expected call of SignedPayload
-func (mr *MockSignedMessageMockRecorder) SignedPayload() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignedPayload", reflect.TypeOf((*MockSignedMessage)(nil).SignedPayload))
 }

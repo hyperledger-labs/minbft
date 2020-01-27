@@ -33,15 +33,9 @@ func TestReqViewChange(t *testing.T) {
 		require.Equal(t, r, rvc.ReplicaID())
 		require.Equal(t, nv, rvc.NewView())
 	})
-	t.Run("SignedPayload", func(t *testing.T) {
-		rvc := randReqViewChange(impl)
-		r := rvc.ReplicaID()
-		sp := rvc.SignedPayload()
-		require.NotEqual(t, sp, newTestReqViewChange(impl, r, rand.Uint64()).SignedPayload())
-	})
 	t.Run("SetSignature", func(t *testing.T) {
 		rvc := randReqViewChange(impl)
-		sig := testSig(rvc.SignedPayload())
+		sig := testSig(messages.AuthenBytes(rvc))
 		rvc.SetSignature(sig)
 		require.Equal(t, sig, rvc.Signature())
 	})
@@ -57,13 +51,12 @@ func randReqViewChange(impl messages.MessageImpl) messages.ReqViewChange {
 
 func newTestReqViewChange(impl messages.MessageImpl, r uint32, nv uint64) messages.ReqViewChange {
 	rvc := impl.NewReqViewChange(r, nv)
-	rvc.SetSignature(testSig(rvc.SignedPayload()))
+	rvc.SetSignature(testSig(messages.AuthenBytes(rvc)))
 	return rvc
 }
 
 func requireReqViewChangeEqual(t *testing.T, rvc1, rvc2 messages.ReqViewChange) {
 	require.Equal(t, rvc1.ReplicaID(), rvc2.ReplicaID())
 	require.Equal(t, rvc1.NewView(), rvc2.NewView())
-	require.Equal(t, rvc1.SignedPayload(), rvc2.SignedPayload())
 	require.Equal(t, rvc1.Signature(), rvc2.Signature())
 }

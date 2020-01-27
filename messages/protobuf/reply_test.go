@@ -37,20 +37,9 @@ func TestReply(t *testing.T) {
 		require.Equal(t, seq, reply.Sequence())
 		require.Equal(t, res, reply.Result())
 	})
-	t.Run("SignedPayload", func(t *testing.T) {
-		reply := randReply(impl)
-		r := reply.ReplicaID()
-		cl := reply.ClientID()
-		seq := reply.Sequence()
-		res := reply.Result()
-		sp := reply.SignedPayload()
-		require.NotEqual(t, sp, newTestReply(impl, r, rand.Uint32(), seq, res).SignedPayload())
-		require.NotEqual(t, sp, newTestReply(impl, r, cl, rand.Uint64(), res).SignedPayload())
-		require.NotEqual(t, sp, newTestReply(impl, r, cl, seq, randBytes()).SignedPayload())
-	})
 	t.Run("SetSignature", func(t *testing.T) {
 		reply := randReply(impl)
-		sig := testSig(reply.SignedPayload())
+		sig := testSig(messages.AuthenBytes(reply))
 		reply.SetSignature(sig)
 		require.Equal(t, sig, reply.Signature())
 	})
@@ -66,7 +55,7 @@ func randReply(impl messages.MessageImpl) messages.Reply {
 
 func newTestReply(impl messages.MessageImpl, r, cl uint32, seq uint64, res []byte) messages.Reply {
 	reply := impl.NewReply(r, cl, seq, res)
-	reply.SetSignature(testSig(reply.SignedPayload()))
+	reply.SetSignature(testSig(messages.AuthenBytes(reply)))
 	return reply
 }
 
@@ -75,6 +64,5 @@ func requireReplyEqual(t *testing.T, reply1, reply2 messages.Reply) {
 	require.Equal(t, reply1.ClientID(), reply2.ClientID())
 	require.Equal(t, reply1.Sequence(), reply2.Sequence())
 	require.Equal(t, reply1.Result(), reply2.Result())
-	require.Equal(t, reply1.SignedPayload(), reply2.SignedPayload())
 	require.Equal(t, reply1.Signature(), reply2.Signature())
 }

@@ -33,30 +33,9 @@ func TestCommit(t *testing.T) {
 		require.Equal(t, r, comm.ReplicaID())
 		requirePrepEqual(t, prep, comm.Prepare())
 	})
-	t.Run("CertifiedPayload", func(t *testing.T) {
-		p := rand.Uint32()
-		v := rand.Uint64()
-		req := randReq(impl)
-		prepCV := rand.Uint64()
-		prep := newTestPrep(impl, p, v, req, prepCV)
-
-		r := rand.Uint32()
-		cv := rand.Uint64()
-		comm := newTestComm(impl, r, prep, cv)
-		cp := comm.CertifiedPayload()
-
-		require.NotEqual(t, cp, newTestComm(impl, r,
-			newTestPrep(impl, rand.Uint32(), v, req, prepCV), cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestComm(impl, r,
-			newTestPrep(impl, p, rand.Uint64(), req, prepCV), cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestComm(impl, r,
-			newTestPrep(impl, p, v, randReq(impl), prepCV), cv).CertifiedPayload())
-		require.NotEqual(t, cp, newTestComm(impl, r,
-			newTestPrep(impl, p, v, req, rand.Uint64()), cv).CertifiedPayload())
-	})
 	t.Run("SetUIBytes", func(t *testing.T) {
 		comm := randComm(impl)
-		uiBytes := randUI(comm.CertifiedPayload())
+		uiBytes := randUI(messages.AuthenBytes(comm))
 		comm.SetUIBytes(uiBytes)
 		require.Equal(t, uiBytes, comm.UIBytes())
 	})
@@ -72,7 +51,7 @@ func randComm(impl messages.MessageImpl) messages.Commit {
 
 func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv uint64) messages.Commit {
 	comm := impl.NewCommit(r, prep)
-	uiBytes := newTestUI(cv, comm.CertifiedPayload())
+	uiBytes := newTestUI(cv, messages.AuthenBytes(comm))
 	comm.SetUIBytes(uiBytes)
 	return comm
 }
@@ -80,6 +59,5 @@ func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv 
 func requireCommEqual(t *testing.T, comm1, comm2 messages.Commit) {
 	require.Equal(t, comm1.ReplicaID(), comm2.ReplicaID())
 	requirePrepEqual(t, comm1.Prepare(), comm2.Prepare())
-	require.Equal(t, comm1.CertifiedPayload(), comm2.CertifiedPayload())
 	require.Equal(t, comm1.UIBytes(), comm2.UIBytes())
 }

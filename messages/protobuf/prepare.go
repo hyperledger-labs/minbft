@@ -51,10 +51,6 @@ func (m *prepare) Request() messages.Request {
 	return newRequestFromPb(m.pbMsg.GetRequest())
 }
 
-func (m *prepare) CertifiedPayload() []byte {
-	return pb.AuthenBytesFromPrepare(m.pbMsg)
-}
-
 func (m *prepare) UIBytes() []byte {
 	return m.pbMsg.Ui
 }
