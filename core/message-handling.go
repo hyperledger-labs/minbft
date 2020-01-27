@@ -79,6 +79,14 @@ type messageProcessor func(msg messages.Message) (new bool, err error)
 // invoke concurrently.
 type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 
+// embeddedMessageProcessor processes embedded messages.
+//
+// It recursively processes messages embedded into the supplied
+// message. The supplied message and its embedded messages are assumed
+// to be authentic and internally consistent. It is safe to invoke
+// concurrently.
+type embeddedMessageProcessor func(msg messages.PeerMessage)
+
 // uiMessageProcessor processes a valid message with UI.
 //
 // It continues processing of the supplied message with UI. Messages
@@ -197,7 +205,8 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
-	processPeerMessage := makePeerMessageProcessor(processMessageThunk, processUIMessage, logger)
+	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
+	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
@@ -387,9 +396,22 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(process messageProcessor, processUIMessage uiMessageProcessor, logger *logging.Logger) peerMessageProcessor {
+func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor) peerMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
-		for _, m := range messages.EmbeddedMessages(msg) {
+		processEmbedded(msg)
+
+		switch msg := msg.(type) {
+		case messages.CertifiedMessage:
+			return processUIMessage(msg)
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
+func makeEmbeddedMessageProcessor(process messageProcessor, logger *logging.Logger) embeddedMessageProcessor {
+	return func(msg messages.PeerMessage) {
+		processOne := func(m messages.Message) {
 			if _, err := process(m); err != nil {
 				logger.Warningf("Failed to process %s extracted from %s: %s",
 					messages.Stringify(m), messages.Stringify(msg), err)
@@ -397,8 +419,11 @@ func makePeerMessageProcessor(process messageProcessor, processUIMessage uiMessa
 		}
 
 		switch msg := msg.(type) {
-		case messages.CertifiedMessage:
-			return processUIMessage(msg)
+		case messages.Prepare:
+			processOne(msg.Request())
+		case messages.Commit:
+			processOne(msg.Prepare())
+		case messages.ReqViewChange:
 		default:
 			panic("Unknown message type")
 		}
