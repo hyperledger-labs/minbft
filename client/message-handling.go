@@ -165,7 +165,7 @@ func makeReplyAuthenticator(clientID uint32, authenticator api.Authenticator) re
 		}
 
 		return authenticator.VerifyMessageAuthenTag(api.ReplicaAuthen, reply.ReplicaID(),
-			reply.SignedPayload(), reply.Signature())
+			messages.AuthenBytes(reply), reply.Signature())
 	}
 }
 

@@ -40,19 +40,29 @@ func TestMakeUIVerifier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	extractAuthenBytes := func(m messages.Message) []byte {
+		args := mock.MethodCalled("authenBytesExtractor", m)
+		return args.Get(0).([]byte)
+	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
 	makeMsg := func(cv uint64) (messages.CertifiedMessage, *usig.UI) {
 		return makeMockUIMsg(ctrl, rand.Uint32(), cv)
 	}
 
-	verifyUI := makeUIVerifier(authen)
+	verifyUI := makeUIVerifier(authen, extractAuthenBytes)
 
 	cv := rand.Uint64()
+	authenBytes := make([]byte, 1)
+	rand.Read(authenBytes)
 
 	// Correct UI
 	msg, expectedUI := makeMsg(cv)
+	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, msg.ReplicaID(), msg.CertifiedPayload(), msg.UIBytes(),
+		api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes(),
 	).Return(nil)
 	actualUI, err := verifyUI(msg)
 	assert.NoError(t, err)
@@ -60,8 +70,9 @@ func TestMakeUIVerifier(t *testing.T) {
 
 	// Failed USIG certificate verification
 	msg, _ = makeMsg(cv)
+	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, msg.ReplicaID(), msg.CertifiedPayload(), msg.UIBytes(),
+		api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes(),
 	).Return(fmt.Errorf("USIG certificate invalid"))
 	actualUI, err = verifyUI(msg)
 	assert.Error(t, err)
@@ -117,10 +128,6 @@ func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock,
 func makeMockUIMsg(ctrl *gomock.Controller, replicaID uint32, cv uint64) (messages.CertifiedMessage, *usig.UI) {
 	msg := mock_messages.NewMockCertifiedMessage(ctrl)
 	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
-
-	payload := make([]byte, 1)
-	rand.Read(payload)
-	msg.EXPECT().CertifiedPayload().Return(payload).AnyTimes()
 
 	cert := make([]byte, 1)
 	rand.Read(cert)

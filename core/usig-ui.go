@@ -64,7 +64,7 @@ func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 
 // makeUIVerifier constructs uiVerifier using the supplied external
 // authenticator to verify USIG certificates.
-func makeUIVerifier(authen api.Authenticator) uiVerifier {
+func makeUIVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) uiVerifier {
 	return func(msg messages.CertifiedMessage) (*usig.UI, error) {
 		ui, err := parseMessageUI(msg)
 		if err != nil {
@@ -75,7 +75,8 @@ func makeUIVerifier(authen api.Authenticator) uiVerifier {
 			return nil, fmt.Errorf("Invalid (zero) counter value")
 		}
 
-		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), msg.CertifiedPayload(), msg.UIBytes()); err != nil {
+		authenBytes := extractAuthenBytes(msg)
+		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes()); err != nil {
 			return nil, fmt.Errorf("Failed verifying USIG certificate: %s", err)
 		}
 
@@ -85,9 +86,10 @@ func makeUIVerifier(authen api.Authenticator) uiVerifier {
 
 // makeUIAssigner constructs uiAssigner using the supplied external
 // authentication interface to generate USIG UIs.
-func makeUIAssigner(authen api.Authenticator) uiAssigner {
+func makeUIAssigner(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) uiAssigner {
 	return func(msg messages.CertifiedMessage) {
-		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, msg.CertifiedPayload())
+		authenBytes := extractAuthenBytes(msg)
+		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, authenBytes)
 		if err != nil {
 			panic(err)
 		}

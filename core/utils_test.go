@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -35,22 +36,37 @@ func TestMakeMessageSigner(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	authen := mock_api.NewMockAuthenticator(ctrl)
-	signer := makeMessageSigner(authen)
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
 
-	payload := make([]byte, 1)
+	extractAuthenBytes := func(m messages.Message) []byte {
+		args := mock.MethodCalled("authenBytesExtractor", m)
+		return args.Get(0).([]byte)
+	}
+	authen := mock_api.NewMockAuthenticator(ctrl)
+	signer := makeMessageSigner(authen, extractAuthenBytes)
+
+	authenBytes := make([]byte, 1)
 	signature := make([]byte, 1)
-	rand.Read(payload)
+	rand.Read(authenBytes)
 	rand.Read(signature)
-	msg := mock_messages.NewMockSignedMessage(ctrl)
-	msg.EXPECT().SignedPayload().Return(payload).AnyTimes()
+
+	msg := struct {
+		*mock_messages.MockMessage
+		*mock_messages.MockSignedMessage
+	}{
+		mock_messages.NewMockMessage(ctrl),
+		mock_messages.NewMockSignedMessage(ctrl),
+	}
+
+	mock.On("authenBytesExtractor", msg).Return(authenBytes)
 
 	err := fmt.Errorf("cannot sign")
-	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, payload).Return(nil, err)
+	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, authenBytes).Return(nil, err)
 	assert.Panics(t, func() { signer(msg) })
 
-	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, payload).Return(signature, nil)
-	msg.EXPECT().SetSignature(signature)
+	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, authenBytes).Return(signature, nil)
+	msg.MockSignedMessage.EXPECT().SetSignature(signature)
 	signer(msg)
 }
 
@@ -58,22 +74,29 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	extractAuthenBytes := func(m messages.Message) []byte {
+		args := mock.MethodCalled("authenBytesExtractor", m)
+		return args.Get(0).([]byte)
+	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	verify := makeMessageSignatureVerifier(authen)
+	verify := makeMessageSignatureVerifier(authen, extractAuthenBytes)
 
 	clientID := rand.Uint32()
 	replicaID := rand.Uint32()
-	payload := make([]byte, 1)
+
+	authenBytes := make([]byte, 1)
 	signature := make([]byte, 1)
-	rand.Read(payload)
+	rand.Read(authenBytes)
 	rand.Read(signature)
 
 	signedMsg := mock_messages.NewMockSignedMessage(ctrl)
-	signedMsg.EXPECT().SignedPayload().Return(payload).AnyTimes()
 	signedMsg.EXPECT().Signature().Return(signature).AnyTimes()
 	clientMsg := mock_messages.NewMockClientMessage(ctrl)
 	clientMsg.EXPECT().ClientID().Return(clientID).AnyTimes()
-	msg := struct {
+	signedClientMsg := struct {
 		messages.ClientMessage
 		messages.SignedMessage
 	}{clientMsg, signedMsg}
@@ -86,25 +109,28 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 		messages.SignedMessage
 	}{replicaMsg, signedMsg}
 
+	mock.On("authenBytesExtractor", signedClientMsg).Return(authenBytes)
+	mock.On("authenBytesExtractor", signedReplicaMsg).Return(authenBytes)
+
 	assert.Panics(t, func() { verify(signedMsg) }, "Message with no signer ID")
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
-		payload, signature).Return(fmt.Errorf(""))
-	err := verify(msg)
+		authenBytes, signature).Return(fmt.Errorf(""))
+	err := verify(signedClientMsg)
 	assert.Error(t, err)
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ClientAuthen, clientID,
-		payload, signature).Return(nil)
-	err = verify(msg)
+		authenBytes, signature).Return(nil)
+	err = verify(signedClientMsg)
 	assert.NoError(t, err)
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ReplicaAuthen, replicaID,
-		payload, signature).Return(fmt.Errorf(""))
+		authenBytes, signature).Return(fmt.Errorf(""))
 	err = verify(signedReplicaMsg)
 	assert.Error(t, err)
 
 	authen.EXPECT().VerifyMessageAuthenTag(api.ReplicaAuthen, replicaID,
-		payload, signature).Return(nil)
+		authenBytes, signature).Return(nil)
 	err = verify(signedReplicaMsg)
 	assert.NoError(t, err)
 }

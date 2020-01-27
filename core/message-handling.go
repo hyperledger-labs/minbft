@@ -142,10 +142,10 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
 
-	verifyMessageSignature := makeMessageSignatureVerifier(stack)
-	signMessage := makeMessageSigner(stack)
-	verifyUI := makeUIVerifier(stack)
-	assignUI := makeUIAssigner(stack)
+	verifyMessageSignature := makeMessageSignatureVerifier(stack, messages.AuthenBytes)
+	signMessage := makeMessageSigner(stack, messages.AuthenBytes)
+	verifyUI := makeUIVerifier(stack, messages.AuthenBytes)
+	assignUI := makeUIAssigner(stack, messages.AuthenBytes)
 
 	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
 	peerStates := peerstate.NewProvider()
