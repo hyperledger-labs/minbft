@@ -34,11 +34,16 @@ type messageSigner func(msg messages.SignedMessage)
 // message against the message data.
 type messageSignatureVerifier func(msg messages.SignedMessage) error
 
+// authenBytesExtractor returns serialized representation of message's
+// authenticated content.
+type authenBytesExtractor func(msg messages.Message) []byte
+
 // makeMessageSigner constructs an instance of messageSigner using the
 // supplied external interface for message authentication.
-func makeMessageSigner(authen api.Authenticator) messageSigner {
+func makeMessageSigner(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) messageSigner {
 	return func(msg messages.SignedMessage) {
-		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, msg.SignedPayload())
+		authenBytes := extractAuthenBytes(msg.(messages.Message))
+		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, authenBytes)
 		if err != nil {
 			panic(err) // Supplied Authenticator must be able to sign
 		}
@@ -49,7 +54,7 @@ func makeMessageSigner(authen api.Authenticator) messageSigner {
 // makeMessageSignatureVerifier constructs an instance of
 // messageSignatureVerifier using the supplied external interface for
 // message authentication.
-func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVerifier {
+func makeMessageSignatureVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) messageSignatureVerifier {
 	return func(msg messages.SignedMessage) error {
 		var role api.AuthenticationRole
 		var id uint32
@@ -65,7 +70,8 @@ func makeMessageSignatureVerifier(authen api.Authenticator) messageSignatureVeri
 			panic("Message with no signer ID")
 		}
 
-		return authen.VerifyMessageAuthenTag(role, id, msg.SignedPayload(), msg.Signature())
+		authenBytes := extractAuthenBytes(msg.(messages.Message))
+		return authen.VerifyMessageAuthenTag(role, id, authenBytes, msg.Signature())
 	}
 }
 

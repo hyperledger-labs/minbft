@@ -35,18 +35,9 @@ func TestRequest(t *testing.T) {
 		require.Equal(t, seq, req.Sequence())
 		require.Equal(t, op, req.Operation())
 	})
-	t.Run("SignedPayload", func(t *testing.T) {
-		req := randReq(impl)
-		cl := req.ClientID()
-		seq := req.Sequence()
-		op := req.Operation()
-		sp := req.SignedPayload()
-		require.NotEqual(t, sp, newTestReq(impl, cl, rand.Uint64(), op).SignedPayload())
-		require.NotEqual(t, sp, newTestReq(impl, cl, seq, randBytes()).SignedPayload())
-	})
 	t.Run("SetSignature", func(t *testing.T) {
 		req := randReq(impl)
-		sig := testSig(req.SignedPayload())
+		sig := testSig(messages.AuthenBytes(req))
 		req.SetSignature(sig)
 		require.Equal(t, sig, req.Signature())
 	})
@@ -62,7 +53,7 @@ func randReq(impl messages.MessageImpl) messages.Request {
 
 func newTestReq(impl messages.MessageImpl, cl uint32, seq uint64, op []byte) messages.Request {
 	req := impl.NewRequest(cl, seq, op)
-	req.SetSignature(testSig(req.SignedPayload()))
+	req.SetSignature(testSig(messages.AuthenBytes(req)))
 	return req
 }
 
@@ -70,6 +61,5 @@ func requireReqEqual(t *testing.T, req1, req2 messages.Request) {
 	require.Equal(t, req1.ClientID(), req2.ClientID())
 	require.Equal(t, req1.Sequence(), req2.Sequence())
 	require.Equal(t, req1.Operation(), req2.Operation())
-	require.Equal(t, req1.SignedPayload(), req2.SignedPayload())
 	require.Equal(t, req1.Signature(), req2.Signature())
 }

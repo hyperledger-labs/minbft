@@ -46,10 +46,6 @@ func (m *commit) Prepare() messages.Prepare {
 	return newPrepareFromPb(m.pbMsg.GetPrepare())
 }
 
-func (m *commit) CertifiedPayload() []byte {
-	return pb.AuthenBytesFromCommit(m.pbMsg)
-}
-
 func (m *commit) UIBytes() []byte {
 	return m.pbMsg.Ui
 }

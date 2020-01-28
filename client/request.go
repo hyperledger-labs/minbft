@@ -193,7 +193,7 @@ func makeRequestConstructor(clientID uint32, seq sequenceGenerator) requestConst
 // authenticator to generate message authentication tags.
 func makeRequestSigner(authenticator api.Authenticator) requestSigner {
 	return func(request messages.Request) error {
-		sig, err := authenticator.GenerateMessageAuthenTag(api.ClientAuthen, request.SignedPayload())
+		sig, err := authenticator.GenerateMessageAuthenTag(api.ClientAuthen, messages.AuthenBytes(request))
 		if err != nil {
 			return err
 		}

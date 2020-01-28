@@ -20,16 +20,6 @@ syntax = "proto3";
 // Package pb defines MinBFT protocol messages in Protobuf format.
 package pb;
 
-// MessageType represents message type tag.
-enum MessageType {
-    UNKNOWN = 0;
-    REQUEST = 1;
-    REPLY = 2;
-    PREPARE = 3;
-    COMMIT = 4;
-    REQ_VIEW_CHANGE = 5;
-}
-
 // Message represents arbitrary protocol message.
 message Message{
     oneof typed {

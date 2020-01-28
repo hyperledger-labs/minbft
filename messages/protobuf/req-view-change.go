@@ -45,10 +45,6 @@ func (m *reqViewChange) NewView() uint64 {
 	return m.pbMsg.GetNewView()
 }
 
-func (m *reqViewChange) SignedPayload() []byte {
-	return pb.AuthenBytesFromReqViewChange(m.pbMsg)
-}
-
 func (m *reqViewChange) Signature() []byte {
 	return m.pbMsg.Signature
 }

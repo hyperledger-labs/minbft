@@ -51,10 +51,6 @@ func (m *request) Operation() []byte {
 	return m.pbMsg.GetOperation()
 }
 
-func (m *request) SignedPayload() []byte {
-	return pb.AuthenBytesFromRequest(m.pbMsg)
-}
-
 func (m *request) Signature() []byte {
 	return m.pbMsg.Signature
 }

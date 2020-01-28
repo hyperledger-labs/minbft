@@ -57,22 +57,14 @@ type PeerMessage interface {
 }
 
 // CertifiedMessage represents a message certified with a UI.
-//
-// CertifiedPayload returns the serialized message content certified
-// by its UI.
 type CertifiedMessage interface {
 	ReplicaMessage
-	CertifiedPayload() []byte
 	UIBytes() []byte
 	SetUIBytes(ui []byte)
 }
 
 // SignedMessage represents a message signed with a normal signature.
-//
-// SginedPayload returns serialized message content signed with its
-// signature.
 type SignedMessage interface {
-	SignedPayload() []byte
 	Signature() []byte
 	SetSignature(signature []byte)
 }
