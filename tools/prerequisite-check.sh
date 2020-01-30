@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ "$SKIP_PREREQUISITE_CHECK" ] ; then
+	echo "Skip prerequisite_check."
+	exit 0
+fi
+
 REQUIRED_GO_VERSION=1.11
 REQUIRED_SGXSDK_VERSION=2.3.101
 
