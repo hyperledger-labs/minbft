@@ -78,5 +78,8 @@ lint:
 generate:
 	go generate ./...
 
+prerequisite-check:
+	@bash tools/prerequisite-check.sh
+
 $(usig-target-list):
 	$(MAKE) -C usig/sgx $(patsubst usig-%,%,$@)
