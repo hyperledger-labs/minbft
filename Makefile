@@ -51,7 +51,7 @@ help:
 	@echo '  usig-*           - Make USIG target, where target is one of:'
 	@echo '                     $(usig-target-list)'
 
-build: usig-build
+build: prerequisite-check usig-build
 	go build -o $(builddir)/keytool ./sample/authentication/keytool
 	go build -o $(builddir)/peer ./sample/peer
 
@@ -77,6 +77,9 @@ lint:
 
 generate:
 	go generate ./...
+
+prerequisite-check:
+	@bash tools/prerequisite-check.sh
 
 $(usig-target-list):
 	$(MAKE) -C usig/sgx $(patsubst usig-%,%,$@)
