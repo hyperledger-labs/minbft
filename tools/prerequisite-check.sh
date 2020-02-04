@@ -5,6 +5,10 @@ if [ "$SKIP_PREREQUISITE_CHECK" ] ; then
 	exit 0
 fi
 
+if [ ! "$SGX_MODE" ] ; then
+	SGX_MODE="HW"
+fi
+
 REQUIRED_GO_VERSION=1.11
 REQUIRED_SGXSDK_VERSION=2.3.101
 
@@ -55,7 +59,7 @@ check_sgxsdk_version() {
 }
 
 check_sgx_support() {
-	if [ "$SGX_MODE" == SIM ] ; then
+	if [ "$SGX_MODE" != "HW" ] ; then
 		return 0
 	fi
 
@@ -92,7 +96,7 @@ get_sgx_psw_version() {
 }
 
 check_sgxpsw_version() {
-	if [ "$SGX_MODE" == SIM ] ; then
+	if [ "$SGX_MODE" != "HW" ] ; then
 		return 0
 	fi
 
@@ -117,7 +121,7 @@ if [ ! "$SGX_SDK" ] ; then
 	exit 1
 fi
 
-if [ "$SGX_MODE" == SIM ] ; then
+if [ "$SGX_MODE" != "HW" ] ; then
 	echo "SGX is running in simulation mode."
 fi
 
