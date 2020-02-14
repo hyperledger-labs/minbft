@@ -41,6 +41,8 @@ func AuthenBytes(m Message) []byte {
 		tag = "REQ-VIEW-CHANGE"
 	case ViewChange:
 		tag = "VIEW-CHANGE"
+	case NewView:
+		tag = "NEW-VIEW"
 	default:
 		panic("unknown message type")
 	}
@@ -82,6 +84,12 @@ func writeAuthenBytes(buf io.Writer, m Message) {
 		// equivalent to any other valid one. Moreover,
 		// messages in the message log and view-change
 		// certificate are authenticated on their own.
+	case NewView:
+		_ = binary.Write(buf, binary.BigEndian, m.NewView())
+		for _, vc := range m.NewViewCert() {
+			_ = binary.Write(buf, binary.BigEndian, vc.ReplicaID())
+			_ = binary.Write(buf, binary.BigEndian, vc.UI().Counter)
+		}
 	default:
 		panic("unknown message type")
 	}
