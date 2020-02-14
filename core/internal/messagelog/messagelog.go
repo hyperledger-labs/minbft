@@ -43,7 +43,7 @@ type MessageLog interface {
 }
 
 type messageLog struct {
-	lock sync.RWMutex
+	sync.RWMutex
 
 	// Messages in order added
 	msgs []messages.Message
@@ -58,8 +58,8 @@ func New() MessageLog {
 }
 
 func (log *messageLog) Append(msg messages.Message) {
-	log.lock.Lock()
-	defer log.lock.Unlock()
+	log.Lock()
+	defer log.Unlock()
 
 	log.msgs = append(log.msgs, msg)
 
@@ -81,16 +81,16 @@ func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan st
 	defer close(ch)
 
 	newAdded := make(chan struct{}, 1)
-	log.lock.Lock()
+	log.Lock()
 	log.newAdded = append(log.newAdded, newAdded)
-	log.lock.Unlock()
+	log.Unlock()
 
 	next := 0
 	for {
-		log.lock.RLock()
+		log.RLock()
 		msgs := log.msgs[next:]
 		next = len(log.msgs)
-		log.lock.RUnlock()
+		log.RUnlock()
 
 		for _, msg := range msgs {
 			select {
