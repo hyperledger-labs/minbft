@@ -198,11 +198,16 @@ func TestMakeMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("commitValidator", msg)
 		return args.Error(0)
 	}
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
+	validateReqViewChange := func(msg messages.ReqViewChange) error {
+		args := mock.MethodCalled("reqViewChangeValidator", msg)
+		return args.Error(0)
+	}
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(0, 0, request)
 	commit := messageImpl.NewCommit(0, prepare)
+	rvc := messageImpl.NewReqViewChange(0, rand.Uint64())
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockMessage(ctrl)
@@ -233,6 +238,15 @@ func TestMakeMessageValidator(t *testing.T) {
 
 		mock.On("commitValidator", commit).Return(nil).Once()
 		err = validateMessage(commit)
+		assert.NoError(t, err)
+	})
+	t.Run("ReqViewChange", func(t *testing.T) {
+		mock.On("reqViewChangeValidator", rvc).Return(fmt.Errorf("Error")).Once()
+		err := validateMessage(rvc)
+		assert.Error(t, err, "Invalid ReqViewChange")
+
+		mock.On("reqViewChangeValidator", rvc).Return(nil).Once()
+		err = validateMessage(rvc)
 		assert.NoError(t, err)
 	})
 }

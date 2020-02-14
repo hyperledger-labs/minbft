@@ -164,7 +164,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
+	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
@@ -405,7 +406,7 @@ func makeClientMessageHandler(validateRequest requestValidator, processRequest r
 
 // makeMessageValidator constructs an instance of messageValidator
 // using the supplied abstractions.
-func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator) messageValidator {
+func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) messageValidator {
 	return func(msg messages.Message) error {
 		switch msg := msg.(type) {
 		case messages.Request:
@@ -415,7 +416,7 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 		case messages.Commit:
 			return validateCommit(msg)
 		case messages.ReqViewChange:
-			return fmt.Errorf("not implemented")
+			return validateReqViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}
