@@ -39,10 +39,13 @@ import (
 // passed if there's no need to close the returned channel.
 //
 // Messages returns all messages currently in the log.
+//
+// Reset replaces messages stored in the log with the supplied ones.
 type MessageLog interface {
 	Append(msg messages.Message)
 	Stream(done <-chan struct{}) <-chan messages.Message
 	Messages() []messages.Message
+	Reset(msgs []messages.Message)
 }
 
 type messageLog struct {
@@ -53,12 +56,16 @@ type messageLog struct {
 
 	// Channel to close and recreate when adding new messages
 	newAdded chan struct{}
+
+	// Channel to close and recreate on reset
+	resetChan chan struct{}
 }
 
 // New creates a new instance of the message log.
 func New() MessageLog {
 	return &messageLog{
-		newAdded: make(chan struct{}),
+		newAdded:  make(chan struct{}),
+		resetChan: make(chan struct{}),
 	}
 }
 
@@ -80,9 +87,20 @@ func (log *messageLog) Stream(done <-chan struct{}) <-chan messages.Message {
 func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan struct{}) {
 	defer close(ch)
 
-	next := 0
+	log.RLock()
+	resetChan := log.resetChan
+	log.RUnlock()
+
+	var next int
+loop:
 	for {
 		log.RLock()
+		select {
+		case <-resetChan:
+			resetChan = log.resetChan
+			next = 0
+		default:
+		}
 		newAdded := log.newAdded
 		msgs := log.msgs[next:]
 		next = len(log.msgs)
@@ -91,6 +109,8 @@ func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan st
 		for _, msg := range msgs {
 			select {
 			case ch <- msg:
+			case <-resetChan:
+				continue loop
 			case <-done:
 				return
 			}
@@ -98,6 +118,7 @@ func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan st
 
 		select {
 		case <-newAdded:
+		case <-resetChan:
 		case <-done:
 			return
 		}
@@ -109,4 +130,13 @@ func (log *messageLog) Messages() []messages.Message {
 	defer log.RUnlock()
 
 	return log.msgs
+}
+
+func (log *messageLog) Reset(msgs []messages.Message) {
+	log.Lock()
+	defer log.Unlock()
+
+	log.msgs = msgs
+	close(log.resetChan)
+	log.resetChan = make(chan struct{})
 }

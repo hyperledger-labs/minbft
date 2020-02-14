@@ -92,6 +92,74 @@ func TestMessages(t *testing.T) {
 	assert.Equalf(t, msgs, log.Messages(), "Unexpected messages")
 }
 
+func TestReset(t *testing.T) {
+	const nrMessages = 23
+
+	log := New()
+	ch := log.Stream(nil)
+
+	msgs := makeManyMsgs(nrMessages)
+	log.Reset(msgs)
+
+	for i, m := range msgs {
+		assert.Equalf(t, m, <-ch, "Unexpected message %d", i)
+	}
+
+	msgs2 := makeManyMsgs(nrMessages)
+	log.Reset(msgs2)
+
+	ch2 := log.Stream(nil)
+	for i, m := range msgs2 {
+		assert.Equalf(t, m, <-ch, "Unexpected message %d", i)
+		assert.Equalf(t, m, <-ch2, "Unexpected message %d", i)
+	}
+	assert.Equalf(t, msgs2, log.Messages(), "Unexpected messages")
+}
+
+func TestResetConcurrent(t *testing.T) {
+	const nrStreams = 3
+	const nrMessages = 23
+
+	log := New()
+
+	msgs := makeManyMsgs(nrMessages)
+	msgs2 := makeManyMsgs(nrMessages)
+	log.Reset(msgs)
+
+	wg := new(sync.WaitGroup)
+	wg.Add(nrStreams)
+	for id := 0; id < nrStreams; id++ {
+		ch := log.Stream(nil)
+
+		go func(streamID int) {
+			defer wg.Done()
+
+			var i, j int
+			for j < len(msgs2) {
+				ok := assert.Conditionf(t, func() bool {
+					m := <-ch
+					switch {
+					case i < len(msgs) && m == msgs[i]:
+						i++
+						return assert.Zero(t, j)
+					case m == msgs2[j]:
+						j++
+						return true
+					default:
+						return false
+					}
+				}, "Unexpected message from stream %d", streamID)
+				if !ok {
+					break
+				}
+			}
+		}(id)
+	}
+
+	log.Reset(msgs2)
+	wg.Wait()
+}
+
 func TestConcurrent(t *testing.T) {
 	const nrStreams = 3
 	const nrMessages = 5
