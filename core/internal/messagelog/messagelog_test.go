@@ -80,6 +80,18 @@ func TestStream(t *testing.T) {
 	assert.False(t, more, "Channel not closed")
 }
 
+func TestMessages(t *testing.T) {
+	const nrMessages = 5
+
+	log := New()
+	msgs := makeManyMsgs(nrMessages)
+
+	for _, msg := range msgs {
+		log.Append(msg)
+	}
+	assert.Equalf(t, msgs, log.Messages(), "Unexpected messages")
+}
+
 func TestConcurrent(t *testing.T) {
 	const nrStreams = 3
 	const nrMessages = 5
@@ -97,8 +109,8 @@ func TestConcurrent(t *testing.T) {
 			ch := log.Stream(done)
 
 			for i, msg := range msgs {
-				assert.Equalf(t, msg, <-ch,
-					"Unexpected message %d from stream %d", i, streamID)
+				assert.Equalf(t, msg, <-ch, "Unexpected message %d from stream %d", i, streamID)
+				assert.Equalf(t, msgs[:i], log.Messages()[:i], "Unexpected messages in the log")
 			}
 
 			close(done)
@@ -137,8 +149,8 @@ func TestWithFaulty(t *testing.T) {
 			}
 
 			for i, msg := range msgs {
-				assert.Equalf(t, msg, <-ch,
-					"Unexpected message %d from stream %d", i, streamID)
+				assert.Equalf(t, msg, <-ch, "Unexpected message %d from stream %d", i, streamID)
+				assert.Equalf(t, msgs[:i], log.Messages()[:i], "Unexpected messages in the log")
 			}
 
 			wg.Done()
@@ -152,15 +164,15 @@ func TestWithFaulty(t *testing.T) {
 	wg.Wait()
 }
 
-func makeManyMsgs(nrMessages int) []messages.ReplicaMessage {
-	msgs := make([]messages.ReplicaMessage, nrMessages)
+func makeManyMsgs(nrMessages int) []messages.Message {
+	msgs := make([]messages.Message, nrMessages)
 	for i := 0; i < nrMessages; i++ {
 		msgs[i] = makeMsg()
 	}
 	return msgs
 }
 
-func makeMsg() messages.ReplicaMessage {
+func makeMsg() messages.Message {
 	return struct {
 		messages.ReplicaMessage
 		i int

@@ -37,9 +37,12 @@ import (
 // they appear in the log. Closing the channel passed to this function
 // indicates the returned channel should be closed. Nil channel may be
 // passed if there's no need to close the returned channel.
+//
+// Messages returns all messages currently in the log.
 type MessageLog interface {
 	Append(msg messages.Message)
 	Stream(done <-chan struct{}) <-chan messages.Message
+	Messages() []messages.Message
 }
 
 type messageLog struct {
@@ -99,4 +102,11 @@ func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan st
 			return
 		}
 	}
+}
+
+func (log *messageLog) Messages() []messages.Message {
+	log.RLock()
+	defer log.RUnlock()
+
+	return log.msgs
 }
