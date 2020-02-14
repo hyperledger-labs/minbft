@@ -31,6 +31,7 @@ message Message{
         Commit commit = 5;
         ReqViewChange req_view_change = 6;
         ViewChange view_change = 7;
+        NewView new_view = 8;
     }
 }
 
@@ -128,4 +129,19 @@ message ViewChange {
 
     // Replicas's UI
     bytes ui = 6;
+}
+
+// NewView represents NEW-VIEW message.
+message NewView {
+    // Replica identifier
+    uint32 replica_id = 1;
+
+    // New view number
+    uint64 new_view = 2;
+
+    // New view certificate
+    repeated ViewChange nv_cert = 3;
+
+    // Replicas's UI
+    bytes ui = 4;
 }

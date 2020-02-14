@@ -45,6 +45,8 @@ func WrapMessage(m proto.Message) *Message {
 		return &Message{Typed: &Message_ReqViewChange{ReqViewChange: m}}
 	case *ViewChange:
 		return &Message{Typed: &Message_ViewChange{ViewChange: m}}
+	case *NewView:
+		return &Message{Typed: &Message_NewView{NewView: m}}
 	default:
 		panic("unknown message type")
 	}
@@ -70,6 +72,8 @@ func MessageFromAPI(m messages.Message) proto.Message {
 		return ReqViewChangeFromAPI(m)
 	case messages.ViewChange:
 		return ViewChangeFromAPI(m)
+	case messages.NewView:
+		return NewViewFromAPI(m)
 	default:
 		panic("unknown message type")
 	}
@@ -141,6 +145,23 @@ func viewChangeCertFromAPI(cert messages.ViewChangeCert) []*ReqViewChange {
 	pbCert := make([]*ReqViewChange, 0, len(cert))
 	for _, m := range cert {
 		pbCert = append(pbCert, ReqViewChangeFromAPI(m))
+	}
+	return pbCert
+}
+
+func NewViewFromAPI(nv messages.NewView) *NewView {
+	return &NewView{
+		ReplicaId: nv.ReplicaID(),
+		NewView:   nv.NewView(),
+		NvCert:    newViewCertFromAPI(nv.NewViewCert()),
+		Ui:        usig.MustMarshalUI(nv.UI()),
+	}
+}
+
+func newViewCertFromAPI(cert messages.NewViewCert) []*ViewChange {
+	pbCert := make([]*ViewChange, 0, len(cert))
+	for _, m := range cert {
+		pbCert = append(pbCert, ViewChangeFromAPI(m))
 	}
 	return pbCert
 }
