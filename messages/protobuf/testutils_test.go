@@ -72,5 +72,11 @@ func requireCertMsgEqual(t *testing.T, m1, m2 messages.CertifiedMessage) {
 		m2, ok := m2.(messages.ViewChange)
 		require.True(t, ok)
 		requireVCEqual(t, m1, m2)
+	case messages.NewView:
+		m2, ok := m2.(messages.NewView)
+		require.True(t, ok)
+		requireNVEqual(t, m1, m2)
+	default:
+		panic("Unexpected message type")
 	}
 }

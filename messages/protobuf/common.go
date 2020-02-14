@@ -39,6 +39,8 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 		return newReqViewChangeFromPb(t.ReqViewChange)
 	case *pb.Message_ViewChange:
 		return newViewChangeFromPb(t.ViewChange)
+	case *pb.Message_NewView:
+		return newNewViewFromPb(t.NewView)
 	default:
 		return nil, xerrors.New("unknown message type")
 	}
@@ -58,6 +60,8 @@ func pbMessageFromAPI(m messages.Message) proto.Message {
 		return pbReqViewChangeFromAPI(m)
 	case messages.ViewChange:
 		return pbViewChangeFromAPI(m)
+	case messages.NewView:
+		return pbNewViewFromAPI(m)
 	default:
 		panic("unknown message type")
 	}
@@ -104,4 +108,12 @@ func pbViewChangeFromAPI(m messages.ViewChange) *pb.ViewChange {
 	}
 
 	return pb.ViewChangeFromAPI(m)
+}
+
+func pbNewViewFromAPI(m messages.NewView) *pb.NewView {
+	if m, ok := m.(*newView); ok {
+		return m.pbMsg
+	}
+
+	return pb.NewViewFromAPI(m)
 }
