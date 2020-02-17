@@ -924,11 +924,8 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 	t.Run("Reply", func(t *testing.T) {
 		reply := messageImpl.NewReply(rand.Uint32(), clientID, rand.Uint64(), nil)
 
-		clientState.EXPECT().AddReply(reply).Return(nil)
+		clientState.EXPECT().AddReply(reply)
 		consume(reply)
-
-		clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("invalid request ID"))
-		assert.Panics(t, func() { consume(reply) })
 	})
 	t.Run("PeerMessage", func(t *testing.T) {
 		msg := struct {

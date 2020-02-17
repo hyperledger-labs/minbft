@@ -660,17 +660,13 @@ func makeGeneratedMessageHandler(sign messageSigner, assignUI uiAssigner, consum
 	}
 }
 
-func makeGeneratedMessageConsumer(log messagelog.MessageLog, provider clientstate.Provider, logger logger.Logger) generatedMessageConsumer {
+func makeGeneratedMessageConsumer(log messagelog.MessageLog, clientStates clientstate.Provider, logger logger.Logger) generatedMessageConsumer {
 	return func(msg messages.ReplicaMessage) {
 		logger.Debugf("Generated %s", messages.Stringify(msg))
 
 		switch msg := msg.(type) {
 		case messages.Reply:
-			clientID := msg.ClientID()
-			if err := provider.ClientState(clientID).AddReply(msg); err != nil {
-				// Erroneous Reply must never be supplied
-				panic(fmt.Errorf("failed to consume generated Reply: %s", err))
-			}
+			clientStates.ClientState(msg.ClientID()).AddReply(msg)
 		case messages.ReplicaMessage:
 			log.Append(msg)
 		default:
