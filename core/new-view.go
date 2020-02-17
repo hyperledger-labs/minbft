@@ -126,13 +126,13 @@ func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, pre
 	}
 }
 
-func makeNewViewAcceptor(extractPrepared preparedRequestExtractor, executeRequest requestExecutor, applyPendingRequests pendingRequestApplier) newViewAcceptor {
+func makeNewViewAcceptor(extractPrepared preparedRequestExtractor, executeRequest requestExecutor, stopVCTimer viewChangeTimerStopper, applyPendingRequests pendingRequestApplier) newViewAcceptor {
 	return func(nv messages.NewView) {
 		for _, req := range extractPrepared(nv.NewViewCert()) {
 			executeRequest(req)
 		}
 
-		// TODO: stop and reset view-change timer
+		stopVCTimer()
 		applyPendingRequests(nv.NewView())
 	}
 }
