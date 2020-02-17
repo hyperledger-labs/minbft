@@ -33,11 +33,11 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // AdvanceCurrentView mocks base method
-func (m *MockState) AdvanceCurrentView(arg0 uint64) (bool, bool, func()) {
+func (m *MockState) AdvanceCurrentView(arg0 uint64) (bool, uint64, func()) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AdvanceCurrentView", arg0)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(bool)
+	ret1, _ := ret[1].(uint64)
 	ret2, _ := ret[2].(func())
 	return ret0, ret1, ret2
 }

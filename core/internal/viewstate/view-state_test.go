@@ -65,14 +65,10 @@ func TestViewState(t *testing.T) {
 			}
 		}
 		if c.Finish {
-			ok, active, release := s.AdvanceCurrentView(view)
+			ok, expected, release := s.AdvanceCurrentView(view)
 			require.Equal(t, c.Ok, ok, assertMsg)
 			if ok {
-				if c.Current == c.Expected {
-					require.True(t, active)
-				} else {
-					require.False(t, active)
-				}
+				require.EqualValues(t, c.Expected, expected, assertMsg)
 				release()
 			}
 		}
@@ -133,16 +129,12 @@ func TestConcurrent(t *testing.T) {
 	}
 
 	finishViewChange := func(view uint64) {
-		ok, active, release := s.AdvanceCurrentView(view)
+		ok, expected, release := s.AdvanceCurrentView(view)
 		if !ok {
 			return
 		}
 		assert.True(t, finished < view)
-		if active {
-			assert.True(t, started == view)
-		} else {
-			assert.True(t, started > view)
-		}
+		assert.True(t, expected == started)
 		finished = view
 		go release()
 	}
