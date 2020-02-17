@@ -188,10 +188,11 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validatePeerMessage := makePeerMessageValidator(n, validateCertifiedMessage, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
+	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
-	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit)
-	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
+	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareSeq, collectCommitment, handleGeneratedMessage)
+	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit, applyNewView)
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 
@@ -408,7 +409,7 @@ func makePeerMessageHandler(validate messageValidator, handleEmbedded embeddedMe
 }
 
 func makeEmbeddedMessageHandler(handle messageHandler) embeddedMessageHandler {
-	return func(msg messages.Message) (err error) {
+	return func(msg messages.Message) error {
 		handleOne := func(m messages.Message) error {
 			if _, _, err := handle(m); err != nil {
 				return fmt.Errorf("error handling %s: %s", messages.Stringify(m), err)
@@ -419,26 +420,32 @@ func makeEmbeddedMessageHandler(handle messageHandler) embeddedMessageHandler {
 		switch msg := msg.(type) {
 		case messages.Request:
 		case messages.Prepare:
-			err = handleOne(msg.Request())
+			return handleOne(msg.Request())
 		case messages.Commit:
-			err = handleOne(msg.Proposal())
+			return handleOne(msg.Proposal())
 		case messages.ReqViewChange:
 		case messages.ViewChange:
 			for _, m := range msg.ViewChangeCert() {
-				if err = handleOne(m); err != nil {
-					goto out
+				if err := handleOne(m); err != nil {
+					return err
 				}
 			}
 			for _, m := range msg.MessageLog() {
-				if err = handleOne(m); err != nil {
-					goto out
+				if err := handleOne(m); err != nil {
+					return err
+				}
+			}
+		case messages.NewView:
+			for _, m := range msg.NewViewCert() {
+				if err := handleOne(m); err != nil {
+					return err
 				}
 			}
 		default:
 			panic("Unknown message type")
 		}
-	out:
-		return err
+
+		return nil
 	}
 }
 
@@ -591,10 +598,10 @@ func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProce
 
 func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMessageApplier) viewMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
+		var messageView, expectedView uint64
+
 		switch msg := msg.(type) {
 		case messages.Prepare, messages.Commit:
-			var messageView uint64
-
 			switch msg := msg.(type) {
 			case messages.Prepare:
 				messageView = msg.View()
@@ -607,7 +614,9 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 				}
 			}
 
-			currentView, expectedView, release := viewState.HoldView()
+			var currentView uint64
+			var release func()
+			currentView, expectedView, release = viewState.HoldView()
 			defer release()
 
 			if messageView > currentView {
@@ -615,11 +624,22 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 				// transition into the new view.
 				return false, fmt.Errorf("message refers to unexpected view")
 			}
-			if messageView < expectedView {
+		case messages.NewView:
+			messageView = msg.NewView()
+
+			var ok bool
+			var release func()
+			ok, expectedView, release = viewState.AdvanceCurrentView(messageView)
+			if !ok {
 				return false, nil
 			}
+			defer release()
 		default:
 			panic("Unknown message type")
+		}
+
+		if messageView != expectedView {
+			return false, nil
 		}
 
 		if err := applyPeerMessage(msg); err != nil {
@@ -632,13 +652,15 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 
 // makePeerMessageApplier constructs an instance of peerMessageApplier using
 // the supplied abstractions.
-func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) peerMessageApplier {
+func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier, applyNewView newViewApplier) peerMessageApplier {
 	return func(msg messages.PeerMessage) error {
 		switch msg := msg.(type) {
 		case messages.Prepare:
 			return applyPrepare(msg)
 		case messages.Commit:
 			return applyCommit(msg)
+		case messages.NewView:
+			return applyNewView(msg)
 		default:
 			panic("Unknown message type")
 		}

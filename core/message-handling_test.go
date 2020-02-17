@@ -623,6 +623,33 @@ func TestMakeEmbeddedMessageHandler(t *testing.T) {
 		err = handle(vc)
 		assert.NoError(t, err)
 	})
+	t.Run("NewView", func(t *testing.T) {
+		nvCert := MakeTestNVCert(messageImpl)
+		nv := messageImpl.NewNewView(1, 1, nvCert)
+
+		for _, m := range nvCert {
+			mock.On("messageHandler", m).Return(true, nil).Once()
+		}
+		err := handle(nv)
+		assert.NoError(t, err)
+
+		for _, m := range nvCert {
+			mock.On("messageHandler", m).Return(false, nil).Once()
+		}
+		err = handle(nv)
+		assert.NoError(t, err)
+
+		mock.On("messageHandler", nvCert[rand.Intn(len(nvCert))]).Return(false, fmt.Errorf("error")).Once()
+
+		for _, m := range nvCert {
+			mock.On("messageHandler", m).Return(false, nil)
+		}
+		err = handle(nv)
+		assert.Error(t, err)
+
+		err = handle(nv)
+		assert.NoError(t, err)
+	})
 }
 
 func TestMakeCertifiedMessageProcessor(t *testing.T) {
@@ -754,14 +781,15 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	process := makeViewMessageProcessor(viewState, applyPeerMessage)
 
 	n := randN()
-	primary := randReplicaID(n)
-	view := viewForPrimary(n, primary) + uint64(n)
+	view := randView() + uint64(n)
 	oldView := view - uint64(1+rand.Intn(int(n-1)))
 	newView := view + uint64(1+rand.Intn(int(n-1)))
+	primary := primaryID(n, view)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(randOtherReplicaID(primary, n), prepare)
+	nv := messageImpl.NewNewView(primary, view, nil)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
@@ -799,6 +827,30 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	t.Run("Commit", func(t *testing.T) {
 		testPeerMessage(t, commit)
 	})
+	t.Run("NewView", func(t *testing.T) {
+		viewState.EXPECT().AdvanceCurrentView(view).Return(false, view, releaseView)
+		new, err := process(nv)
+		assert.NoError(t, err)
+		assert.False(t, new)
+
+		viewState.EXPECT().AdvanceCurrentView(view).Return(false, newView, releaseView)
+		new, err = process(nv)
+		assert.NoError(t, err)
+		assert.False(t, new)
+
+		viewState.EXPECT().AdvanceCurrentView(view).Return(true, view, releaseView)
+		mock.On("viewReleaser").Once()
+		mock.On("peerMessageApplier", nv).Return(nil).Once()
+		new, err = process(nv)
+		assert.NoError(t, err)
+		assert.True(t, new)
+
+		viewState.EXPECT().AdvanceCurrentView(view).Return(true, newView, releaseView)
+		mock.On("viewReleaser").Once()
+		new, err = process(nv)
+		assert.NoError(t, err)
+		assert.False(t, new)
+	})
 }
 
 func TestMakePeerMessageApplier(t *testing.T) {
@@ -816,12 +868,17 @@ func TestMakePeerMessageApplier(t *testing.T) {
 		args := mock.MethodCalled("commitApplier", msg)
 		return args.Error(0)
 	}
-	apply := makePeerMessageApplier(applyPrepare, applyCommit)
+	applyNewView := func(msg messages.NewView) error {
+		args := mock.MethodCalled("newViewApplier", msg)
+		return args.Error(0)
+	}
+	apply := makePeerMessageApplier(applyPrepare, applyCommit, applyNewView)
 
 	reqSeq := rand.Uint64()
 	request := messageImpl.NewRequest(0, reqSeq, nil)
 	prepare := messageImpl.NewPrepare(0, 0, request)
 	commit := messageImpl.NewCommit(1, prepare)
+	nv := messageImpl.NewNewView(1, 1, nil)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
@@ -843,6 +900,15 @@ func TestMakePeerMessageApplier(t *testing.T) {
 
 		mock.On("commitApplier", commit).Return(nil).Once()
 		err = apply(commit)
+		assert.NoError(t, err)
+	})
+	t.Run("NewView", func(t *testing.T) {
+		mock.On("newViewApplier", nv).Return(fmt.Errorf("error")).Once()
+		err := apply(nv)
+		assert.Error(t, err, "Failed to apply NewView")
+
+		mock.On("newViewApplier", nv).Return(nil).Once()
+		err = apply(nv)
 		assert.NoError(t, err)
 	})
 }

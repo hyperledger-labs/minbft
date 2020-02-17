@@ -96,3 +96,95 @@ func TestMakeNewViewCertValidator(t *testing.T) {
 	err = validate(p, v, cert)
 	assert.NoError(t, err)
 }
+
+func TestMakeNewViewApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	view := randOtherView(0)
+	primary := primaryID(n, view)
+	id := randOtherReplicaID(primary, n)
+
+	extractPrepared := func(nvCert messages.NewViewCert) []messages.Request {
+		args := mock.MethodCalled("preparedRequestExtractor", nvCert)
+		return args.Get(0).([]messages.Request)
+	}
+	prepareSeq := func(request messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqPreparer", request)
+		return args.Bool(0)
+	}
+	collectCommitment := func(msg messages.CertifiedMessage) error {
+		args := mock.MethodCalled("commitmentCollector", msg)
+		return args.Error(0)
+	}
+	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageHandler", msg)
+	}
+	apply := makeNewViewApplier(id, extractPrepared, prepareSeq, collectCommitment, handleGeneratedMessage)
+
+	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
+	nvCert := MakeTestNVCert(messageImpl)
+	ownNV := messageImpl.NewNewView(id, viewForPrimary(n, id), nvCert)
+	nv := messageImpl.NewNewView(primary, view, nvCert)
+	comm := messageImpl.NewCommit(id, nv)
+
+	mock.On("preparedRequestExtractor", nvCert).Return(reqs)
+	for _, m := range reqs {
+		mock.On("requestSeqPreparer", m).Return(rand.Intn(2) == 0)
+	}
+
+	mock.On("commitmentCollector", ownNV).Return(fmt.Errorf("error")).Once()
+	err := apply(ownNV)
+	assert.Error(t, err, "Failed to collect own commitment")
+
+	mock.On("commitmentCollector", ownNV).Return(nil).Once()
+	err = apply(ownNV)
+	assert.NoError(t, err)
+
+	mock.On("commitmentCollector", nv).Return(fmt.Errorf("error")).Once()
+	err = apply(nv)
+	assert.Error(t, err, "Failed to collect commitment")
+
+	mock.On("commitmentCollector", nv).Return(nil).Once()
+	mock.On("generatedMessageHandler", comm).Once()
+	err = apply(nv)
+	assert.NoError(t, err)
+}
+
+func TestExtractPreparedRequests(t *testing.T) {
+	const n, f = 3, 1
+	const maxView = 2
+	const maxNrRequests = 2
+
+	reqs := make([]messages.Request, maxNrRequests)
+	for i := range reqs {
+		reqs[i] = RandReq(messageImpl)
+	}
+
+	for k := len(reqs); k >= 0; k-- {
+		reqs := reqs[:k]
+		for v := uint64(1); v <= maxView; v++ {
+			i := 0
+			for logs := range GenerateMessageLogs(messageImpl, f, n, v-1, reqs) {
+				_, vcs := TerminateMessageLogs(messageImpl, f, n, v-1, logs)
+				j := 0
+				for nvCert := range GenerateNewViewCertificates(messageImpl, f, n, v, vcs) {
+					t.Run(fmt.Sprintf("NrRequests=%d/View=%d/Log=%d/Cert=%d", k, v, i, j), func(t *testing.T) {
+						prepared := extractPreparedRequests(nvCert)
+						if len(reqs) > 0 {
+							assert.Equal(t, reqs, prepared)
+						} else {
+							assert.Len(t, prepared, 0)
+						}
+					})
+					j++
+				}
+				i++
+			}
+		}
+		if testing.Short() {
+			return
+		}
+	}
+}
