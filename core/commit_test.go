@@ -182,8 +182,9 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	var executedReqs []messages.Request
 	var lastSeq uint64
 
+	commitCertSize := uint32(nrFaulty + 1)
 	acceptCommitment := makeCommitmentAcceptor()
-	countCommitment := makeCommitmentCounter(nrFaulty)
+	countCommitment := makeCommitmentCounter(commitCertSize)
 	executeRequest := func(req messages.Request) {
 		// Real requestExecutor ensures exactly-once
 		// semantics; just imitate this behavior here
@@ -311,7 +312,8 @@ func TestMakeCommitmentCounter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	count := makeCommitmentCounter(uint32(f))
+	commitCertSize := uint32(f + 1)
+	count := makeCommitmentCounter(commitCertSize)
 	for i, c := range cases {
 		desc := fmt.Sprintf("Case #%d", i)
 		done := count(c.View, c.CV)

@@ -83,11 +83,11 @@ func makeReqViewChangeProcessor(collect reqViewChangeCollector, startViewChange 
 	}
 }
 
-func makeReqViewChangeCollector(f uint32) reqViewChangeCollector {
+func makeReqViewChangeCollector(commitCertSize, n uint32) reqViewChangeCollector {
 	var (
 		view      uint64
-		collected = make(messages.ViewChangeCert, 0, f+1)
-		replicas  = make(map[uint32]bool, f+1)
+		collected = make(messages.ViewChangeCert, 0, n-commitCertSize+1)
+		replicas  = make(map[uint32]bool, cap(collected))
 	)
 
 	return func(rvc messages.ReqViewChange) (new bool, vcCert messages.ViewChangeCert) {
@@ -100,13 +100,13 @@ func makeReqViewChangeCollector(f uint32) reqViewChangeCollector {
 		collected = append(collected, rvc)
 		replicas[replicaID] = true
 
-		if uint32(len(collected)) <= f {
+		if len(collected) <= int(n-commitCertSize) {
 			return true, nil
 		}
 
 		vcCert = collected
-		collected = make(messages.ViewChangeCert, 0, f+1)
-		replicas = make(map[uint32]bool, f+1)
+		collected = make(messages.ViewChangeCert, 0, cap(collected))
+		replicas = make(map[uint32]bool, cap(collected))
 		view++
 
 		return true, vcCert

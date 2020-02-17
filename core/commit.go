@@ -191,10 +191,12 @@ func makeCommitmentAcceptor() commitmentAcceptor {
 	}
 }
 
-func makeCommitmentCounter(f uint32) commitmentCounter {
+// makeCommitmentCounter constructs an instance of commitmentCounter
+// given the commit certificate size.
+func makeCommitmentCounter(commitCertSize uint32) commitmentCounter {
 	var (
 		lastView = uint64(0)
-		highest  = make([]uint64, f)
+		highest  = make([]uint64, commitCertSize-1)
 	)
 
 	return func(view, primaryCV uint64) (done bool) {
@@ -203,7 +205,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 		}
 		if view > lastView {
 			lastView = view
-			highest = make([]uint64, f)
+			highest = make([]uint64, len(highest))
 		}
 
 		for i, cv := range highest {
