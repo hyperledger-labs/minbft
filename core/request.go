@@ -159,10 +159,10 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 		}
 		defer releaseSeq()
 
-		pendingReq.Add(request)
-
 		currentView, expectedView, releaseView := viewState.HoldView()
 		defer releaseView()
+
+		pendingReq.Add(request)
 
 		if currentView != expectedView {
 			return true, nil

@@ -70,31 +70,31 @@ func TestMakeRequestProcessor(t *testing.T) {
 	assert.False(t, new)
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
-	pendingReq.EXPECT().Add(request)
 	viewState.EXPECT().HoldView().Return(view, newView, func() {
 		mock.MethodCalled("viewReleaser")
 	})
+	pendingReq.EXPECT().Add(request)
 	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
 	assert.NoError(t, err)
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
-	pendingReq.EXPECT().Add(request)
 	viewState.EXPECT().HoldView().Return(view, view, func() {
 		mock.MethodCalled("viewReleaser")
 	})
-	mock.On("requestApplier", request, view).Return(fmt.Errorf("failed")).Once()
+	pendingReq.EXPECT().Add(request)
+	mock.On("requestApplier", request, view).Return(fmt.Errorf("error")).Once()
 	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
 	assert.Error(t, err, "Failed to apply Request")
 
 	mock.On("requestSeqCapturer", request).Return(true).Once()
-	pendingReq.EXPECT().Add(request)
 	viewState.EXPECT().HoldView().Return(view, view, func() {
 		mock.MethodCalled("viewReleaser")
 	})
+	pendingReq.EXPECT().Add(request)
 	mock.On("requestApplier", request, view).Return(nil).Once()
 	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
