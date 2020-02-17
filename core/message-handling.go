@@ -171,11 +171,6 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	startPrepTimer := makePrepareTimerStarter(n, clientStates, unicastLogs, logger)
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
-	acceptCommitment := makeCommitmentAcceptor()
-	countCommitment := makeCommitmentCounter(commitCertSize)
-	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
-	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
-
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n)
 	validateCommit := makeCommitValidator()
@@ -189,8 +184,16 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
 	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
-	applyCommit := makeCommitApplier(collectCommitment)
+	applyPendingRequests := makePendingRequestApplier(pendingReq, applyRequest)
+	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
+	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest, applyPendingRequests)
+
+	acceptCommitment := makeCommitmentAcceptor()
+	countCommitment := makeCommitmentCounter(commitCertSize)
+	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest, acceptNewView)
+
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
+	applyCommit := makeCommitApplier(collectCommitment)
 	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareSeq, collectCommitment, handleGeneratedMessage)
 	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit, applyNewView)
 
@@ -609,6 +612,8 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 				switch prop := msg.Proposal().(type) {
 				case messages.Prepare:
 					messageView = prop.View()
+				case messages.NewView:
+					messageView = prop.NewView()
 				default:
 					panic("Unknown proposal message type")
 				}

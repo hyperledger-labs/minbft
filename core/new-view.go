@@ -42,6 +42,12 @@ type newViewCertValidator func(newPrimary uint32, newView uint64, cert messages.
 // and internally consistent. It is safe to invoke concurrently.
 type newViewApplier func(nv messages.NewView) error
 
+// newViewAcceptor completes transitioning into the new active view.
+//
+// It brings the replica state according to the supplied NewView
+// messages and completes transitioning into the new active view.
+type newViewAcceptor func(nv messages.NewView)
+
 // preparedRequestExtractor extracts a sequence of prepared requests
 // from a new-view certificate.
 //
@@ -117,6 +123,17 @@ func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, pre
 		handleGeneratedMessage(messageImpl.NewCommit(id, nv))
 
 		return nil
+	}
+}
+
+func makeNewViewAcceptor(extractPrepared preparedRequestExtractor, executeRequest requestExecutor, applyPendingRequests pendingRequestApplier) newViewAcceptor {
+	return func(nv messages.NewView) {
+		for _, req := range extractPrepared(nv.NewViewCert()) {
+			executeRequest(req)
+		}
+
+		// TODO: stop and reset view-change timer
+		applyPendingRequests(nv.NewView())
 	}
 }
 

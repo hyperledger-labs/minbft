@@ -47,12 +47,21 @@ func TestMakeCommitValidator(t *testing.T) {
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
+	nv := messageImpl.NewNewView(primary, view, nil)
 
 	commit := messageImpl.NewCommit(primary, prepare)
 	err := validate(commit)
 	assert.Error(t, err, "Commit from primary")
 
 	commit = messageImpl.NewCommit(backup, prepare)
+	err = validate(commit)
+	assert.NoError(t, err)
+
+	commit = messageImpl.NewCommit(primary, nv)
+	err = validate(commit)
+	assert.Error(t, err, "Commit from primary")
+
+	commit = messageImpl.NewCommit(backup, nv)
 	err = validate(commit)
 	assert.NoError(t, err)
 }
@@ -103,7 +112,10 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
+	acceptNewView := func(nv messages.NewView) {
+		mock.MethodCalled("newViewAcceptor", nv)
+	}
+	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest, acceptNewView)
 
 	n := randN()
 	view := randView()
@@ -116,15 +128,20 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	prepare.SetUI(&usig.UI{Counter: primaryCV})
-	commit := messageImpl.NewCommit(id, prepare)
-	commit.SetUI(&usig.UI{Counter: backupCV})
+	prepComm := messageImpl.NewCommit(id, prepare)
+	prepComm.SetUI(&usig.UI{Counter: backupCV})
+
+	nv := messageImpl.NewNewView(primary, view, nil)
+	nv.SetUI(&usig.UI{Counter: primaryCV})
+	nvComm := messageImpl.NewCommit(id, nv)
+	nvComm.SetUI(&usig.UI{Counter: backupCV})
 
 	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(fmt.Errorf("error")).Once()
 	err := collect(prepare)
 	assert.Error(t, err, "Failed to accept Prepare")
 
 	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(fmt.Errorf("error")).Once()
-	err = collect(commit)
+	err = collect(prepComm)
 	assert.Error(t, err, "Failed to accept Commit")
 
 	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(nil).Once()
@@ -134,7 +151,7 @@ func TestMakeCommitmentCollector(t *testing.T) {
 
 	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(nil).Once()
 	mock.On("commitmentCounter", view, primaryCV).Return(false).Once()
-	err = collect(commit)
+	err = collect(prepComm)
 	assert.NoError(t, err)
 
 	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(nil).Once()
@@ -146,7 +163,37 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(nil).Once()
 	mock.On("commitmentCounter", view, primaryCV).Return(true).Once()
 	mock.On("requestExecutor", request).Once()
-	err = collect(commit)
+	err = collect(prepComm)
+	assert.NoError(t, err)
+
+	mock.On("commitmentAcceptor", primary, true, view, primaryCV, primaryCV).Return(fmt.Errorf("error")).Once()
+	err = collect(nv)
+	assert.Error(t, err, "Failed to accept NewView")
+
+	mock.On("commitmentAcceptor", id, true, view, primaryCV, backupCV).Return(fmt.Errorf("error")).Once()
+	err = collect(nvComm)
+	assert.Error(t, err, "Failed to accept Commit")
+
+	mock.On("commitmentAcceptor", primary, true, view, primaryCV, primaryCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(false).Once()
+	err = collect(nv)
+	assert.NoError(t, err)
+
+	mock.On("commitmentAcceptor", id, true, view, primaryCV, backupCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(false).Once()
+	err = collect(nvComm)
+	assert.NoError(t, err)
+
+	mock.On("commitmentAcceptor", primary, true, view, primaryCV, primaryCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(true).Once()
+	mock.On("newViewAcceptor", nv).Once()
+	err = collect(nv)
+	assert.NoError(t, err)
+
+	mock.On("commitmentAcceptor", id, true, view, primaryCV, backupCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(true).Once()
+	mock.On("newViewAcceptor", nv).Once()
+	err = collect(nvComm)
 	assert.NoError(t, err)
 }
 
@@ -173,7 +220,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 		time.Sleep(time.Millisecond)
 		executedReqs = append(executedReqs, req)
 	}
-	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
+	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest, nil)
 
 	wg := new(sync.WaitGroup)
 	for id := 0; id < nrReplicas; id++ {
