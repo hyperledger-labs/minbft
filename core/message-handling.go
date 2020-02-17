@@ -181,8 +181,10 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validateCommit := makeCommitValidator()
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
 	validateVCCert := makeViewChangeCertValidator(viewChangeCertSize)
+	validateNVCert := makeNewViewCertValidator(viewChangeCertSize)
 	validateViewChange := makeViewChangeValidator(validateMessageLog, validateVCCert)
-	validateCertifiedMessage := makeCertifiedMessageValidator(validatePrepare, validateCommit, validateViewChange, verifyUI)
+	validateNewView := makeNewViewValidator(n, validateNVCert)
+	validateCertifiedMessage := makeCertifiedMessageValidator(validatePrepare, validateCommit, validateViewChange, validateNewView, verifyUI)
 	validatePeerMessage := makePeerMessageValidator(n, validateCertifiedMessage, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
@@ -501,7 +503,7 @@ func makePeerMessageValidator(n uint32, validateCertified certifiedMessageValida
 	}
 }
 
-func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCommit commitValidator, validateViewChange viewChangeValidator, verifyUI uiVerifier) certifiedMessageValidator {
+func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCommit commitValidator, validateViewChange viewChangeValidator, validateNewView newViewValidator, verifyUI uiVerifier) certifiedMessageValidator {
 	return func(msg messages.CertifiedMessage) error {
 		if err := verifyUI(msg); err != nil {
 			return fmt.Errorf("invalid UI: %s", err)
@@ -514,6 +516,8 @@ func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCom
 			return validateCommit(msg)
 		case messages.ViewChange:
 			return validateViewChange(msg)
+		case messages.NewView:
+			return validateNewView(msg)
 		default:
 			panic("Unknown message type")
 		}
