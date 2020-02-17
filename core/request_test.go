@@ -197,7 +197,7 @@ func TestMakeRequestExecutor(t *testing.T) {
 	resultChan <- expectedResult
 	done := make(chan struct{})
 	mock.On("requestSeqRetirer", request).Return(true).Once()
-	pendingReq.EXPECT().Remove(clientID)
+	pendingReq.EXPECT().Remove(request)
 	mock.On("requestTimerStopper", request).Once()
 	consumer.EXPECT().Deliver(expectedOperation).Return(resultChan)
 	mock.On("generatedMessageHandler", expectedReply).Run(

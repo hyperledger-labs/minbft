@@ -42,10 +42,10 @@ func TestList(t *testing.T) {
 - {cid: 0, seq: 1, add: true, list: {0: 1      }}
 - {cid: 1, seq: 2, add: true, list: {0: 1, 1: 2}}
 - {cid: 0, seq: 3, add: true, list: {0: 3, 1: 2}}
-- {cid: 1,         rm:  true, list: {0: 3      }}
+- {cid: 1, seq: 2, rm:  true, list: {0: 3      }}
 - {cid: 1, seq: 3, add: true, list: {0: 3, 1: 3}}
-- {cid: 0,         rm:  true, list: {      1: 3}}
-- {cid: 1,         rm:  true, list: {          }}
+- {cid: 0, seq: 3, rm:  true, list: {      1: 3}}
+- {cid: 1, seq: 3, rm:  true, list: {          }}
 `)
 	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
 		t.Fatal(err)
@@ -56,11 +56,12 @@ func TestList(t *testing.T) {
 	for i, c := range cases {
 		assertMsg := fmt.Sprintf("case=%d cid=%d seq=%d add=%t rm=%t",
 			i, c.Cid, c.Seq, c.Add, c.Rm)
+		m := messageImpl.NewRequest(uint32(c.Cid), uint64(c.Seq), nil)
 		if c.Add {
-			l.Add(messageImpl.NewRequest(uint32(c.Cid), uint64(c.Seq), nil))
+			l.Add(m)
 		}
 		if c.Rm {
-			l.Remove(uint32(c.Cid))
+			l.Remove(m)
 		}
 		msgs := l.All()
 		require.Len(t, msgs, len(c.List), assertMsg)
@@ -93,7 +94,7 @@ func TestListConcurrent(t *testing.T) {
 				list := l.All()
 				assert.Contains(t, list, m)
 
-				l.Remove(uint32(cid))
+				l.Remove(m)
 
 				list = l.All()
 				assert.NotContains(t, list, m)

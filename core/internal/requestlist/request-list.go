@@ -29,13 +29,12 @@ import (
 // Add method adds Request message to the set. Any previously added
 // Request from the same client will be replaced.
 //
-// Remove method removes Request message of the specified client from
-// the set, if any.
+// Remove method removes the Request message from the set.
 //
 // All method returns all messages currently in the set.
 type List interface {
 	Add(req messages.Request)
-	Remove(clientID uint32)
+	Remove(req messages.Request)
 	All() []messages.Request
 }
 
@@ -60,9 +59,17 @@ func (l *list) Add(req messages.Request) {
 	l.messages[req.ClientID()] = req
 }
 
-func (l *list) Remove(clientID uint32) {
+func (l *list) Remove(req messages.Request) {
+	clientID := req.ClientID()
+
 	l.Lock()
 	defer l.Unlock()
+
+	if lastReq, ok := l.messages[clientID]; !ok {
+		return
+	} else if lastReq.Sequence() != req.Sequence() {
+		return
+	}
 
 	delete(l.messages, clientID)
 }
