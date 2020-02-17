@@ -106,7 +106,7 @@ func PrepareFromAPI(prep messages.Prepare) *Prepare {
 func CommitFromAPI(comm messages.Commit) *Commit {
 	return &Commit{
 		ReplicaId: comm.ReplicaID(),
-		Prepare:   PrepareFromAPI(comm.Prepare()),
+		Proposal:  WrapMessage(MessageFromAPI(comm.Proposal())),
 		Ui:        usig.MustMarshalUI(comm.UI()),
 	}
 }

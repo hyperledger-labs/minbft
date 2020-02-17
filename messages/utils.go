@@ -45,8 +45,8 @@ func Stringify(msg Message) string {
 			cv, msg.ReplicaID(), msg.View(),
 			req.ClientID(), req.Sequence())
 	case Commit:
-		return fmt.Sprintf("<COMMIT cv=%d replica=%d prepare=%s>",
-			cv, msg.ReplicaID(), Stringify(msg.Prepare()))
+		return fmt.Sprintf("<COMMIT cv=%d replica=%d proposal=%s>",
+			cv, msg.ReplicaID(), Stringify(msg.Proposal()))
 	case ReqViewChange:
 		return fmt.Sprintf("<REQ-VIEW-CHANGE replica=%d newView=%d>",
 			msg.ReplicaID(), msg.NewView())

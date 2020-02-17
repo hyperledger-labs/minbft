@@ -53,8 +53,8 @@ func (*impl) NewPrepare(r uint32, v uint64, req messages.Request) messages.Prepa
 	return newPrepare(r, v, req)
 }
 
-func (*impl) NewCommit(r uint32, prep messages.Prepare) messages.Commit {
-	return newCommit(r, prep)
+func (*impl) NewCommit(r uint32, prop messages.CertifiedMessage) messages.Commit {
+	return newCommit(r, prop)
 }
 
 func (*impl) NewReply(r, cl uint32, seq uint64, res []byte) messages.Reply {

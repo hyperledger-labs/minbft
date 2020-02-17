@@ -471,7 +471,7 @@ func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger
 		case messages.Prepare:
 			processOne(msg.Request())
 		case messages.Commit:
-			processOne(msg.Prepare())
+			processOne(msg.Proposal())
 		case messages.ReqViewChange:
 		default:
 			panic("Unknown message type")
@@ -508,7 +508,12 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 			case messages.Prepare:
 				messageView = msg.View()
 			case messages.Commit:
-				messageView = msg.Prepare().View()
+				switch prop := msg.Proposal().(type) {
+				case messages.Prepare:
+					messageView = prop.View()
+				default:
+					panic("Unknown proposal message type")
+				}
 			}
 
 			currentView, expectedView, release := viewState.HoldView()
