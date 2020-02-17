@@ -36,6 +36,7 @@ import (
 	mock_messagelog "github.com/hyperledger-labs/minbft/core/internal/messagelog/mocks"
 	mock_viewstate "github.com/hyperledger-labs/minbft/core/internal/viewstate/mocks"
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
+	. "github.com/hyperledger-labs/minbft/messages/testing"
 )
 
 func TestMakeOwnMessageHandler(t *testing.T) {
@@ -559,6 +560,55 @@ func TestMakeEmbeddedMessageHandler(t *testing.T) {
 		err = handle(commit)
 		assert.NoError(t, err)
 	})
+	t.Run("ViewChange", func(t *testing.T) {
+		reqs := []messages.Request{
+			MakeTestReq(messageImpl, rand.Uint32(), rand.Uint64(), randBytes()),
+			MakeTestReq(messageImpl, rand.Uint32(), rand.Uint64(), randBytes()),
+		}
+		log := messages.MessageLog{
+			MakeTestComm(messageImpl, 1, MakeTestPrep(messageImpl, 0, 0, reqs[0], 1), 1),
+			MakeTestComm(messageImpl, 1, MakeTestPrep(messageImpl, 0, 0, reqs[1], 2), 2),
+		}
+		vcCert := RandVCCert(messageImpl, 1, 3, 1)
+		vc := MakeTestVC(messageImpl, 1, 1, log, vcCert, 3)
+
+		for _, m := range vcCert {
+			mock.On("messageHandler", m).Return(true, nil).Once()
+		}
+		for _, m := range log {
+			mock.On("messageHandler", m).Return(true, nil).Once()
+		}
+		err := handle(vc)
+		assert.NoError(t, err)
+
+		for _, m := range vcCert {
+			mock.On("messageHandler", m).Return(false, nil).Once()
+		}
+		for _, m := range log {
+			mock.On("messageHandler", m).Return(false, nil).Once()
+		}
+		err = handle(vc)
+		assert.NoError(t, err)
+
+		mock.On("messageHandler", vcCert[rand.Intn(len(vcCert))]).Return(false, fmt.Errorf("error")).Once()
+		mock.On("messageHandler", log[rand.Intn(len(log))]).Return(false, fmt.Errorf("error")).Once()
+
+		for _, m := range vcCert {
+			mock.On("messageHandler", m).Return(false, nil)
+		}
+		for _, m := range log {
+			mock.On("messageHandler", m).Return(false, nil)
+		}
+
+		err = handle(vc)
+		assert.Error(t, err)
+
+		err = handle(vc)
+		assert.Error(t, err)
+
+		err = handle(vc)
+		assert.NoError(t, err)
+	})
 }
 
 func TestMakeCertifiedMessageProcessor(t *testing.T) {
@@ -575,7 +625,11 @@ func TestMakeCertifiedMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("viewMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeCertifiedMessageProcessor(n, processViewMessage)
+	processViewChange := func(vc messages.ViewChange) (new bool, err error) {
+		args := mock.MethodCalled("viewChangeProcessor", vc)
+		return args.Bool(0), args.Error(1)
+	}
+	process := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
 
 	certifiedMsg := mock_messages.NewMockCertifiedMessage(ctrl)
 	type peerMessage interface {
@@ -595,7 +649,8 @@ func TestMakeCertifiedMessageProcessor(t *testing.T) {
 	assert.True(t, new)
 
 	// First certified message from another replica
-	certifiedMsg.EXPECT().ReplicaID().Return(randOtherReplicaID(r, n))
+	otherReplica := randOtherReplicaID(r, n)
+	certifiedMsg.EXPECT().ReplicaID().Return(otherReplica)
 	certifiedMsg.EXPECT().UI().Return(testUI(1))
 	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
 	new, err = process(msg)
@@ -645,6 +700,26 @@ func TestMakeCertifiedMessageProcessor(t *testing.T) {
 	certifiedMsg.EXPECT().UI().Return(testUI(5))
 	_, err = process(msg)
 	assert.Error(t, err, "Certified message following an incorrect one")
+
+	// ViewChange message from the other replica
+	vc := MakeTestVC(messageImpl, otherReplica, 1, nil, nil, 2)
+	mock.On("viewChangeProcessor", vc).Return(false, nil).Once()
+	new, err = process(vc)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// Another ViewChange message from the other replica
+	vc = MakeTestVC(messageImpl, otherReplica, 2, nil, nil, 3)
+	mock.On("viewChangeProcessor", vc).Return(true, nil).Once()
+	new, err = process(vc)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	// Invalid ViewChange message from the other replica
+	vc = MakeTestVC(messageImpl, otherReplica, 3, nil, nil, 4)
+	mock.On("viewChangeProcessor", vc).Return(false, fmt.Errorf("error")).Once()
+	_, err = process(vc)
+	assert.Error(t, err)
 }
 
 func TestMakeViewMessageProcessor(t *testing.T) {

@@ -17,13 +17,20 @@ package minbft
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	yaml "gopkg.in/yaml.v2"
+
+	mock_messagelog "github.com/hyperledger-labs/minbft/core/internal/messagelog/mocks"
+	mock_viewstate "github.com/hyperledger-labs/minbft/core/internal/viewstate/mocks"
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 	testifymock "github.com/stretchr/testify/mock"
 
@@ -170,4 +177,164 @@ func testValidateMessageLog(t *testing.T, r, n uint32, v uint64, log messages.Me
 
 	err = validateMessageLog(r, randOtherView(v), log, nextCV)
 	assert.Error(t, err, "Wrong view")
+}
+
+func TestMakeViewChangeProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	r := randReplicaID(n)
+	v := randOtherView(0)
+
+	collectVC := func(vc messages.ViewChange) (new bool, nvCert messages.NewViewCert) {
+		args := mock.MethodCalled("viewChangeCollector", vc)
+		return args.Bool(0), args.Get(1).(messages.NewViewCert)
+	}
+	processNVCert := func(newView uint64, nvCert messages.NewViewCert) {
+		mock.MethodCalled("newViewCertProcessor", newView, nvCert)
+	}
+	process := makeViewChangeProcessor(collectVC, processNVCert)
+
+	vc1 := messageImpl.NewViewChange(r, v, nil, nil)
+	mock.On("viewChangeCollector", vc1).Return(false, messages.NewViewCert(nil)).Once()
+	new, err := process(vc1)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	vc2 := messageImpl.NewViewChange(r, v+1, nil, nil)
+	mock.On("viewChangeCollector", vc2).Return(true, messages.NewViewCert(nil)).Once()
+	new, err = process(vc2)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	vc3 := messageImpl.NewViewChange(randOtherReplicaID(r, n), v+1, nil, nil)
+	cert := messages.NewViewCert{vc2, vc3}
+	mock.On("viewChangeCollector", vc3).Return(true, cert).Once()
+	mock.On("newViewCertProcessor", v+1, cert)
+	new, err = process(vc3)
+	assert.NoError(t, err)
+	assert.True(t, new)
+}
+
+func TestMakeViewChangeProcessorConcurrent(t *testing.T) {
+	const n, f = 3, 1
+	const r = 1
+	const maxView = 42
+
+	collectVC := makeViewChangeCollector(r, n, n-f)
+	nvCerts := make(map[uint64]messages.NewViewCert)
+	processNVCert := func(newView uint64, nvCert messages.NewViewCert) {
+		nvCerts[newView] = nvCert
+	}
+	process := makeViewChangeProcessor(collectVC, processNVCert)
+
+	var wg *sync.WaitGroup
+	for v := uint64(1); v <= maxView; v++ {
+		wg = new(sync.WaitGroup)
+		if isPrimary(v, r, n) {
+			wg.Add(n - f)
+		}
+
+		for id := uint32(0); id < n; id++ {
+			go func(id uint32, v uint64, wg *sync.WaitGroup) {
+				time.Sleep(time.Millisecond * time.Duration(rand.Intn(100)))
+				vc := messageImpl.NewViewChange(id, v, nil, nil)
+				new, err := process(vc)
+				assert.NoError(t, err)
+
+				if new {
+					wg.Done()
+				}
+			}(id, v, wg)
+		}
+
+		wg.Wait()
+	}
+
+	wg.Wait()
+	for v := uint64(0); v <= maxView; v++ {
+		if isPrimary(v, r, n) {
+			assert.Contains(t, nvCerts, v)
+			assert.NotNil(t, nvCerts[v])
+		} else {
+			assert.NotContains(t, nvCerts, v)
+		}
+	}
+}
+
+func TestMakeViewChangeCollector(t *testing.T) {
+	const n, f = 4, 1
+	const r = 1
+
+	var cases []struct {
+		ID   uint32
+		View uint64
+		New  bool
+		Done bool
+	}
+	casesYAML := []byte(`
+- {id: 1, view: 1, new: y, done: n}
+- {id: 2, view: 1, new: y, done: n}
+- {id: 0, view: 2, new: n, done: n}
+- {id: 0, view: 5, new: y, done: n}
+- {id: 3, view: 1, new: n, done: n}
+- {id: 3, view: 5, new: y, done: n}
+- {id: 1, view: 5, new: y, done: y}
+- {id: 2, view: 5, new: n, done: n}
+- {id: 3, view: 9, new: y, done: n}
+- {id: 2, view: 9, new: y, done: n}
+- {id: 0, view: 9, new: n, done: n}
+- {id: 1, view: 9, new: y, done: y}
+`)
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
+		t.Fatal(err)
+	}
+
+	collect := makeViewChangeCollector(r, n, n-f)
+	for i, c := range cases {
+		desc := fmt.Sprintf("Case #%d", i)
+		vc := messageImpl.NewViewChange(c.ID, c.View, nil, nil)
+		new, cert := collect(vc)
+		require.Equal(t, c.New, new, desc)
+		if c.Done {
+			require.NotNil(t, cert, desc)
+		} else {
+			require.Nil(t, cert, desc)
+		}
+	}
+}
+
+func TestMakeNewViewCertProcessor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n := randN()
+	r := randReplicaID(n)
+
+	viewState := mock_viewstate.NewMockState(ctrl)
+	log := mock_messagelog.NewMockMessageLog(ctrl)
+	handleGenerated := func(msg messages.ReplicaMessage) {
+		mock.MethodCalled("generatedMessageHandler", msg)
+	}
+	process := makeNewViewCertProcessor(r, viewState, log, handleGenerated)
+
+	cert := MakeTestNVCert(messageImpl)
+
+	viewState.EXPECT().HoldView().Return(uint64(0), uint64(1), func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	log.EXPECT().Reset(nil)
+	mock.On("generatedMessageHandler", messageImpl.NewNewView(r, 1, cert))
+	mock.On("viewReleaser").Once()
+	process(1, cert)
+
+	viewState.EXPECT().HoldView().Return(uint64(1), uint64(2), func() {
+		mock.MethodCalled("viewReleaser")
+	})
+	mock.On("viewReleaser").Once()
+	process(1, cert)
 }

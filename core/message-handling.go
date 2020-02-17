@@ -193,8 +193,13 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
+
+	collectViewChange := makeViewChangeCollector(id, n, viewChangeCertSize)
+	processNewViewCert := makeNewViewCertProcessor(id, viewState, log, handleGeneratedMessage)
+	processViewChange := makeViewChangeProcessor(collectViewChange, processNewViewCert)
+
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
-	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
+	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
 
 	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
@@ -417,9 +422,21 @@ func makeEmbeddedMessageHandler(handle messageHandler) embeddedMessageHandler {
 		case messages.Commit:
 			err = handleOne(msg.Proposal())
 		case messages.ReqViewChange:
+		case messages.ViewChange:
+			for _, m := range msg.ViewChangeCert() {
+				if err = handleOne(m); err != nil {
+					goto out
+				}
+			}
+			for _, m := range msg.MessageLog() {
+				if err = handleOne(m); err != nil {
+					goto out
+				}
+			}
 		default:
 			panic("Unknown message type")
 		}
+	out:
 		return err
 	}
 }
@@ -538,7 +555,7 @@ func makePeerMessageProcessor(n uint32, processCertifiedMessage certifiedMessage
 	}
 }
 
-func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
+func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor, processViewChange viewChangeProcessor) certifiedMessageProcessor {
 	lastUI := make([]uint64, n)
 
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
@@ -553,6 +570,8 @@ func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProce
 		}
 
 		switch msg := msg.(type) {
+		case messages.ViewChange:
+			new, err = processViewChange(msg)
 		case messages.PeerMessage:
 			new, err = processViewMessage(msg)
 		default:
