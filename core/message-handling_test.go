@@ -260,11 +260,16 @@ func TestMakeCertifiedMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Error(0)
 	}
-	validate := makeCertifiedMessageValidator(validatePrepare, validateCommit, verifyUI)
+	validateViewChange := func(msg messages.ViewChange) error {
+		args := mock.MethodCalled("viewChangeValidator", msg)
+		return args.Error(0)
+	}
+	validate := makeCertifiedMessageValidator(validatePrepare, validateCommit, validateViewChange, verifyUI)
 
 	request := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), randBytes())
 	prepare := messageImpl.NewPrepare(p, v, request)
 	commit := messageImpl.NewCommit(randOtherReplicaID(p, n), prepare)
+	vc := messageImpl.NewViewChange(randReplicaID(n), randView()+1, nil, nil)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockCertifiedMessage(ctrl)
@@ -296,6 +301,17 @@ func TestMakeCertifiedMessageValidator(t *testing.T) {
 		mock.On("uiVerifier", commit).Return(nil).Once()
 		mock.On("commitValidator", commit).Return(nil).Once()
 		err = validate(commit)
+		assert.NoError(t, err)
+	})
+	t.Run("ViewChange", func(t *testing.T) {
+		mock.On("uiVerifier", vc).Return(nil).Once()
+		mock.On("viewChangeValidator", vc).Return(fmt.Errorf("error")).Once()
+		err := validate(vc)
+		assert.Error(t, err, "Invalid ViewChange")
+
+		mock.On("uiVerifier", vc).Return(nil).Once()
+		mock.On("viewChangeValidator", vc).Return(nil).Once()
+		err = validate(vc)
 		assert.NoError(t, err)
 	})
 }
