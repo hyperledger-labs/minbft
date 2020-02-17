@@ -325,7 +325,11 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("uiMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makePeerMessageProcessor(processEmbedded, processUIMessage)
+	processReqViewChange := func(msg messages.ReqViewChange) (new bool, err error) {
+		args := mock.MethodCalled("reqViewChangeProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	process := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
@@ -363,6 +367,26 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, new)
 
+	})
+	t.Run("ReqViewChange", func(t *testing.T) {
+		msg := messageImpl.NewReqViewChange(rand.Uint32(), rand.Uint64())
+
+		mock.On("embeddedMessageProcessor", msg).Once()
+		mock.On("reqViewChangeProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+		_, err := process(msg)
+		assert.Error(t, err, "Failed to finish processing certified message")
+
+		mock.On("embeddedMessageProcessor", msg).Once()
+		mock.On("reqViewChangeProcessor", msg).Return(true, nil).Once()
+		new, err := process(msg)
+		assert.NoError(t, err)
+		assert.True(t, new)
+
+		mock.On("embeddedMessageProcessor", msg).Once()
+		mock.On("reqViewChangeProcessor", msg).Return(false, nil).Once()
+		new, err = process(msg)
+		assert.NoError(t, err)
+		assert.False(t, new)
 	})
 }
 

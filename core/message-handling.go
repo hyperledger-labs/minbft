@@ -188,7 +188,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
-	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage)
+
+	collectReqViewChange := makeReqViewChangeCollector(f)
+	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
+	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
+
+	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
 	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
@@ -438,13 +443,15 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
 		processEmbedded(msg)
 
 		switch msg := msg.(type) {
 		case messages.CertifiedMessage:
 			return processUIMessage(msg)
+		case messages.ReqViewChange:
+			return processReqViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}
