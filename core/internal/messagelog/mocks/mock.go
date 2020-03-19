@@ -34,7 +34,7 @@ func (m *MockMessageLog) EXPECT() *MockMessageLogMockRecorder {
 }
 
 // Append mocks base method
-func (m *MockMessageLog) Append(arg0 messages.ReplicaMessage) {
+func (m *MockMessageLog) Append(arg0 messages.Message) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Append", arg0)
 }
@@ -46,10 +46,10 @@ func (mr *MockMessageLogMockRecorder) Append(arg0 interface{}) *gomock.Call {
 }
 
 // Stream mocks base method
-func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan messages.ReplicaMessage {
+func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan messages.Message {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stream", arg0)
-	ret0, _ := ret[0].(<-chan messages.ReplicaMessage)
+	ret0, _ := ret[0].(<-chan messages.Message)
 	return ret0
 }
 
