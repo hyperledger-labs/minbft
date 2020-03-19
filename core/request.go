@@ -26,6 +26,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -325,12 +326,13 @@ func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
 
 // makePrepareTimerStarter constructs an instance of
 // prepareTimerStarter.
-func makePrepareTimerStarter(provideClientState clientstate.Provider, logger *logging.Logger) prepareTimerStarter {
+func makePrepareTimerStarter(n uint32, provideClientState clientstate.Provider, logger *logging.Logger, requestforward map[uint32]messagelog.MessageLog) prepareTimerStarter {
 	return func(request messages.Request, view uint64) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
 		provideClientState(clientID).StartPrepareTimer(seq, func() {
 			logger.Infof("Prepare timer expired: client=%d seq=%d view=%d", clientID, seq, view)
+			requestforward[uint32(view%uint64(n))].Append(request)
 		})
 	}
 }

@@ -45,11 +45,11 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // processed before.
 type incomingMessageHandler func(msg messages.Message, own bool) (reply <-chan messages.Message, new bool, err error)
 
-// peerMessageSupplier supplies messages for peer replica.
+// messageSupplier supplies messages for peer replica.
 //
 // Given a channel, it supplies the channel with messages to be
 // delivered to the peer replica.
-type peerMessageSupplier func(out chan<- []byte)
+type messageSupplier func(out chan<- []byte)
 
 // peerConnector initiates message exchange with a peer replica.
 //
@@ -143,7 +143,7 @@ type generatedMessageConsumer func(msg messages.ReplicaMessage)
 // defaultIncomingMessageHandler construct a standard
 // incomingMessageHandler using id as the current replica ID and the
 // supplied interfaces.
-func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) incomingMessageHandler {
+func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger, requestForward map[uint32]messagelog.MessageLog) incomingMessageHandler {
 	n := config.N()
 	f := config.F()
 
@@ -172,7 +172,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	handleReqTimeout := makeRequestTimeoutHandler(requestViewChange, logger)
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
-	startPrepTimer := makePrepareTimerStarter(clientStates, logger)
+	startPrepTimer := makePrepareTimerStarter(n, clientStates, logger, requestForward)
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	countCommitment := makeCommitmentCounter(f)
@@ -253,14 +253,18 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 
 // startPeerConnections initiates asynchronous message exchange with
 // peer replicas.
-func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger) error {
-	supply := makePeerMessageSupplier(log)
-
+func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger, requestforward map[uint32]messagelog.MessageLog) error {
 	for peerID := uint32(0); peerID < n; peerID++ {
 		if peerID == replicaID {
 			continue
 		}
 
+		// TODO: we need to handle the situation where messagelog accumulates
+		// many requests indefinitely when the destination replica stops
+		// receiving them.
+		requestforward[peerID] = messagelog.New()
+
+		supply := makeMessageSupplier(log, requestforward[peerID].Stream(nil))
 		connect := makePeerConnector(peerID, connector)
 		if err := startPeerConnection(connect, supply); err != nil {
 			return fmt.Errorf("Cannot connect to replica %d: %s", peerID, err)
@@ -272,7 +276,7 @@ func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, l
 
 // startPeerConnection initiates asynchronous message exchange with a
 // peer replica.
-func startPeerConnection(connect peerConnector, supply peerMessageSupplier) error {
+func startPeerConnection(connect peerConnector, supply messageSupplier) error {
 	out := make(chan []byte)
 
 	// So far, reply stream is not used for replica-to-replica
@@ -301,11 +305,19 @@ func handleGeneratedPeerMessages(log messagelog.MessageLog, handle incomingMessa
 	}
 }
 
-// makePeerMessageSupplier construct a peerMessageSupplier using the
+// makeMessageSupplier constructs a messageSupplier using the
 // supplied message log.
-func makePeerMessageSupplier(log messagelog.MessageLog) peerMessageSupplier {
+// Another parameter 'forwardChan' is to accept unicasted messages.
+func makeMessageSupplier(log messagelog.MessageLog, forwardChan <-chan messages.Message) messageSupplier {
 	return func(out chan<- []byte) {
-		for msg := range log.Stream(nil) {
+		logChan := log.Stream(nil)
+		for {
+			var msg messages.Message
+
+			select {
+			case msg = <-logChan:
+			case msg = <-forwardChan:
+			}
 			msgBytes, err := msg.MarshalBinary()
 			if err != nil {
 				panic(err)

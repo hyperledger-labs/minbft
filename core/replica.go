@@ -57,13 +57,14 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	logOpts := newOptions(opts...)
 
 	messageLog := messagelog.New()
+	requestForward := make(map[uint32]messagelog.MessageLog)
 	logger := makeLogger(id, logOpts)
 
-	if err := startPeerConnections(id, n, stack, messageLog, logger); err != nil {
+	if err := startPeerConnections(id, n, stack, messageLog, logger, requestForward); err != nil {
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
 
-	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger)
+	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger, requestForward)
 	handleStream := makeMessageStreamHandler(handle, logger)
 
 	go handleGeneratedPeerMessages(messageLog, handle, logger)
