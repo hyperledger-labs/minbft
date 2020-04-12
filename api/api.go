@@ -50,6 +50,13 @@ type Configer interface {
 
 	// starts when sends VIEW-CHANGE and stops when receives a valid NEW-VIEW
 	TimeoutViewChange() time.Duration
+
+	// returns true if replica @replicaID is configured to ignore
+	// (i.e. refuse to send any message to) replica @peerID via
+	// replica setting debug.selectiveignorereplica.
+	//
+	// This interface is supposed to used only for debug purpose.
+	SelectiveIgnorantReplicas(replicaID, peerID uint32) bool
 }
 
 //======= Interface for module 'network' =======

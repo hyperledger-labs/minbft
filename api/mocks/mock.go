@@ -90,6 +90,20 @@ func (mr *MockConfigerMockRecorder) N() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "N", reflect.TypeOf((*MockConfiger)(nil).N))
 }
 
+// SelectiveIgnorantReplicas mocks base method
+func (m *MockConfiger) SelectiveIgnorantReplicas(arg0, arg1 uint32) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelectiveIgnorantReplicas", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SelectiveIgnorantReplicas indicates an expected call of SelectiveIgnorantReplicas
+func (mr *MockConfigerMockRecorder) SelectiveIgnorantReplicas(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectiveIgnorantReplicas", reflect.TypeOf((*MockConfiger)(nil).SelectiveIgnorantReplicas), arg0, arg1)
+}
+
 // TimeoutPrepare mocks base method
 func (m *MockConfiger) TimeoutPrepare() time.Duration {
 	m.ctrl.T.Helper()

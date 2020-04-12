@@ -253,7 +253,8 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 
 // startPeerConnections initiates asynchronous message exchange with
 // peer replicas.
-func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger) error {
+func startPeerConnections(replicaID uint32, config api.Configer, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger) error {
+	n := config.N()
 	supply := makePeerMessageSupplier(log)
 
 	for peerID := uint32(0); peerID < n; peerID++ {
@@ -261,6 +262,10 @@ func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, l
 			continue
 		}
 
+		if config.SelectiveIgnorantReplicas(replicaID, peerID) {
+			logger.Warningf("DEBUG ENABLED: intentionally refuse to send to replica %d", peerID)
+			continue
+		}
 		connect := makePeerConnector(peerID, connector)
 		if err := startPeerConnection(connect, supply); err != nil {
 			return fmt.Errorf("Cannot connect to replica %d: %s", peerID, err)

@@ -22,6 +22,8 @@ import (
 	"log"
 	"math"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -157,6 +159,25 @@ func (c *ViperConfiger) TimeoutPrepare() time.Duration {
 // TimeoutViewChange returns the timeout to receive NEW-VIEW message
 func (c *ViperConfiger) TimeoutViewChange() time.Duration {
 	return c.getTimeDuration("protocol.timeout.viewchange")
+}
+
+// SelectiveIgnorantReplicas returns true if replica @replicaID
+// is configured to ignore (i.e. refuse to send any message to)
+// replica @peerID via replica setting debug.selectiveignorereplica.
+func (c *ViperConfiger) SelectiveIgnorantReplicas(replicaID, peerID uint32) bool {
+	tmp := c.config.GetStringMapString("debug.selectiveignorantreplicas")
+	val, ok := tmp[strconv.Itoa(int(replicaID))]
+	if !ok {
+		return false
+	}
+	j := strings.Split(val, " ")
+	for _, v := range j {
+		k, _ := strconv.Atoi(v)
+		if uint32(k) == peerID {
+			return true
+		}
+	}
+	return false
 }
 
 // Peers returns a list peers
