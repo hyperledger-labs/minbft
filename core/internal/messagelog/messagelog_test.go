@@ -64,7 +64,7 @@ func TestStream(t *testing.T) {
 		log.Append(msg)
 	}
 
-	receiveMessages := func(ch <-chan messages.ReplicaMessage) {
+	receiveMessages := func(ch <-chan messages.Message) {
 		for i, msg := range msgs {
 			assert.Equalf(t, msg, <-ch, "Unexpected message %d", i)
 		}

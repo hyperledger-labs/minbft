@@ -30,6 +30,7 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/messages"
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
@@ -415,7 +416,10 @@ func TestMakePrepareTimerStarter(t *testing.T) {
 
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
-	startTimer := makePrepareTimerStarter(provider, logging.MustGetLogger(module))
+	requestForward := map[uint32]messagelog.MessageLog{
+		uint32(0): messagelog.New(),
+	}
+	startTimer := makePrepareTimerStarter(uint32(0), provider, logging.MustGetLogger(module), requestForward)
 
 	request := messageImpl.NewRequest(clientID, seq, nil)
 
