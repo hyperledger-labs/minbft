@@ -38,9 +38,9 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 
 // messageHandler fully handles message.
 //
-// If there is any message produced in reply, it will be send to reply
-// channel, otherwise nil channel is returned. The return value new
-// indicates that the message has not been processed before.
+// If there are any messages produced in reply, they will be sent to
+// reply channel, otherwise nil channel is returned. The return value
+// new indicates that the message has not been processed before.
 type messageHandler func(msg messages.Message) (reply <-chan messages.Message, new bool, err error)
 
 // messageSupplier supplies messages for peer replica.
@@ -208,7 +208,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, config api.Con
 // makeMessageStreamHandler construct an instance of
 // messageStreamHandler using the supplied abstract handler.
 func makeMessageStreamHandler(handleMessage messageHandler, logger *logging.Logger) messageStreamHandler {
-	return func(in <-chan []byte, reply chan<- []byte) {
+	return func(in <-chan []byte, out chan<- []byte) {
 		for msgBytes := range in {
 			msg, err := messageImpl.NewFromBinary(msgBytes)
 			if err != nil {
@@ -220,23 +220,24 @@ func makeMessageStreamHandler(handleMessage messageHandler, logger *logging.Logg
 
 			logger.Debugf("Received %s", msgStr)
 
-			if replyChan, new, err := handleMessage(msg); err != nil {
+			replyChan, new, err := handleMessage(msg)
+			if err != nil {
 				logger.Warningf("Failed to handle %s: %s", msgStr, err)
 				return
-			} else if replyChan != nil {
-				m, more := <-replyChan
-				if !more {
-					continue
-				}
-				replyBytes, err := m.MarshalBinary()
-				if err != nil {
-					panic(err)
-				}
-				reply <- replyBytes
 			} else if !new {
 				logger.Infof("Dropped %s", msgStr)
 			} else {
 				logger.Debugf("Handled %s", msgStr)
+			}
+
+			if replyChan != nil {
+				for m := range replyChan {
+					replyBytes, err := m.MarshalBinary()
+					if err != nil {
+						panic(err)
+					}
+					out <- replyBytes
+				}
 			}
 		}
 	}
