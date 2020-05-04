@@ -42,7 +42,8 @@ type Stack interface {
 
 // Replica represents an instance of replica peer
 type replica struct {
-	handleStream messageStreamHandler
+	handlePeerStream   messageStreamHandler
+	handleClientStream messageStreamHandler
 }
 
 // New creates a new instance of replica node
@@ -64,22 +65,22 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
 
-	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger, requestForward)
-	handleStream := makeMessageStreamHandler(handle, logger)
+	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, configer, stack, logger, requestForward)
 
-	go handleGeneratedPeerMessages(messageLog, handle, logger)
+	go handleOwnPeerMessages(messageLog, handleOwnMessage, logger)
 
-	return &replica{handleStream}, nil
+	return &replica{
+		handlePeerStream:   makeMessageStreamHandler(handlePeerMessage, logger),
+		handleClientStream: makeMessageStreamHandler(handleClientMessage, logger),
+	}, nil
 }
 
 func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
-	// TODO: Handle peer/client connections differently
-	return r.handleStream
+	return r.handlePeerStream
 }
 
 func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
-	// TODO: Handle peer/client connections differently
-	return r.handleStream
+	return r.handleClientStream
 }
 
 func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
