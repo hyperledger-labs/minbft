@@ -59,29 +59,30 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	logger := makeLogger(id, logOpts)
 
 	messageLog := messagelog.New()
-	requestForward := make(map[uint32]messagelog.MessageLog)
+	unicastLogs := make(map[uint32]messagelog.MessageLog)
 	for peerID := uint32(0); peerID < n; peerID++ {
 		if peerID == id {
 			continue
 		}
 
 		// TODO: we need to handle the situation when the
-		// messagelog accumulates requests indefinitely if the
+		// messagelog accumulates messages indefinitely if the
 		// destination replica stops receiving them.
-		requestForward[peerID] = messagelog.New()
+		unicastLogs[peerID] = messagelog.New()
 	}
 
-	if err := startPeerConnections(id, n, stack, messageLog, logger, requestForward); err != nil {
+	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
+	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs)
+
+	if err := startPeerConnections(id, n, stack, handlePeerMessage, logger); err != nil {
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
-
-	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, configer, stack, logger, requestForward)
 
 	go handleOwnPeerMessages(messageLog, handleOwnMessage, logger)
 
 	return &replica{
-		handlePeerStream:   makeMessageStreamHandler(handlePeerMessage, logger),
-		handleClientStream: makeMessageStreamHandler(handleClientMessage, logger),
+		handlePeerStream:   makeMessageStreamHandler(handleHelloMessage, "peer", logger),
+		handleClientStream: makeMessageStreamHandler(handleClientMessage, "client", logger),
 	}, nil
 }
 
