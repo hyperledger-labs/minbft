@@ -28,6 +28,12 @@ func MarshalOrPanic(m proto.Message) []byte {
 	return bytes
 }
 
+func HelloFromAPI(h messages.Hello) *Hello {
+	return &Hello{
+		ReplicaId: h.ReplicaID(),
+	}
+}
+
 func RequestFromAPI(req messages.Request) *Request {
 	return &Request{
 		ClientId:  req.ClientID(),

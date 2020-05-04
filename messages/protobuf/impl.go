@@ -41,6 +41,10 @@ func (*impl) NewFromBinary(data []byte) (messages.Message, error) {
 	return typedMessageFromPb(pbMsg)
 }
 
+func (*impl) NewHello(r uint32) messages.Hello {
+	return newHello(r)
+}
+
 func (*impl) NewRequest(cl uint32, seq uint64, op []byte) messages.Request {
 	return newRequest(cl, seq, op)
 }
@@ -63,6 +67,8 @@ func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
 
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	switch t := pbMsg.Typed.(type) {
+	case *pb.Message_Hello:
+		return newHelloFromPb(t.Hello), nil
 	case *pb.Message_Request:
 		return newRequestFromPb(t.Request), nil
 	case *pb.Message_Reply:
@@ -81,6 +87,8 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 func marshalMessage(m proto.Message) ([]byte, error) {
 	pbMsg := &pb.Message{}
 	switch m := m.(type) {
+	case *pb.Hello:
+		pbMsg.Typed = &pb.Message_Hello{Hello: m}
 	case *pb.Request:
 		pbMsg.Typed = &pb.Message_Request{Request: m}
 	case *pb.Reply:
