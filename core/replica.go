@@ -84,8 +84,9 @@ func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
 
 func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
-
-	go handle(in, out)
-
+	go func() {
+		defer close(out)
+		handle(in, out)
+	}()
 	return out
 }

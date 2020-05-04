@@ -223,7 +223,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 			msg, err := messageImpl.NewFromBinary(msgBytes)
 			if err != nil {
 				logger.Warningf("Failed to unmarshal message: %s", err)
-				continue
+				return
 			}
 
 			msgStr := messages.Stringify(msg)
@@ -232,6 +232,7 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 
 			if replyChan, new, err := handle(msg, false); err != nil {
 				logger.Warningf("Failed to handle %s: %s", msgStr, err)
+				return
 			} else if replyChan != nil {
 				m, more := <-replyChan
 				if !more {
