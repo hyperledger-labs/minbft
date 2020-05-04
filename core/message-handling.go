@@ -251,11 +251,6 @@ func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, l
 			continue
 		}
 
-		// TODO: we need to handle the situation where messagelog accumulates
-		// many requests indefinitely when the destination replica stops
-		// receiving them.
-		requestforward[peerID] = messagelog.New()
-
 		supply := makeMessageSupplier(log, requestforward[peerID].Stream(nil))
 		connect := makePeerConnector(peerID, connector)
 		if err := startPeerConnection(connect, supply); err != nil {

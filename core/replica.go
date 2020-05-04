@@ -56,10 +56,20 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	}
 
 	logOpts := newOptions(opts...)
+	logger := makeLogger(id, logOpts)
 
 	messageLog := messagelog.New()
 	requestForward := make(map[uint32]messagelog.MessageLog)
-	logger := makeLogger(id, logOpts)
+	for peerID := uint32(0); peerID < n; peerID++ {
+		if peerID == id {
+			continue
+		}
+
+		// TODO: we need to handle the situation when the
+		// messagelog accumulates requests indefinitely if the
+		// destination replica stops receiving them.
+		requestForward[peerID] = messagelog.New()
+	}
 
 	if err := startPeerConnections(id, n, stack, messageLog, logger, requestForward); err != nil {
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
