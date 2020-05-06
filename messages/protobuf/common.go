@@ -17,6 +17,8 @@ package protobuf
 import (
 	"golang.org/x/xerrors"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
 )
@@ -38,4 +40,56 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	default:
 		return nil, xerrors.New("unknown message type")
 	}
+}
+
+func pbMessageFromAPI(m messages.Message) proto.Message {
+	switch m := m.(type) {
+	case messages.Request:
+		return pbRequestFromAPI(m)
+	case messages.Reply:
+		return pbReplyFromAPI(m)
+	case messages.Prepare:
+		return pbPrepareFromAPI(m)
+	case messages.Commit:
+		return pbCommitFromAPI(m)
+	case messages.ReqViewChange:
+		return pbReqViewChangeFromAPI(m)
+	default:
+		panic("unknown message type")
+	}
+}
+
+func pbRequestFromAPI(m messages.Request) *pb.Request {
+	if m, ok := m.(*request); ok {
+		return m.pbMsg
+	}
+	return pb.RequestFromAPI(m)
+}
+
+func pbReplyFromAPI(m messages.Reply) *pb.Reply {
+	if m, ok := m.(*reply); ok {
+		return m.pbMsg
+	}
+	return pb.ReplyFromAPI(m)
+}
+
+func pbPrepareFromAPI(m messages.Prepare) *pb.Prepare {
+	if m, ok := m.(*prepare); ok {
+		return m.pbMsg
+	}
+	return pb.PrepareFromAPI(m)
+}
+
+func pbCommitFromAPI(m messages.Commit) *pb.Commit {
+	if m, ok := m.(*commit); ok {
+		return m.pbMsg
+	}
+	return pb.CommitFromAPI(m)
+}
+
+func pbReqViewChangeFromAPI(m messages.ReqViewChange) *pb.ReqViewChange {
+	if m, ok := m.(*reqViewChange); ok {
+		return m.pbMsg
+	}
+	return pb.ReqViewChangeFromAPI(m)
 }
