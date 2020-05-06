@@ -43,6 +43,8 @@ func WrapMessage(m proto.Message) *Message {
 		return &Message{Typed: &Message_Commit{Commit: m}}
 	case *ReqViewChange:
 		return &Message{Typed: &Message_ReqViewChange{ReqViewChange: m}}
+	case *ViewChange:
+		return &Message{Typed: &Message_ViewChange{ViewChange: m}}
 	default:
 		panic("unknown message type")
 	}
@@ -66,6 +68,8 @@ func MessageFromAPI(m messages.Message) proto.Message {
 		return CommitFromAPI(m)
 	case messages.ReqViewChange:
 		return ReqViewChangeFromAPI(m)
+	case messages.ViewChange:
+		return ViewChangeFromAPI(m)
 	default:
 		panic("unknown message type")
 	}
@@ -113,4 +117,30 @@ func ReqViewChangeFromAPI(rvc messages.ReqViewChange) *ReqViewChange {
 		NewView:   rvc.NewView(),
 		Signature: rvc.Signature(),
 	}
+}
+
+func ViewChangeFromAPI(vc messages.ViewChange) *ViewChange {
+	return &ViewChange{
+		ReplicaId: vc.ReplicaID(),
+		NewView:   vc.NewView(),
+		Log:       messageLogFromAPI(vc.MessageLog()),
+		VcCert:    viewChangeCertFromAPI(vc.ViewChangeCert()),
+		Ui:        usig.MustMarshalUI(vc.UI()),
+	}
+}
+
+func messageLogFromAPI(log messages.MessageLog) []*Message {
+	pbLog := make([]*Message, 0, len(log))
+	for _, m := range log {
+		pbLog = append(pbLog, WrapMessage(MessageFromAPI(m)))
+	}
+	return pbLog
+}
+
+func viewChangeCertFromAPI(cert messages.ViewChangeCert) []*ReqViewChange {
+	pbCert := make([]*ReqViewChange, 0, len(cert))
+	for _, m := range cert {
+		pbCert = append(pbCert, ReqViewChangeFromAPI(m))
+	}
+	return pbCert
 }
