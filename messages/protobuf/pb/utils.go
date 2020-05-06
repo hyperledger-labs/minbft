@@ -29,6 +29,25 @@ func MarshalOrPanic(m proto.Message) []byte {
 	return bytes
 }
 
+func WrapMessage(m proto.Message) *Message {
+	switch m := m.(type) {
+	case *Hello:
+		return &Message{Typed: &Message_Hello{Hello: m}}
+	case *Request:
+		return &Message{Typed: &Message_Request{Request: m}}
+	case *Reply:
+		return &Message{Typed: &Message_Reply{Reply: m}}
+	case *Prepare:
+		return &Message{Typed: &Message_Prepare{Prepare: m}}
+	case *Commit:
+		return &Message{Typed: &Message_Commit{Commit: m}}
+	case *ReqViewChange:
+		return &Message{Typed: &Message_ReqViewChange{ReqViewChange: m}}
+	default:
+		panic("unknown message type")
+	}
+}
+
 func HelloFromAPI(h messages.Hello) *Hello {
 	return &Hello{
 		ReplicaId: h.ReplicaID(),

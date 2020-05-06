@@ -89,23 +89,5 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 }
 
 func marshalMessage(m proto.Message) ([]byte, error) {
-	pbMsg := &pb.Message{}
-	switch m := m.(type) {
-	case *pb.Hello:
-		pbMsg.Typed = &pb.Message_Hello{Hello: m}
-	case *pb.Request:
-		pbMsg.Typed = &pb.Message_Request{Request: m}
-	case *pb.Reply:
-		pbMsg.Typed = &pb.Message_Reply{Reply: m}
-	case *pb.Prepare:
-		pbMsg.Typed = &pb.Message_Prepare{Prepare: m}
-	case *pb.Commit:
-		pbMsg.Typed = &pb.Message_Commit{Commit: m}
-	case *pb.ReqViewChange:
-		pbMsg.Typed = &pb.Message_ReqViewChange{ReqViewChange: m}
-	default:
-		panic("marshaling unknown message type")
-	}
-
-	return proto.Marshal(pbMsg)
+	return proto.Marshal(pb.WrapMessage(m))
 }
