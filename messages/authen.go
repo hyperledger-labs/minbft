@@ -39,6 +39,8 @@ func AuthenBytes(m Message) []byte {
 		tag = "COMMIT"
 	case ReqViewChange:
 		tag = "REQ-VIEW-CHANGE"
+	case ViewChange:
+		tag = "VIEW-CHANGE"
 	default:
 		panic("unknown message type")
 	}
@@ -70,6 +72,16 @@ func writeAuthenBytes(buf io.Writer, m Message) {
 		_ = binary.Write(buf, binary.BigEndian, prep.UI().Counter)
 	case ReqViewChange:
 		_ = binary.Write(buf, binary.BigEndian, m.NewView())
+	case ViewChange:
+		_ = binary.Write(buf, binary.BigEndian, m.NewView())
+		// There is no need to authenticate any other message
+		// content. Messages in the message log are certified
+		// with USIG and therefore cannot be reordered,
+		// omitted, or duplicated without it being detected,
+		// whereas any valid view-change certificate is
+		// equivalent to any other valid one. Moreover,
+		// messages in the message log and view-change
+		// certificate are authenticated on their own.
 	default:
 		panic("unknown message type")
 	}

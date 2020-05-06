@@ -65,6 +65,10 @@ func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
 	return newReqViewChange(r, nv)
 }
 
+func (*impl) NewViewChange(r uint32, nv uint64, log messages.MessageLog, vcCert messages.ViewChangeCert) messages.ViewChange {
+	panic("Not implemented")
+}
+
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	switch t := pbMsg.Typed.(type) {
 	case *pb.Message_Hello:
