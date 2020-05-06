@@ -37,6 +37,8 @@ func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 		return newCommitFromPb(t.Commit)
 	case *pb.Message_ReqViewChange:
 		return newReqViewChangeFromPb(t.ReqViewChange)
+	case *pb.Message_ViewChange:
+		return newViewChangeFromPb(t.ViewChange)
 	default:
 		return nil, xerrors.New("unknown message type")
 	}
@@ -54,6 +56,8 @@ func pbMessageFromAPI(m messages.Message) proto.Message {
 		return pbCommitFromAPI(m)
 	case messages.ReqViewChange:
 		return pbReqViewChangeFromAPI(m)
+	case messages.ViewChange:
+		return pbViewChangeFromAPI(m)
 	default:
 		panic("unknown message type")
 	}
@@ -92,4 +96,12 @@ func pbReqViewChangeFromAPI(m messages.ReqViewChange) *pb.ReqViewChange {
 		return m.pbMsg
 	}
 	return pb.ReqViewChangeFromAPI(m)
+}
+
+func pbViewChangeFromAPI(m messages.ViewChange) *pb.ViewChange {
+	if m, ok := m.(*viewChange); ok {
+		return m.pbMsg
+	}
+
+	return pb.ViewChangeFromAPI(m)
 }

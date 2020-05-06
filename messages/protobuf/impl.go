@@ -66,7 +66,7 @@ func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
 }
 
 func (*impl) NewViewChange(r uint32, nv uint64, log messages.MessageLog, vcCert messages.ViewChangeCert) messages.ViewChange {
-	panic("Not implemented")
+	return newViewChange(r, nv, log, vcCert)
 }
 
 func marshalMessage(m proto.Message) ([]byte, error) {
