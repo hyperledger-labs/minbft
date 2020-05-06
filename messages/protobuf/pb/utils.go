@@ -54,6 +54,23 @@ func HelloFromAPI(h messages.Hello) *Hello {
 	}
 }
 
+func MessageFromAPI(m messages.Message) proto.Message {
+	switch m := m.(type) {
+	case messages.Request:
+		return RequestFromAPI(m)
+	case messages.Reply:
+		return ReplyFromAPI(m)
+	case messages.Prepare:
+		return PrepareFromAPI(m)
+	case messages.Commit:
+		return CommitFromAPI(m)
+	case messages.ReqViewChange:
+		return ReqViewChangeFromAPI(m)
+	default:
+		panic("unknown message type")
+	}
+}
+
 func RequestFromAPI(req messages.Request) *Request {
 	return &Request{
 		ClientId:  req.ClientID(),
@@ -63,11 +80,37 @@ func RequestFromAPI(req messages.Request) *Request {
 	}
 }
 
+func ReplyFromAPI(reply messages.Reply) *Reply {
+	return &Reply{
+		ReplicaId: reply.ReplicaID(),
+		ClientId:  reply.ClientID(),
+		Seq:       reply.Sequence(),
+		Result:    reply.Result(),
+		Signature: reply.Signature(),
+	}
+}
+
 func PrepareFromAPI(prep messages.Prepare) *Prepare {
 	return &Prepare{
 		ReplicaId: prep.ReplicaID(),
 		View:      prep.View(),
 		Request:   RequestFromAPI(prep.Request()),
 		Ui:        usig.MustMarshalUI(prep.UI()),
+	}
+}
+
+func CommitFromAPI(comm messages.Commit) *Commit {
+	return &Commit{
+		ReplicaId: comm.ReplicaID(),
+		Prepare:   PrepareFromAPI(comm.Prepare()),
+		Ui:        usig.MustMarshalUI(comm.UI()),
+	}
+}
+
+func ReqViewChangeFromAPI(rvc messages.ReqViewChange) *ReqViewChange {
+	return &ReqViewChange{
+		ReplicaId: rvc.ReplicaID(),
+		NewView:   rvc.NewView(),
+		Signature: rvc.Signature(),
 	}
 }
