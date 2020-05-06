@@ -1,5 +1,8 @@
-NOTE: Please remove irrelevant parts of this template and check the contribution guideline before submitting.
+<!-- NOTE: Please check the contribution guideline before submitting -->
 
+<!-- describe the purpose of the pull request, as well as its benefits
+     and possible concerns related to the proposed changes -->
 This pull request ...
 
-Resolves #{ISSUE_ID}
+<!-- and reference any issues resolved by the pull request, e.g. #123 -->
+Resolves: ...
