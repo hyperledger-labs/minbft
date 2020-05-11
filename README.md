@@ -117,13 +117,13 @@ sudo apt-get install build-essential pkg-config
 ### Golang ###
 
 Go 1.11 or later is required to build this project (tested with Go 1.11
-and 1.13). For installation instructions please visit [this page]
-(https://golang.org/doc/install).
+and 1.14). For installation instructions please visit
+[this page](https://golang.org/doc/install).
 
 ### Intel® SGX SDK ###
 
 The Intel® SGX enclave implementation has been tested with Intel® SGX
-SDK for Linux version 2.3.1. For installation instuctions please visit
+SDK for Linux version 2.9.1. For installation instuctions please visit
 [download page][sgx-downloads].
 Please note that Intel SGX has two operation modes and required software
 components depend on operation mode.
@@ -162,8 +162,9 @@ export SGX_MODE=SIM
 ## Getting Started ##
 
 This is a Go module and can be placed anywhere; no need to be in
-GOPATH. If this is placed in GOPATH, please make sure that the
-environment variable `GO111MODULE=on` has set to activate module mode.
+GOPATH. If this is placed in GOPATH and you are using Go 1.11 or 1.12,
+please make sure that the environment variable `GO111MODULE=on` has
+set to activate module mode.
 
 All following commands are supposed to be run in the root of the
 module's source tree.
