@@ -35,6 +35,8 @@ func Stringify(msg Message) string {
 	cv := ui.Counter
 
 	switch msg := msg.(type) {
+	case Hello:
+		return fmt.Sprintf("<HELLO replica=%d>", msg.ReplicaID())
 	case Request:
 		return fmt.Sprintf("<REQUEST client=%d seq=%d operation=%q>",
 			msg.ClientID(), msg.Sequence(),

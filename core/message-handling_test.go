@@ -38,7 +38,39 @@ import (
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
-func TestMakeIncomingMessageHandler(t *testing.T) {
+func TestMakeOwnMessageHandler(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	processMessage := func(msg messages.Message) (new bool, err error) {
+		args := mock.MethodCalled("messageProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	handle := makeOwnMessageHandler(processMessage)
+
+	msg := struct {
+		messages.Message
+		i int
+	}{i: rand.Int()}
+
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+	_, _, err := handle(msg)
+	assert.Error(t, err)
+
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	ch, new, err := handle(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+	assert.Nil(t, ch)
+
+	mock.On("messageProcessor", msg).Return(true, nil).Once()
+	ch, new, err = handle(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+	assert.Nil(t, ch)
+}
+
+func TestMakePeerMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
@@ -50,90 +82,101 @@ func TestMakeIncomingMessageHandler(t *testing.T) {
 		args := mock.MethodCalled("messageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	replyMessage := func(msg messages.Message) (reply <-chan messages.Message, err error) {
-		args := mock.MethodCalled("messageReplier", msg)
-		return args.Get(0).(chan messages.Message), args.Error(1)
-	}
-	handle := makeIncomingMessageHandler(validateMessage, processMessage, replyMessage)
+	handle := makePeerMessageHandler(validateMessage, processMessage)
 
 	msg := struct {
 		messages.Message
 		i int
 	}{i: rand.Int()}
 
-	reply := struct {
-		messages.Message
-		i int
-	}{i: rand.Int()}
-
 	mock.On("messageValidator", msg).Return(fmt.Errorf("Error")).Once()
-	_, _, err := handle(msg, false)
+	_, _, err := handle(msg)
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
-	_, _, err = handle(msg, false)
+	_, _, err = handle(msg)
 	assert.Error(t, err)
-
-	nilRelyChan := (chan messages.Message)(nil)
-	mock.On("messageValidator", msg).Return(nil).Once()
-	mock.On("messageProcessor", msg).Return(false, nil).Once()
-	mock.On("messageReplier", msg).Return(nilRelyChan, fmt.Errorf("Error")).Once()
-	_, new, err := handle(msg, false)
-	assert.Error(t, err)
-	assert.False(t, new)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
-	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err := handle(msg, false)
+	ch, new, err := handle(msg)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Nil(t, ch)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
-	mock.On("messageReplier", msg).Return(nilRelyChan, nil).Once()
-	ch, new, err = handle(msg, false)
+	ch, new, err = handle(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
 	assert.Nil(t, ch)
 
-	replyChan := make(chan messages.Message, 1)
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, nil).Once()
+	ch, new, err = handle(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+	assert.Nil(t, ch)
+}
+
+func TestMakeClientMessageHandler(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	validateRequest := func(msg messages.Request) error {
+		args := mock.MethodCalled("requestValidator", msg)
+		return args.Error(0)
+	}
+	processRequest := func(msg messages.Request) (new bool, err error) {
+		args := mock.MethodCalled("requestProcessor", msg)
+		return args.Bool(0), args.Error(1)
+	}
+	replyRequest := func(request messages.Request) <-chan messages.Reply {
+		args := mock.MethodCalled("requestReplier", request)
+		return args.Get(0).(chan messages.Reply)
+	}
+
+	handle := makeClientMessageHandler(validateRequest, processRequest, replyRequest)
+
+	msg := struct{ messages.Message }{}
+
+	cl := rand.Uint32()
+	seq := rand.Uint64()
+	req := messageImpl.NewRequest(cl, seq, nil)
+	reply := messageImpl.NewReply(rand.Uint32(), cl, seq, nil)
+
+	_, _, err := handle(msg)
+	assert.Error(t, err, "Unexpected message")
+
+	mock.On("requestValidator", req).Return(fmt.Errorf("Error")).Once()
+	_, _, err = handle(req)
+	assert.Error(t, err)
+
+	mock.On("requestValidator", req).Return(nil).Once()
+	mock.On("requestProcessor", req).Return(false, fmt.Errorf("Error")).Once()
+	_, _, err = handle(req)
+	assert.Error(t, err)
+
+	replyChan := make(chan messages.Reply, 1)
 	replyChan <- reply
-	mock.On("messageValidator", msg).Return(nil).Once()
-	mock.On("messageProcessor", msg).Return(false, nil).Once()
-	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg, false)
+	mock.On("requestValidator", req).Return(nil).Once()
+	mock.On("requestProcessor", req).Return(false, nil).Once()
+	mock.On("requestReplier", req).Return(replyChan).Once()
+	ch, new, err := handle(req)
 	assert.NoError(t, err)
 	assert.False(t, new)
-	assert.Equal(t, reply, <-ch)
+	assert.EqualValues(t, reply, <-ch)
 
-	replyChan = make(chan messages.Message, 1)
+	replyChan = make(chan messages.Reply, 1)
 	replyChan <- reply
-	mock.On("messageValidator", msg).Return(nil).Once()
-	mock.On("messageProcessor", msg).Return(true, nil).Once()
-	mock.On("messageReplier", msg).Return(replyChan, nil).Once()
-	ch, new, err = handle(msg, false)
+	mock.On("requestValidator", req).Return(nil).Once()
+	mock.On("requestProcessor", req).Return(true, nil).Once()
+	mock.On("requestReplier", req).Return(replyChan).Once()
+	ch, new, err = handle(req)
 	assert.NoError(t, err)
 	assert.True(t, new)
-	assert.Equal(t, reply, <-ch)
-
-	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
-	_, _, err = handle(msg, true)
-	assert.Error(t, err)
-
-	mock.On("messageProcessor", msg).Return(false, nil).Once()
-	ch, new, err = handle(msg, true)
-	assert.NoError(t, err)
-	assert.False(t, new)
-	assert.Nil(t, ch)
-
-	mock.On("messageProcessor", msg).Return(true, nil).Once()
-	ch, new, err = handle(msg, true)
-	assert.NoError(t, err)
-	assert.True(t, new)
-	assert.Nil(t, ch)
+	assert.EqualValues(t, reply, <-ch)
 }
 
 func TestMakeMessageValidator(t *testing.T) {
@@ -517,50 +560,6 @@ func TestMakePeerMessageApplier(t *testing.T) {
 		mock.On("commitApplier", commit, false).Return(nil).Once()
 		err = apply(commit, false)
 		assert.NoError(t, err)
-	})
-}
-
-func TestMakeMessageReplier(t *testing.T) {
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	replyRequest := func(request messages.Request) <-chan messages.Reply {
-		args := mock.MethodCalled("requestReplier", request)
-		return args.Get(0).(chan messages.Reply)
-	}
-
-	replyMessage := makeMessageReplier(replyRequest)
-
-	seq := rand.Uint64()
-	request := messageImpl.NewRequest(0, seq, nil)
-	prepare := messageImpl.NewPrepare(0, 0, request)
-	commit := messageImpl.NewCommit(1, prepare)
-	reply := messageImpl.NewReply(1, 0, seq, nil)
-
-	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockMessage(ctrl)
-		assert.Panics(t, func() { replyMessage(msg) }, "Unknown message type")
-	})
-	t.Run("Request", func(t *testing.T) {
-		replyChan := make(chan messages.Reply, 1)
-		replyChan <- reply
-		mock.On("requestReplier", request).Return(replyChan).Once()
-		ch, err := replyMessage(request)
-		assert.NoError(t, err)
-		assert.Equal(t, reply, <-ch)
-	})
-	t.Run("Prepare", func(t *testing.T) {
-		ch, err := replyMessage(prepare)
-		assert.NoError(t, err)
-		assert.Nil(t, ch)
-	})
-	t.Run("Commit", func(t *testing.T) {
-		ch, err := replyMessage(commit)
-		assert.NoError(t, err)
-		assert.Nil(t, ch)
 	})
 }
 

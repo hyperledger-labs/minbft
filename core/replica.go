@@ -42,7 +42,8 @@ type Stack interface {
 
 // Replica represents an instance of replica peer
 type replica struct {
-	handleStream messageStreamHandler
+	handlePeerStream   messageStreamHandler
+	handleClientStream messageStreamHandler
 }
 
 // New creates a new instance of replica node
@@ -55,37 +56,49 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	}
 
 	logOpts := newOptions(opts...)
-
-	messageLog := messagelog.New()
-	requestForward := make(map[uint32]messagelog.MessageLog)
 	logger := makeLogger(id, logOpts)
 
-	if err := startPeerConnections(id, n, stack, messageLog, logger, requestForward); err != nil {
+	messageLog := messagelog.New()
+	unicastLogs := make(map[uint32]messagelog.MessageLog)
+	for peerID := uint32(0); peerID < n; peerID++ {
+		if peerID == id {
+			continue
+		}
+
+		// TODO: we need to handle the situation when the
+		// messagelog accumulates messages indefinitely if the
+		// destination replica stops receiving them.
+		unicastLogs[peerID] = messagelog.New()
+	}
+
+	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
+	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs)
+
+	if err := startPeerConnections(id, n, stack, handlePeerMessage, logger); err != nil {
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
 	}
 
-	handle := defaultIncomingMessageHandler(id, messageLog, configer, stack, logger, requestForward)
-	handleStream := makeMessageStreamHandler(handle, logger)
+	go handleOwnPeerMessages(messageLog, handleOwnMessage, logger)
 
-	go handleGeneratedPeerMessages(messageLog, handle, logger)
-
-	return &replica{handleStream}, nil
+	return &replica{
+		handlePeerStream:   makeMessageStreamHandler(handleHelloMessage, "peer", logger),
+		handleClientStream: makeMessageStreamHandler(handleClientMessage, "client", logger),
+	}, nil
 }
 
 func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {
-	// TODO: Handle peer/client connections differently
-	return r.handleStream
+	return r.handlePeerStream
 }
 
 func (r *replica) ClientMessageStreamHandler() api.MessageStreamHandler {
-	// TODO: Handle peer/client connections differently
-	return r.handleStream
+	return r.handleClientStream
 }
 
 func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan []byte {
 	out := make(chan []byte)
-
-	go handle(in, out)
-
+	go func() {
+		defer close(out)
+		handle(in, out)
+	}()
 	return out
 }

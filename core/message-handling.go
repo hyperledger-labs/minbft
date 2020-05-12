@@ -36,20 +36,12 @@ import (
 // message, if any, to reply channel.
 type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 
-// incomingMessageHandler fully handles incoming message.
+// messageHandler fully handles message.
 //
-// If there is any message produced in reply, it will be send to reply
-// channel, otherwise nil channel is returned. Parameter 'own'
-// indicates if the message originates from the local replica itself.
-// The return value new indicates that the message has not been
-// processed before.
-type incomingMessageHandler func(msg messages.Message, own bool) (reply <-chan messages.Message, new bool, err error)
-
-// messageSupplier supplies messages for peer replica.
-//
-// Given a channel, it supplies the channel with messages to be
-// delivered to the peer replica.
-type messageSupplier func(out chan<- []byte)
+// If there are any messages produced in reply, they will be sent to
+// reply channel, otherwise nil channel is returned. The return value
+// new indicates that the message has not been processed before.
+type messageHandler func(msg messages.Message) (reply <-chan messages.Message, new bool, err error)
 
 // peerConnector initiates message exchange with a peer replica.
 //
@@ -115,15 +107,6 @@ type viewMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 // concurrently.
 type peerMessageApplier func(msg messages.PeerMessage, active bool) error
 
-// messageReplier provides reply to a valid message.
-//
-// If there is any message to be produced in reply to the supplied
-// one, it will be send to the returned reply channel, otherwise nil
-// channel is returned. The supplied message is assumed to be
-// authentic and internally consistent. It is safe to invoke
-// concurrently.
-type messageReplier func(msg messages.Message) (reply <-chan messages.Message, err error)
-
 // generatedMessageHandler finalizes and handles generated message.
 //
 // It finalizes the supplied message by attaching an authentication
@@ -140,10 +123,9 @@ type generatedMessageHandler func(msg messages.ReplicaMessage)
 // concurrently.
 type generatedMessageConsumer func(msg messages.ReplicaMessage)
 
-// defaultIncomingMessageHandler construct a standard
-// incomingMessageHandler using id as the current replica ID and the
-// supplied interfaces.
-func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger, requestForward map[uint32]messagelog.MessageLog) incomingMessageHandler {
+// defaultMessageHandlers constructs standard message handlers using
+// id as the current replica ID and the supplied interfaces.
+func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs map[uint32]messagelog.MessageLog, config api.Configer, stack Stack, logger *logging.Logger) (handleOwnMessage, handlePeerMessage, handleClientMessage messageHandler) {
 	n := config.N()
 	f := config.F()
 
@@ -172,7 +154,7 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	handleReqTimeout := makeRequestTimeoutHandler(requestViewChange, logger)
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
-	startPrepTimer := makePrepareTimerStarter(n, clientStates, logger, requestForward)
+	startPrepTimer := makePrepareTimerStarter(n, clientStates, unicastLogs, logger)
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	countCommitment := makeCommitmentCounter(f)
@@ -208,44 +190,56 @@ func defaultIncomingMessageHandler(id uint32, log messagelog.MessageLog, config 
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
+	handleOwnMessage = makeOwnMessageHandler(processMessage)
+	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
-	replyMessage := makeMessageReplier(replyRequest)
+	handleClientMessage = makeClientMessageHandler(validateRequest, processRequest, replyRequest)
 
-	return makeIncomingMessageHandler(validateMessage, processMessage, replyMessage)
+	return
 }
 
 // makeMessageStreamHandler construct an instance of
 // messageStreamHandler using the supplied abstract handler.
-func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Logger) messageStreamHandler {
-	return func(in <-chan []byte, reply chan<- []byte) {
+func makeMessageStreamHandler(handleMessage messageHandler, remote string, logger *logging.Logger) messageStreamHandler {
+	return func(in <-chan []byte, out chan<- []byte) {
 		for msgBytes := range in {
 			msg, err := messageImpl.NewFromBinary(msgBytes)
 			if err != nil {
-				logger.Warningf("Failed to unmarshal message: %s", err)
-				continue
+				logger.Warningf("Error unmarshaling message from %s: %s", remote, err)
+				return
 			}
 
 			msgStr := messages.Stringify(msg)
+			logger.Debugf("Received %s from %s", msgStr, remote)
 
-			logger.Debugf("Received %s", msgStr)
-
-			if replyChan, new, err := handle(msg, false); err != nil {
-				logger.Warningf("Failed to handle %s: %s", msgStr, err)
-			} else if replyChan != nil {
-				m, more := <-replyChan
-				if !more {
-					continue
-				}
-				replyBytes, err := m.MarshalBinary()
-				if err != nil {
-					panic(err)
-				}
-				reply <- replyBytes
+			replyChan, new, err := handleMessage(msg)
+			if err != nil {
+				logger.Warningf("Error handling %s from %s: %s", msgStr, remote, err)
+				return
 			} else if !new {
-				logger.Infof("Dropped %s", msgStr)
+				logger.Debugf("Dropped %s from %s", msgStr, remote)
 			} else {
-				logger.Debugf("Handled %s", msgStr)
+				logger.Debugf("Handled %s from %s", msgStr, remote)
+			}
+
+			if replyChan != nil {
+				remote := remote // avoid data race with logger
+				switch m := msg.(type) {
+				case messages.Hello:
+					remote = fmt.Sprintf("replica %d", m.ReplicaID())
+				case messages.ClientMessage:
+					remote = fmt.Sprintf("client %d", m.ClientID())
+				}
+				for m := range replyChan {
+					mStr := messages.Stringify(m)
+					logger.Debugf("Sending %s to %s", mStr, remote)
+					replyBytes, err := m.MarshalBinary()
+					if err != nil {
+						panic(err)
+					}
+					out <- replyBytes
+				}
 			}
 		}
 	}
@@ -253,20 +247,16 @@ func makeMessageStreamHandler(handle incomingMessageHandler, logger *logging.Log
 
 // startPeerConnections initiates asynchronous message exchange with
 // peer replicas.
-func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, log messagelog.MessageLog, logger *logging.Logger, requestforward map[uint32]messagelog.MessageLog) error {
+func startPeerConnections(ownID, n uint32, connector api.ReplicaConnector, handleMessage messageHandler, logger *logging.Logger) error {
 	for peerID := uint32(0); peerID < n; peerID++ {
-		if peerID == replicaID {
+		if peerID == ownID {
 			continue
 		}
 
-		// TODO: we need to handle the situation where messagelog accumulates
-		// many requests indefinitely when the destination replica stops
-		// receiving them.
-		requestforward[peerID] = messagelog.New()
-
-		supply := makeMessageSupplier(log, requestforward[peerID].Stream(nil))
+		remote := fmt.Sprintf("replica %d", peerID)
 		connect := makePeerConnector(peerID, connector)
-		if err := startPeerConnection(connect, supply); err != nil {
+		handleReplyStream := makeMessageStreamHandler(handleMessage, remote, logger)
+		if err := startPeerConnection(ownID, connect, handleReplyStream); err != nil {
 			return fmt.Errorf("Cannot connect to replica %d: %s", peerID, err)
 		}
 	}
@@ -276,53 +266,37 @@ func startPeerConnections(replicaID, n uint32, connector api.ReplicaConnector, l
 
 // startPeerConnection initiates asynchronous message exchange with a
 // peer replica.
-func startPeerConnection(connect peerConnector, supply messageSupplier) error {
+func startPeerConnection(ownID uint32, connect peerConnector, handleReplyStream messageStreamHandler) error {
 	out := make(chan []byte)
-
-	// So far, reply stream is not used for replica-to-replica
-	// communication, thus return value is ignored. Each replica
-	// will establish connections to other peers the same way, so
-	// they all will be eventually fully connected.
-	if _, err := connect(out); err != nil {
+	in, err := connect(out)
+	if err != nil {
 		return err
 	}
 
-	go supply(out)
+	go func() {
+		defer close(out)
+
+		h := messageImpl.NewHello(ownID)
+		msgBytes, err := h.MarshalBinary()
+		if err != nil {
+			panic(err)
+		}
+		out <- msgBytes
+
+		handleReplyStream(in, nil)
+	}()
 
 	return nil
 }
 
-// handleGeneratedPeerMessages handles messages generated by the local
+// handleOwnPeerMessages handles messages generated by the local
 // replica for the peer replicas.
-func handleGeneratedPeerMessages(log messagelog.MessageLog, handle incomingMessageHandler, logger *logging.Logger) {
+func handleOwnPeerMessages(log messagelog.MessageLog, handleOwnMessage messageHandler, logger *logging.Logger) {
 	for msg := range log.Stream(nil) {
-		_, new, err := handle(msg, true)
-		if err != nil {
-			panic(err)
+		if _, new, err := handleOwnMessage(msg); err != nil {
+			panic(fmt.Errorf("Error handling own message: %s", err))
 		} else if new {
-			logger.Debugf("Handled %s", messages.Stringify(msg))
-		}
-	}
-}
-
-// makeMessageSupplier constructs a messageSupplier using the
-// supplied message log.
-// Another parameter 'forwardChan' is to accept unicasted messages.
-func makeMessageSupplier(log messagelog.MessageLog, forwardChan <-chan messages.Message) messageSupplier {
-	return func(out chan<- []byte) {
-		logChan := log.Stream(nil)
-		for {
-			var msg messages.Message
-
-			select {
-			case msg = <-logChan:
-			case msg = <-forwardChan:
-			}
-			msgBytes, err := msg.MarshalBinary()
-			if err != nil {
-				panic(err)
-			}
-			out <- msgBytes
+			logger.Debugf("Handled own %s", messages.Stringify(msg))
 		}
 	}
 }
@@ -339,35 +313,91 @@ func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnec
 	}
 }
 
-// makeIncomingMessageHandler constructs an instance of
-// incomingMessageHandler using id as the current replica ID, and the
-// supplied abstractions.
-func makeIncomingMessageHandler(validate messageValidator, process messageProcessor, reply messageReplier) incomingMessageHandler {
-	return func(msg messages.Message, own bool) (replyChan <-chan messages.Message, new bool, err error) {
-		if !own {
-			err = validate(msg)
-			if err != nil {
-				err = fmt.Errorf("Validation failed: %s", err)
-				return nil, false, err
-			}
+func makeHelloHandler(ownID, n uint32, messageLog messagelog.MessageLog, unicastLogs map[uint32]messagelog.MessageLog) messageHandler {
+	return func(msg messages.Message) (<-chan messages.Message, bool, error) {
+		h, ok := msg.(messages.Hello)
+		if !ok {
+			return nil, false, fmt.Errorf("Unexpected message type")
+		}
+		peerID := h.ReplicaID()
+		if peerID >= n || peerID == ownID {
+			return nil, false, fmt.Errorf("Unexpected peer ID")
+		}
 
-			new, err = process(msg)
-			if err != nil {
-				err = fmt.Errorf("Error processing message: %s", err)
-				return nil, false, err
-			}
+		var replyChan = make(chan messages.Message)
+		var bcChan, ucChan <-chan messages.Message
 
-			replyChan, err = reply(msg)
-			if err != nil {
-				err = fmt.Errorf("Error replying message: %s", err)
-				return nil, false, err
+		bcChan = messageLog.Stream(nil)
+		if ucLog := unicastLogs[peerID]; ucLog != nil {
+			ucChan = ucLog.Stream(nil)
+		}
+
+		go func() {
+			for {
+				var msg messages.Message
+
+				select {
+				case msg = <-bcChan:
+				case msg = <-ucChan:
+				}
+
+				replyChan <- msg
 			}
-		} else {
-			new, err = process(msg)
-			if err != nil {
-				err = fmt.Errorf("Error processing own message: %s", err)
-				return nil, false, err
-			}
+		}()
+
+		return replyChan, true, nil
+	}
+}
+
+func makeOwnMessageHandler(process messageProcessor) messageHandler {
+	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
+		new, err = process(msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("Error processing message: %s", err)
+		}
+
+		return nil, new, nil
+	}
+}
+
+func makePeerMessageHandler(validate messageValidator, process messageProcessor) messageHandler {
+	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
+		err = validate(msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("Validation failed: %s", err)
+		}
+
+		new, err = process(msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("Error processing message: %s", err)
+		}
+
+		return nil, new, nil
+	}
+}
+
+func makeClientMessageHandler(validateRequest requestValidator, processRequest requestProcessor, replyRequest requestReplier) messageHandler {
+	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
+		req, ok := msg.(messages.Request)
+		if !ok {
+			return nil, false, fmt.Errorf("Unexpected message type")
+		}
+
+		err = validateRequest(req)
+		if err != nil {
+			return nil, false, fmt.Errorf("Invalid Reqeust: %s", err)
+		}
+
+		new, err = processRequest(req)
+		if err != nil {
+			return nil, false, fmt.Errorf("Error processing Request: %s", err)
+		}
+
+		replyChan := make(chan messages.Message, 1)
+		defer close(replyChan)
+
+		if m, ok := <-replyRequest(req); ok {
+			replyChan <- m
 		}
 
 		return replyChan, new, nil
@@ -511,29 +541,6 @@ func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitAppli
 			return applyPrepare(msg, active)
 		case messages.Commit:
 			return applyCommit(msg, active)
-		default:
-			panic("Unknown message type")
-		}
-	}
-}
-
-// makeMessageReplier constructs an instance of messageReplier using
-// the supplied abstractions.
-func makeMessageReplier(replyRequest requestReplier) messageReplier {
-	return func(msg messages.Message) (reply <-chan messages.Message, err error) {
-		outChan := make(chan messages.Message)
-
-		switch msg := msg.(type) {
-		case messages.Request:
-			go func() {
-				defer close(outChan)
-				if m, more := <-replyRequest(msg); more {
-					outChan <- m
-				}
-			}()
-			return outChan, nil
-		case messages.Prepare, messages.Commit:
-			return nil, nil
 		default:
 			panic("Unknown message type")
 		}

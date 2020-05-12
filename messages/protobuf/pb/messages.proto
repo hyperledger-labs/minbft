@@ -23,12 +23,19 @@ package pb;
 // Message represents arbitrary protocol message.
 message Message{
     oneof typed {
-        Request request = 1;
-        Reply reply = 2;
-        Prepare prepare = 3;
-        Commit commit = 4;
-        ReqViewChange req_view_change = 5;
+        Hello hello = 1;
+        Request request = 2;
+        Reply reply = 3;
+        Prepare prepare = 4;
+        Commit commit = 5;
+        ReqViewChange req_view_change = 6;
     }
+}
+
+// Hello represents HELLO message.
+message Hello {
+    // Replica identifier
+    uint32 replica_id = 1;
 }
 
 // Request represents REQUEST message.

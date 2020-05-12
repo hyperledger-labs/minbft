@@ -416,10 +416,10 @@ func TestMakePrepareTimerStarter(t *testing.T) {
 
 	provider, state := setupClientStateProviderMock(t, ctrl, clientID)
 
-	requestForward := map[uint32]messagelog.MessageLog{
+	unicastLogs := map[uint32]messagelog.MessageLog{
 		uint32(0): messagelog.New(),
 	}
-	startTimer := makePrepareTimerStarter(uint32(0), provider, logging.MustGetLogger(module), requestForward)
+	startTimer := makePrepareTimerStarter(uint32(0), provider, unicastLogs, logging.MustGetLogger(module))
 
 	request := messageImpl.NewRequest(clientID, seq, nil)
 

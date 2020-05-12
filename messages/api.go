@@ -22,6 +22,7 @@ import (
 // MessageImpl provides an implementation of the message representation.
 type MessageImpl interface {
 	NewFromBinary(data []byte) (Message, error)
+	NewHello(replicaID uint32) Hello
 	NewRequest(clientID uint32, sequence uint64, operation []byte) Request
 	NewPrepare(replicaID uint32, view uint64, request Request) Prepare
 	NewCommit(replicaID uint32, prepare Prepare) Commit
@@ -67,6 +68,11 @@ type CertifiedMessage interface {
 type SignedMessage interface {
 	Signature() []byte
 	SetSignature(signature []byte)
+}
+
+type Hello interface {
+	PeerMessage
+	ImplementsHello()
 }
 
 type Request interface {
