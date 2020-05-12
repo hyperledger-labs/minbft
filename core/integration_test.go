@@ -41,6 +41,8 @@ const (
 	testClientID = 0
 
 	waitDuration = 200 * time.Millisecond
+
+	usigEnclaveFile = "../usig/sgx/enclave/libusig.signed.so"
 )
 
 type testReplicaStack struct {
@@ -77,14 +79,10 @@ protocol:
     viewchange: 3s
 `
 
-const usigEnclaveFile = "../usig/sgx/enclave/libusig.signed.so"
-
-// createTestnetCfgFiles create config file and keystore files for `numReplica`
-// replicas and 1 client
-func createTestnetCfg(numReplica int, numClient int) ([]byte, []byte) {
+// createTestCfg creates config file for `numReplica` replicas
+func createTestCfg(numReplica int) []byte {
 	var err error
 	var testCfg bytes.Buffer
-	var testKeys bytes.Buffer
 
 	t := template.New("cfgTemplate")
 	t = t.Funcs(template.FuncMap{
@@ -95,8 +93,16 @@ func createTestnetCfg(numReplica int, numClient int) ([]byte, []byte) {
 		panic(err)
 	}
 
+	return testCfg.Bytes()
+}
+
+// createTestKeys creates keystore files for `numReplica` replicas
+// and `numClient` clients
+func createTestKeys(numReplica, numClient int) []byte {
+	var testKeys bytes.Buffer
 	const testKeySpec = "ECDSA"
-	if err = authen.GenerateTestnetKeys(&testKeys, &authen.TestnetKeyOpts{
+
+	if err := authen.GenerateTestnetKeys(&testKeys, &authen.TestnetKeyOpts{
 		NumberReplicas:  numReplica,
 		ReplicaKeySpec:  testKeySpec,
 		ReplicaSecParam: 256,
@@ -108,7 +114,7 @@ func createTestnetCfg(numReplica int, numClient int) ([]byte, []byte) {
 		log.Fatalf("Failed to generate testnet keys: %v", err)
 	}
 
-	return testCfg.Bytes(), testKeys.Bytes()
+	return testKeys.Bytes()
 }
 
 func resetFixture() {
@@ -123,7 +129,8 @@ func initTestnetPeers(numReplica int, numClient int) {
 	resetFixture()
 
 	// generate config, keys
-	testCfg, testKeys := createTestnetCfg(numReplica, numClient)
+	testCfg := createTestCfg(numReplica)
+	testKeys := createTestKeys(numReplica, numClient)
 
 	cfg := config.New() // configer shared by all replicas
 	err := cfg.ReadConfig(bytes.NewBuffer(testCfg), "yaml")
@@ -131,12 +138,17 @@ func initTestnetPeers(numReplica int, numClient int) {
 		panic(err)
 	}
 
+	makeReplicas(numReplica, testKeys, cfg)
+	makeClients(numClient, testKeys, cfg)
+}
+
+// Initialize a given number of replica instances.
+func makeReplicas(numReplica int, testKeys []byte, cfg api.Configer) {
 	// replica stubs
 	for i := 0; i < numReplica; i++ {
 		replicaStubs = append(replicaStubs, replicastub.New())
 	}
 
-	// replicas
 	for i := 0; i < numReplica; i++ {
 		id := uint32(i)
 		sigAuth, _ := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, bytes.NewBuffer(testKeys), usigEnclaveFile)
@@ -148,17 +160,6 @@ func initTestnetPeers(numReplica int, numClient int) {
 		replica, _ := minbft.New(id, cfg, stack)
 		replicas = append(replicas, replica)
 		replicaStubs[i].AssignReplica(replica)
-	}
-
-	// clients
-	for i := 0; i < numClient; i++ {
-		au, _ := authen.New([]api.AuthenticationRole{api.ClientAuthen}, testClientID, bytes.NewBuffer(testKeys))
-		conn := newClientSideConnector()
-		stack := &testClientStack{conn, au}
-		clientStacks = append(clientStacks, stack)
-
-		client, _ := cl.New(testClientID, cfg.N(), cfg.F(), stack)
-		clients = append(clients, client)
 	}
 }
 
@@ -172,6 +173,19 @@ func newReplicaSideConnector(replicaID uint32) api.ReplicaConnector {
 		conn.AssignReplicaStub(id, stub)
 	}
 	return conn
+}
+
+// Initialize a given number of client instances.
+func makeClients(numClient int, testKeys []byte, cfg api.Configer) {
+	for i := 0; i < numClient; i++ {
+		au, _ := authen.New([]api.AuthenticationRole{api.ClientAuthen}, testClientID, bytes.NewBuffer(testKeys))
+		conn := newClientSideConnector()
+		stack := &testClientStack{conn, au}
+		clientStacks = append(clientStacks, stack)
+
+		client, _ := cl.New(testClientID, cfg.N(), cfg.F(), stack)
+		clients = append(clients, client)
+	}
 }
 
 func newClientSideConnector() api.ReplicaConnector {
