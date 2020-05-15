@@ -1,25 +1,29 @@
 module github.com/hyperledger-labs/minbft
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/a8m/envsubst v1.1.0
-	github.com/golang/mock v1.2.0
-	github.com/golang/protobuf v1.3.1
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/op/go-logging v0.0.0-20160211212156-b2cb9fa56473
-	github.com/spf13/afero v1.2.0 // indirect
-	github.com/spf13/cobra v0.0.3
+	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/golang/mock v1.4.3
+	github.com/golang/protobuf v1.4.2
+	github.com/mitchellh/mapstructure v1.3.1 // indirect
+	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
+	github.com/pelletier/go-toml v1.8.0 // indirect
+	github.com/spf13/afero v1.2.2 // indirect
+	github.com/spf13/cast v1.3.1 // indirect
+	github.com/spf13/cobra v1.0.0
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/spf13/viper v1.3.1
-	github.com/stretchr/objx v0.0.0-20180825064932-ef50b0de2877 // indirect
-	github.com/stretchr/testify v1.2.2
-	golang.org/x/net v0.0.0-20181217023233-e147a9138326 // indirect
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
-	golang.org/x/sys v0.0.0-20181213200352-4d1cda033e06 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/viper v1.7.0
+	github.com/stretchr/objx v0.2.0 // indirect
+	github.com/stretchr/testify v1.5.1
+	golang.org/x/net v0.0.0-20200520182314-0ba52f642ac2 // indirect
+	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
+	golang.org/x/sys v0.0.0-20200523222454-059865788121 // indirect
 	golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
-	google.golang.org/genproto v0.0.0-20181217193449-09cd0d62f46c // indirect
-	google.golang.org/grpc v1.18.0
-	gopkg.in/yaml.v2 v2.2.2
+	google.golang.org/genproto v0.0.0-20200527145253-8367513e4ece // indirect
+	google.golang.org/grpc v1.29.1
+	gopkg.in/ini.v1 v1.57.0 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 )
 
 go 1.11
