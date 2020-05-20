@@ -52,6 +52,15 @@ smaller, consistent steps.
 
 [new-pr]: https://github.com/hyperledger-labs/minbft/compare
 
+When a pull request is created, reviewers are automatically set and one
+of the reviewers assigns the pull request to themselves. The assignee
+is responsible for merging the request. Note that, if the author is a
+maintainer of this project, the author takes the responsibility.
+
+The reviewers give their feedback or explicitly ask for more time in a
+couple of working days. Generally, the reviewers make a response within
+a week.
+
 #### Addressing review comments
 
 After review comments are collected, they should be addressed,
