@@ -52,8 +52,7 @@ func TestMakeUIVerifier(t *testing.T) {
 
 	id := rand.Uint32()
 	cv := rand.Uint64()
-	authenBytes := make([]byte, 1)
-	rand.Read(authenBytes)
+	authenBytes := randBytes()
 
 	// Correct UI
 	msg, _ := makeMockUIMsg(ctrl, id, cv)
@@ -123,9 +122,7 @@ func makeMockUIMsg(ctrl *gomock.Controller, replicaID uint32, cv uint64) (messag
 	msg := mock_messages.NewMockCertifiedMessage(ctrl)
 	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
 
-	cert := make([]byte, 1)
-	rand.Read(cert)
-	ui := &usig.UI{Counter: cv, Cert: cert}
+	ui := &usig.UI{Counter: cv, Cert: randBytes()}
 	uiBytes, _ := ui.MarshalBinary()
 	msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
 

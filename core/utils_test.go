@@ -46,10 +46,8 @@ func TestMakeMessageSigner(t *testing.T) {
 	authen := mock_api.NewMockAuthenticator(ctrl)
 	signer := makeMessageSigner(authen, extractAuthenBytes)
 
-	authenBytes := make([]byte, 1)
-	signature := make([]byte, 1)
-	rand.Read(authenBytes)
-	rand.Read(signature)
+	authenBytes := randBytes()
+	signature := randBytes()
 
 	msg := struct {
 		*mock_messages.MockMessage
@@ -87,10 +85,8 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 	clientID := rand.Uint32()
 	replicaID := rand.Uint32()
 
-	authenBytes := make([]byte, 1)
-	signature := make([]byte, 1)
-	rand.Read(authenBytes)
-	rand.Read(signature)
+	authenBytes := randBytes()
+	signature := randBytes()
 
 	signedMsg := mock_messages.NewMockSignedMessage(ctrl)
 	signedMsg.EXPECT().Signature().Return(signature).AnyTimes()

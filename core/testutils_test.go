@@ -63,3 +63,8 @@ func randOtherReplicaID(id, n uint32) uint32 {
 	offset := rand.Intn(int(n)-1) + 1
 	return (id + uint32(offset)) % n
 }
+
+// randBytes returns a slice of random bytes
+func randBytes() []byte {
+	return []byte{byte(rand.Int())} // nolint:gosec
+}
