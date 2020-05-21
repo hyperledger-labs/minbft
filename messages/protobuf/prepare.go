@@ -21,18 +21,23 @@ import (
 
 type prepare struct {
 	pbMsg *pb.Prepare
+	req   messages.Request
 }
 
 func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
-	return &prepare{pbMsg: &pb.Prepare{
-		ReplicaId: r,
-		View:      v,
-		Request:   pbRequestFromAPI(req),
-	}}
+	return &prepare{
+		pbMsg: &pb.Prepare{
+			ReplicaId: r,
+			View:      v,
+			Request:   pbRequestFromAPI(req),
+		},
+		req: req,
+	}
 }
 
 func newPrepareFromPb(pbMsg *pb.Prepare) *prepare {
-	return &prepare{pbMsg: pbMsg}
+	req := newRequestFromPb(pbMsg.GetRequest())
+	return &prepare{pbMsg: pbMsg, req: req}
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
@@ -48,7 +53,7 @@ func (m *prepare) View() uint64 {
 }
 
 func (m *prepare) Request() messages.Request {
-	return newRequestFromPb(m.pbMsg.GetRequest())
+	return m.req
 }
 
 func (m *prepare) UIBytes() []byte {

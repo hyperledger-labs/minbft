@@ -21,17 +21,22 @@ import (
 
 type commit struct {
 	pbMsg *pb.Commit
+	prep  messages.Prepare
 }
 
 func newCommit(r uint32, prep messages.Prepare) *commit {
-	return &commit{pbMsg: &pb.Commit{
-		ReplicaId: r,
-		Prepare:   pbPrepareFromAPI(prep),
-	}}
+	return &commit{
+		pbMsg: &pb.Commit{
+			ReplicaId: r,
+			Prepare:   pbPrepareFromAPI(prep),
+		},
+		prep: prep,
+	}
 }
 
 func newCommitFromPb(pbMsg *pb.Commit) *commit {
-	return &commit{pbMsg: pbMsg}
+	prep := newPrepareFromPb(pbMsg.GetPrepare())
+	return &commit{pbMsg: pbMsg, prep: prep}
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
@@ -43,7 +48,7 @@ func (m *commit) ReplicaID() uint32 {
 }
 
 func (m *commit) Prepare() messages.Prepare {
-	return newPrepareFromPb(m.pbMsg.GetPrepare())
+	return m.prep
 }
 
 func (m *commit) UIBytes() []byte {
