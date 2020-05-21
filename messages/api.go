@@ -17,6 +17,8 @@ package messages
 
 import (
 	"encoding"
+
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // MessageImpl provides an implementation of the message representation.
@@ -60,8 +62,8 @@ type PeerMessage interface {
 // CertifiedMessage represents a message certified with a UI.
 type CertifiedMessage interface {
 	ReplicaMessage
-	UIBytes() []byte
-	SetUIBytes(ui []byte)
+	UI() *usig.UI
+	SetUI(ui *usig.UI)
 }
 
 // SignedMessage represents a message signed with a normal signature.

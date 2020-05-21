@@ -15,13 +15,17 @@
 package protobuf
 
 import (
+	"golang.org/x/xerrors"
+
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 type prepare struct {
 	pbMsg *pb.Prepare
 	req   messages.Request
+	ui    *usig.UI
 }
 
 func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
@@ -35,9 +39,16 @@ func newPrepare(r uint32, v uint64, req messages.Request) *prepare {
 	}
 }
 
-func newPrepareFromPb(pbMsg *pb.Prepare) *prepare {
-	req := newRequestFromPb(pbMsg.GetRequest())
-	return &prepare{pbMsg: pbMsg, req: req}
+func newPrepareFromPb(pbMsg *pb.Prepare) (*prepare, error) {
+	req, err := newRequestFromPb(pbMsg.GetRequest())
+	if err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal embedded Request: %w", err)
+	}
+	ui := new(usig.UI)
+	if err := ui.UnmarshalBinary(pbMsg.GetUi()); err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal UI: %w", err)
+	}
+	return &prepare{pbMsg: pbMsg, req: req, ui: ui}, nil
 }
 
 func (m *prepare) MarshalBinary() ([]byte, error) {
@@ -56,12 +67,13 @@ func (m *prepare) Request() messages.Request {
 	return m.req
 }
 
-func (m *prepare) UIBytes() []byte {
-	return m.pbMsg.Ui
+func (m *prepare) UI() *usig.UI {
+	return m.ui
 }
 
-func (m *prepare) SetUIBytes(uiBytes []byte) {
-	m.pbMsg.Ui = uiBytes
+func (m *prepare) SetUI(ui *usig.UI) {
+	m.ui = ui
+	m.pbMsg.Ui = usig.MustMarshalUI(ui)
 }
 
 func (prepare) ImplementsReplicaMessage() {}

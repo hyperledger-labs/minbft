@@ -31,8 +31,8 @@ func newReply(r, cl uint32, seq uint64, res []byte) *reply {
 	}}
 }
 
-func newReplyFromPb(pbMsg *pb.Reply) *reply {
-	return &reply{pbMsg: pbMsg}
+func newReplyFromPb(pbMsg *pb.Reply) (*reply, error) {
+	return &reply{pbMsg: pbMsg}, nil
 }
 
 func (m *reply) MarshalBinary() ([]byte, error) {

@@ -6,6 +6,7 @@ package mock_messages
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	usig "github.com/hyperledger-labs/minbft/usig"
 	reflect "reflect"
 )
 
@@ -315,30 +316,30 @@ func (mr *MockCertifiedMessageMockRecorder) ReplicaID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplicaID", reflect.TypeOf((*MockCertifiedMessage)(nil).ReplicaID))
 }
 
-// SetUIBytes mocks base method
-func (m *MockCertifiedMessage) SetUIBytes(arg0 []byte) {
+// SetUI mocks base method
+func (m *MockCertifiedMessage) SetUI(arg0 *usig.UI) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetUIBytes", arg0)
+	m.ctrl.Call(m, "SetUI", arg0)
 }
 
-// SetUIBytes indicates an expected call of SetUIBytes
-func (mr *MockCertifiedMessageMockRecorder) SetUIBytes(arg0 interface{}) *gomock.Call {
+// SetUI indicates an expected call of SetUI
+func (mr *MockCertifiedMessageMockRecorder) SetUI(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUIBytes", reflect.TypeOf((*MockCertifiedMessage)(nil).SetUIBytes), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUI", reflect.TypeOf((*MockCertifiedMessage)(nil).SetUI), arg0)
 }
 
-// UIBytes mocks base method
-func (m *MockCertifiedMessage) UIBytes() []byte {
+// UI mocks base method
+func (m *MockCertifiedMessage) UI() *usig.UI {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UIBytes")
-	ret0, _ := ret[0].([]byte)
+	ret := m.ctrl.Call(m, "UI")
+	ret0, _ := ret[0].(*usig.UI)
 	return ret0
 }
 
-// UIBytes indicates an expected call of UIBytes
-func (mr *MockCertifiedMessageMockRecorder) UIBytes() *gomock.Call {
+// UI indicates an expected call of UI
+func (mr *MockCertifiedMessageMockRecorder) UI() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UIBytes", reflect.TypeOf((*MockCertifiedMessage)(nil).UIBytes))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UI", reflect.TypeOf((*MockCertifiedMessage)(nil).UI))
 }
 
 // MockSignedMessage is a mock of SignedMessage interface

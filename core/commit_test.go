@@ -205,13 +205,8 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 					releaseSeq()
 				}
 
-				prepareUI := &usig.UI{
-					Counter: cv,
-				}
-				prepareUIBytes, _ := prepareUI.MarshalBinary()
-
 				prepare := messageImpl.NewPrepare(0, 0, request)
-				prepare.SetUIBytes(prepareUIBytes)
+				prepare.SetUI(&usig.UI{Counter: cv})
 				_ = prepareSeq(request)
 
 				err := collect(uint32(id), prepare)
@@ -379,13 +374,8 @@ func TestMakeCommitmentCounter(t *testing.T) {
 }
 
 func makePrepare(p, v, cv int) messages.Prepare {
-	prepareUI := &usig.UI{
-		Counter: uint64(cv),
-	}
-	prepareUIBytes, _ := prepareUI.MarshalBinary()
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(uint32(p), uint64(v), request)
-	prepare.SetUIBytes(prepareUIBytes)
-
+	prepare.SetUI(&usig.UI{Counter: uint64(cv)})
 	return prepare
 }

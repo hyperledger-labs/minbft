@@ -15,13 +15,17 @@
 package protobuf
 
 import (
+	"golang.org/x/xerrors"
+
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 type commit struct {
 	pbMsg *pb.Commit
 	prep  messages.Prepare
+	ui    *usig.UI
 }
 
 func newCommit(r uint32, prep messages.Prepare) *commit {
@@ -34,9 +38,16 @@ func newCommit(r uint32, prep messages.Prepare) *commit {
 	}
 }
 
-func newCommitFromPb(pbMsg *pb.Commit) *commit {
-	prep := newPrepareFromPb(pbMsg.GetPrepare())
-	return &commit{pbMsg: pbMsg, prep: prep}
+func newCommitFromPb(pbMsg *pb.Commit) (*commit, error) {
+	prep, err := newPrepareFromPb(pbMsg.GetPrepare())
+	if err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal embedded Prepare: %w", err)
+	}
+	ui := new(usig.UI)
+	if err := ui.UnmarshalBinary(pbMsg.GetUi()); err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal UI: %w", err)
+	}
+	return &commit{pbMsg: pbMsg, prep: prep, ui: ui}, nil
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
@@ -51,12 +62,13 @@ func (m *commit) Prepare() messages.Prepare {
 	return m.prep
 }
 
-func (m *commit) UIBytes() []byte {
-	return m.pbMsg.Ui
+func (m *commit) UI() *usig.UI {
+	return m.ui
 }
 
-func (m *commit) SetUIBytes(uiBytes []byte) {
-	m.pbMsg.Ui = uiBytes
+func (m *commit) SetUI(ui *usig.UI) {
+	m.ui = ui
+	m.pbMsg.Ui = usig.MustMarshalUI(ui)
 }
 
 func (commit) ImplementsReplicaMessage() {}

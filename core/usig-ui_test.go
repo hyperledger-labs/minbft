@@ -51,29 +51,32 @@ func TestMakeUIVerifier(t *testing.T) {
 	verifyUI := makeUIVerifier(authen, extractAuthenBytes)
 
 	id := rand.Uint32()
-	cv := rand.Uint64()
+	ui := &usig.UI{Counter: rand.Uint64(), Cert: randBytes()}
+	uiBytes := usig.MustMarshalUI(ui)
 	authenBytes := randBytes()
+	msg := mock_messages.NewMockCertifiedMessage(ctrl)
+	msg.EXPECT().ReplicaID().Return(id).AnyTimes()
 
 	// Correct UI
-	msg, _ := makeMockUIMsg(ctrl, id, cv)
+	msg.EXPECT().UI().Return(ui)
 	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, id, authenBytes, msg.UIBytes(),
+		api.USIGAuthen, id, authenBytes, uiBytes,
 	).Return(nil)
 	err := verifyUI(msg)
 	assert.NoError(t, err)
 
 	// Failed USIG certificate verification
-	msg, _ = makeMockUIMsg(ctrl, id, cv)
+	msg.EXPECT().UI().Return(ui)
 	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, id, authenBytes, msg.UIBytes(),
+		api.USIGAuthen, id, authenBytes, uiBytes,
 	).Return(fmt.Errorf("USIG certificate invalid"))
 	err = verifyUI(msg)
 	assert.Error(t, err)
 
 	// Invalid (zero) counter value
-	msg, _ = makeMockUIMsg(ctrl, id, 0)
+	msg.EXPECT().UI().Return(&usig.UI{Counter: 0, Cert: randBytes()})
 	err = verifyUI(msg)
 	assert.Error(t, err)
 }
@@ -90,7 +93,10 @@ func TestMakeUICapturer(t *testing.T) {
 
 	captureUI := makeUICapturer(providePeerState)
 
-	msg, ui := makeMockUIMsg(ctrl, replicaID, rand.Uint64())
+	ui := &usig.UI{Counter: rand.Uint64(), Cert: randBytes()}
+	msg := mock_messages.NewMockCertifiedMessage(ctrl)
+	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
+	msg.EXPECT().UI().Return(ui).AnyTimes()
 
 	peerState.EXPECT().CaptureUI(ui).Return(false, nil)
 	new, _ := captureUI(msg)
@@ -116,15 +122,4 @@ func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock,
 	mock.On("peerStateProvider", replicaID).Return(peerState)
 
 	return providePeerState, peerState
-}
-
-func makeMockUIMsg(ctrl *gomock.Controller, replicaID uint32, cv uint64) (messages.CertifiedMessage, *usig.UI) {
-	msg := mock_messages.NewMockCertifiedMessage(ctrl)
-	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
-
-	ui := &usig.UI{Counter: cv, Cert: randBytes()}
-	uiBytes, _ := ui.MarshalBinary()
-	msg.EXPECT().UIBytes().Return(uiBytes).AnyTimes()
-
-	return msg, ui
 }

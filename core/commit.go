@@ -149,11 +149,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 	return func(replicaID uint32, prepare messages.Prepare) (done bool, err error) {
 		primaryID := prepare.ReplicaID()
 		prepareView := prepare.View()
-		prepareUI, err := parseMessageUI(prepare)
-		if err != nil {
-			panic(err)
-		}
-		prepareCV := prepareUI.Counter
+		prepareCV := prepare.UI().Counter
 
 		if prepareView < view {
 			return false, nil

@@ -67,7 +67,7 @@ func writeAuthenBytes(buf io.Writer, m Message) {
 		prep := m.Prepare()
 		_ = binary.Write(buf, binary.BigEndian, prep.ReplicaID())
 		writeAuthenBytes(buf, prep)
-		_, _ = buf.Write(prep.UIBytes())
+		_ = binary.Write(buf, binary.BigEndian, prep.UI().Counter)
 	case ReqViewChange:
 		_ = binary.Write(buf, binary.BigEndian, m.NewView())
 	default:

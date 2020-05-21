@@ -16,8 +16,6 @@ package messages
 
 import (
 	"fmt"
-
-	"github.com/hyperledger-labs/minbft/usig"
 )
 
 const maxStringWidth = 256
@@ -25,14 +23,10 @@ const maxStringWidth = 256
 // Stringify returns a human-readable string representing the message
 // content that is sufficient for diagnostic output.
 func Stringify(msg Message) string {
-	ui := new(usig.UI)
+	var cv uint64
 	if msg, ok := msg.(CertifiedMessage); ok {
-		uiBytes := msg.UIBytes()
-		if uiBytes != nil {
-			_ = ui.UnmarshalBinary(uiBytes)
-		}
+		cv = msg.UI().Counter
 	}
-	cv := ui.Counter
 
 	switch msg := msg.(type) {
 	case Hello:

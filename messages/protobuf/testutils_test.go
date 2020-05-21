@@ -45,18 +45,13 @@ func remarshalMsg(impl messages.MessageImpl, msg messages.Message) messages.Mess
 	return msg2
 }
 
-func newTestUI(cv uint64, data []byte) []byte {
-	ui := &usig.UI{
+func newTestUI(cv uint64, data []byte) *usig.UI {
+	return &usig.UI{
 		Counter: cv,
+		Cert:    testSig([]byte(fmt.Sprintf("%d:%x", cv, data))),
 	}
-	ui.Cert = testSig([]byte(fmt.Sprintf("%d:%x", ui.Counter, data)))
-	uiBytes, err := ui.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return uiBytes
 }
 
-func randUI(data []byte) []byte {
+func randUI(data []byte) *usig.UI {
 	return newTestUI(rand.Uint64(), data)
 }

@@ -29,8 +29,8 @@ func newReqViewChange(r uint32, nv uint64) *reqViewChange {
 	}}
 }
 
-func newReqViewChangeFromPb(pbMsg *pb.ReqViewChange) *reqViewChange {
-	return &reqViewChange{pbMsg: pbMsg}
+func newReqViewChangeFromPb(pbMsg *pb.ReqViewChange) (*reqViewChange, error) {
+	return &reqViewChange{pbMsg: pbMsg}, nil
 }
 
 func (m *reqViewChange) MarshalBinary() ([]byte, error) {
