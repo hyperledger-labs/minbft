@@ -80,8 +80,8 @@ func TestMakeCommitApplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	collectCommitment := func(id uint32, prepare messages.Prepare) error {
-		args := mock.MethodCalled("commitmentCollector", id, prepare)
+	collectCommitment := func(msg messages.CertifiedMessage) error {
+		args := mock.MethodCalled("commitmentCollector", msg)
 		return args.Error(0)
 	}
 	apply := makeCommitApplier(collectCommitment)
@@ -95,15 +95,15 @@ func TestMakeCommitApplier(t *testing.T) {
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(id, prepare)
 
-	mock.On("commitmentCollector", id, prepare).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", commit).Return(fmt.Errorf("Error")).Once()
 	err := apply(commit, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
-	mock.On("commitmentCollector", id, prepare).Return(nil).Once()
+	mock.On("commitmentCollector", commit).Return(nil).Once()
 	err = apply(commit, false)
 	assert.NoError(t, err)
 
-	mock.On("commitmentCollector", id, prepare).Return(nil).Once()
+	mock.On("commitmentCollector", commit).Return(nil).Once()
 	err = apply(commit, true)
 	assert.NoError(t, err)
 }
@@ -132,18 +132,32 @@ func TestMakeCommitmentCollector(t *testing.T) {
 
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
+	commit := messageImpl.NewCommit(id, prepare)
+
+	mock.On("commitmentCounter", primary, prepare).Return(false, fmt.Errorf("Error")).Once()
+	err := collect(prepare)
+	assert.Error(t, err, "Failed to count Prepare")
 
 	mock.On("commitmentCounter", id, prepare).Return(false, fmt.Errorf("Error")).Once()
-	err := collect(id, prepare)
-	assert.Error(t, err, "Failed to count commitment")
+	err = collect(commit)
+	assert.Error(t, err, "Failed to count Commit")
+
+	mock.On("commitmentCounter", primary, prepare).Return(false, nil).Once()
+	err = collect(prepare)
+	assert.NoError(t, err)
 
 	mock.On("commitmentCounter", id, prepare).Return(false, nil).Once()
-	err = collect(id, prepare)
+	err = collect(commit)
+	assert.NoError(t, err)
+
+	mock.On("commitmentCounter", primary, prepare).Return(true, nil).Once()
+	mock.On("requestExecutor", request).Once()
+	err = collect(prepare)
 	assert.NoError(t, err)
 
 	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
 	mock.On("requestExecutor", request).Once()
-	err = collect(id, prepare)
+	err = collect(commit)
 	assert.NoError(t, err)
 }
 
@@ -172,7 +186,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 
 	wg := new(sync.WaitGroup)
 	for id := 0; id < nrReplicas; id++ {
-		id := id
+		id := uint32(id)
 
 		wg.Add(1)
 		go func() {
@@ -187,7 +201,14 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 				prepare := messageImpl.NewPrepare(0, 0, request)
 				prepare.SetUI(&usig.UI{Counter: cv})
 
-				err := collect(uint32(id), prepare)
+				var msg messages.CertifiedMessage
+				if id == prepare.ReplicaID() {
+					msg = prepare
+				} else {
+					msg = messageImpl.NewCommit(id, prepare)
+				}
+
+				err := collect(msg)
 				assert.NoError(t, err, "Replica %d, Prepare %d", id, cv)
 			}
 		}()

@@ -40,14 +40,14 @@ type commitValidator func(commit messages.Commit) error
 // refers to the active view. It is safe to invoke concurrently.
 type commitApplier func(commit messages.Commit, active bool) error
 
-// commitmentCollector collects commitment on prepared Request.
+// commitmentCollector collects replica commitment.
 //
-// The supplied Prepare message is assumed to be valid and should have
-// a UI assigned. Once the threshold of matching commitments from
-// distinct replicas has been reached, it triggers further required
-// actions to complete the prepared Request. It is safe to invoke
-// concurrently.
-type commitmentCollector func(replicaID uint32, prepare messages.Prepare) error
+// Each supplied message representing a replica commitment should be
+// already validated and passed exactly once following the sequence of
+// the assigned UI. If the threshold of matching commitments from
+// distinct replicas has been reached, it triggers further actions to
+// execute the committed proposal. It is safe to invoke concurrently.
+type commitmentCollector func(msg messages.CertifiedMessage) error
 
 // commitmentCounter counts commitments on prepared Request.
 //
@@ -85,10 +85,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 // supplied abstractions.
 func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 	return func(commit messages.Commit, active bool) error {
-		replicaID := commit.ReplicaID()
-		prepare := commit.Prepare()
-
-		if err := collectCommitment(replicaID, prepare); err != nil {
+		if err := collectCommitment(commit); err != nil {
 			return fmt.Errorf("Commit cannot be taken into account: %s", err)
 		}
 
@@ -101,7 +98,19 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 func makeCommitmentCollector(countCommitment commitmentCounter, executeRequest requestExecutor) commitmentCollector {
 	var lock sync.Mutex
 
-	return func(replicaID uint32, prepare messages.Prepare) error {
+	return func(msg messages.CertifiedMessage) error {
+		replicaID := msg.ReplicaID()
+
+		var prepare messages.Prepare
+		switch msg := msg.(type) {
+		case messages.Prepare:
+			prepare = msg
+		case messages.Commit:
+			prepare = msg.Prepare()
+		default:
+			return fmt.Errorf("Unexpected message type")
+		}
+
 		lock.Lock()
 		defer lock.Unlock()
 

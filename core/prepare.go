@@ -74,14 +74,12 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 			return fmt.Errorf("Request already prepared")
 		}
 
-		primaryID := prepare.ReplicaID()
-
-		if err := collectCommitment(primaryID, prepare); err != nil {
+		if err := collectCommitment(prepare); err != nil {
 			return fmt.Errorf("Prepare cannot be taken into account: %s", err)
 		}
 
-		if id == primaryID {
-			return nil // primary does not generate Commit
+		if id == prepare.ReplicaID() {
+			return nil // do not generate Commit for own message
 		}
 
 		if !active {

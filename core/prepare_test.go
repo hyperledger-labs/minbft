@@ -82,8 +82,8 @@ func TestMakePrepareApplier(t *testing.T) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
 		return args.Bool(0)
 	}
-	collectCommitment := func(id uint32, prepare messages.Prepare) error {
-		args := mock.MethodCalled("commitmentCollector", id, prepare)
+	collectCommitment := func(msg messages.CertifiedMessage) error {
+		args := mock.MethodCalled("commitmentCollector", msg)
 		return args.Error(0)
 	}
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
@@ -109,29 +109,29 @@ func TestMakePrepareApplier(t *testing.T) {
 	assert.Error(t, err, "Request ID already prepared")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", id, ownPrepare).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", ownPrepare).Return(fmt.Errorf("Error")).Once()
 	err = apply(ownPrepare, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", id, ownPrepare).Return(nil).Once()
+	mock.On("commitmentCollector", ownPrepare).Return(nil).Once()
 	err = apply(ownPrepare, true)
 	assert.NoError(t, err)
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", primary, prepare).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", prepare).Return(fmt.Errorf("Error")).Once()
 	err = apply(prepare, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
+	mock.On("commitmentCollector", prepare).Return(nil).Once()
 	mock.On("prepareTimerStopper", request).Once()
 	mock.On("generatedMessageHandler", commit).Once()
 	err = apply(prepare, true)
 	assert.NoError(t, err)
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", primary, prepare).Return(nil).Once()
+	mock.On("commitmentCollector", prepare).Return(nil).Once()
 	err = apply(prepare, false)
 	assert.NoError(t, err)
 }
