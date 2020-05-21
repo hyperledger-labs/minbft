@@ -84,3 +84,19 @@ func (ui *UI) UnmarshalBinary(in []byte) error {
 
 	return nil
 }
+
+func MustMarshalUI(ui *UI) []byte {
+	uiBytes, err := ui.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+	return uiBytes
+}
+
+func MustUnmarshalUI(in []byte) *UI {
+	ui := new(UI)
+	if err := ui.UnmarshalBinary(in); err != nil {
+		panic(err)
+	}
+	return ui
+}
