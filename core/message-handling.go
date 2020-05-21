@@ -158,8 +158,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	countCommitment := makeCommitmentCounter(f)
-	executeRequest := makeRequestExecutor(id, stack, handleGeneratedMessage)
-	collectCommitment := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
+	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
+	collectCommitment := makeCommitmentCollector(countCommitment, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)

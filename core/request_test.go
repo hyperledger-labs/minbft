@@ -177,15 +177,29 @@ func TestMakeRequestExecutor(t *testing.T) {
 	request := messageImpl.NewRequest(clientID, seq, expectedOperation)
 	expectedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
 
+	retireSeq := func(request messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqRetirer", request)
+		return args.Bool(0)
+	}
+	stopReqTimer := func(request messages.Request) {
+		mock.MethodCalled("requestTimerStopper", request)
+	}
+	pendingReq := mock_requestlist.NewMockList(ctrl)
 	consumer := mock_api.NewMockRequestConsumer(ctrl)
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-	requestExecutor := makeRequestExecutor(replicaID, consumer, handleGeneratedMessage)
+	requestExecutor := makeRequestExecutor(replicaID, retireSeq, pendingReq, stopReqTimer, consumer, handleGeneratedMessage)
+
+	mock.On("requestSeqRetirer", request).Return(false).Once()
+	requestExecutor(request)
 
 	resultChan := make(chan []byte, 1)
 	resultChan <- expectedResult
 	done := make(chan struct{})
+	mock.On("requestSeqRetirer", request).Return(true).Once()
+	pendingReq.EXPECT().Remove(clientID)
+	mock.On("requestTimerStopper", request).Once()
 	consumer.EXPECT().Deliver(expectedOperation).Return(resultChan)
 	mock.On("generatedMessageHandler", expectedReply).Run(
 		func(testifymock.Arguments) { close(done) },

@@ -208,14 +208,23 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 
 // makeRequestExecutor constructs an instance of requestExecutor using
 // the supplied replica ID and abstractions.
-func makeRequestExecutor(id uint32, consumer api.RequestConsumer, handleGeneratedMessage generatedMessageHandler) requestExecutor {
+func makeRequestExecutor(id uint32, retireSeq requestSeqRetirer, pendingReq requestlist.List, stopReqTimer requestTimerStopper, consumer api.RequestConsumer, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request messages.Request) {
+		clientID := request.ClientID()
+		seq := request.Sequence()
+
+		if new := retireSeq(request); !new {
+			return // request already accepted for execution
+		}
+
+		pendingReq.Remove(clientID)
+		stopReqTimer(request)
+
 		resultChan := consumer.Deliver(request.Operation())
 
 		go func() {
 			result := <-resultChan
-
-			reply := messageImpl.NewReply(id, request.ClientID(), request.Sequence(), result)
+			reply := messageImpl.NewReply(id, clientID, seq, result)
 			handleGeneratedMessage(reply)
 		}()
 	}

@@ -29,12 +29,8 @@ import (
 
 	testifymock "github.com/stretchr/testify/mock"
 
-	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
-	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
-
-	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 )
 
 func TestMakeCommitValidator(t *testing.T) {
@@ -123,18 +119,10 @@ func TestMakeCommitmentCollector(t *testing.T) {
 		args := mock.MethodCalled("commitmentCounter", id, prepare)
 		return args.Bool(0), args.Error(1)
 	}
-	retireSeq := func(request messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqRetirer", request)
-		return args.Bool(0)
-	}
-	stopReqTimer := func(request messages.Request) {
-		mock.MethodCalled("requestTimerStopper", request)
-	}
 	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	pendingReq := mock_requestlist.NewMockList(ctrl)
-	collect := makeCommitmentCollector(countCommitment, retireSeq, pendingReq, stopReqTimer, executeRequest)
+	collect := makeCommitmentCollector(countCommitment, executeRequest)
 
 	n := randN()
 	view := randView()
@@ -154,14 +142,6 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	assert.NoError(t, err)
 
 	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
-	mock.On("requestSeqRetirer", request).Return(false).Once()
-	err = collect(id, prepare)
-	assert.NoError(t, err)
-
-	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
-	mock.On("requestSeqRetirer", request).Return(true).Once()
-	pendingReq.EXPECT().Remove(clientID)
-	mock.On("requestTimerStopper", request).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(id, prepare)
 	assert.NoError(t, err)
@@ -173,20 +153,22 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	const nrPrepares = 100
 
 	var executedReqs []messages.Request
+	var lastSeq uint64
 
-	timeout := func() time.Duration { return time.Duration(0) }
-	clientStates := clientstate.NewProvider(timeout, timeout)
-	captureSeq := makeRequestSeqCapturer(clientStates)
-	prepareSeq := makeRequestSeqPreparer(clientStates)
-	retireSeq := makeRequestSeqRetirer(clientStates)
-	pendingReqs := requestlist.New()
-	stopReqTimer := makeRequestTimerStopper(clientStates)
 	countCommitment := makeCommitmentCounter(nrFaulty)
 	executeRequest := func(req messages.Request) {
+		// Real requestExecutor ensures exactly-once
+		// semantics; just imitate this behavior here
+		seq := req.Sequence()
+		if seq <= lastSeq {
+			return
+		}
+		lastSeq = seq
+
 		time.Sleep(time.Millisecond)
 		executedReqs = append(executedReqs, req)
 	}
-	collect := makeCommitmentCollector(countCommitment, retireSeq, pendingReqs, stopReqTimer, executeRequest)
+	collect := makeCommitmentCollector(countCommitment, executeRequest)
 
 	wg := new(sync.WaitGroup)
 	for id := 0; id < nrReplicas; id++ {
@@ -201,13 +183,9 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 				seq := cv
 
 				request := messageImpl.NewRequest(0, seq, nil)
-				if ok, releaseSeq := captureSeq(request); ok {
-					releaseSeq()
-				}
 
 				prepare := messageImpl.NewPrepare(0, 0, request)
 				prepare.SetUI(&usig.UI{Counter: cv})
-				_ = prepareSeq(request)
 
 				err := collect(uint32(id), prepare)
 				assert.NoError(t, err, "Replica %d, Prepare %d", id, cv)
