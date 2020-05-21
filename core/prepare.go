@@ -56,7 +56,7 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 			return fmt.Errorf("Request invalid: %s", err)
 		}
 
-		if _, err := verifyUI(prepare); err != nil {
+		if err := verifyUI(prepare); err != nil {
 			return fmt.Errorf("UI not valid: %s", err)
 		}
 

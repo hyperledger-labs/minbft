@@ -74,7 +74,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 			return fmt.Errorf("Invalid Prepare: %s", err)
 		}
 
-		if _, err := verifyUI(commit); err != nil {
+		if err := verifyUI(commit); err != nil {
 			return fmt.Errorf("UI is not valid: %s", err)
 		}
 

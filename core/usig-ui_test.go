@@ -48,41 +48,35 @@ func TestMakeUIVerifier(t *testing.T) {
 		return args.Get(0).([]byte)
 	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	makeMsg := func(cv uint64) (messages.CertifiedMessage, *usig.UI) {
-		return makeMockUIMsg(ctrl, rand.Uint32(), cv)
-	}
-
 	verifyUI := makeUIVerifier(authen, extractAuthenBytes)
 
+	id := rand.Uint32()
 	cv := rand.Uint64()
 	authenBytes := make([]byte, 1)
 	rand.Read(authenBytes)
 
 	// Correct UI
-	msg, expectedUI := makeMsg(cv)
+	msg, _ := makeMockUIMsg(ctrl, id, cv)
 	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes(),
+		api.USIGAuthen, id, authenBytes, msg.UIBytes(),
 	).Return(nil)
-	actualUI, err := verifyUI(msg)
+	err := verifyUI(msg)
 	assert.NoError(t, err)
-	assert.Equal(t, expectedUI, actualUI)
 
 	// Failed USIG certificate verification
-	msg, _ = makeMsg(cv)
+	msg, _ = makeMockUIMsg(ctrl, id, cv)
 	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
-		api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes(),
+		api.USIGAuthen, id, authenBytes, msg.UIBytes(),
 	).Return(fmt.Errorf("USIG certificate invalid"))
-	actualUI, err = verifyUI(msg)
+	err = verifyUI(msg)
 	assert.Error(t, err)
-	assert.Nil(t, actualUI)
 
 	// Invalid (zero) counter value
-	msg, _ = makeMsg(uint64(0))
-	actualUI, err = verifyUI(msg)
+	msg, _ = makeMockUIMsg(ctrl, id, 0)
+	err = verifyUI(msg)
 	assert.Error(t, err)
-	assert.Nil(t, actualUI)
 }
 
 func TestMakeUICapturer(t *testing.T) {
