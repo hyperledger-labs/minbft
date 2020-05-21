@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	testifymock "github.com/stretchr/testify/mock"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
@@ -115,47 +116,59 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	countCommitment := func(id uint32, prepare messages.Prepare) (done bool, err error) {
-		args := mock.MethodCalled("commitmentCounter", id, prepare)
-		return args.Bool(0), args.Error(1)
+	acceptCommitment := func(id uint32, nv bool, view, primaryCV, replicaCV uint64) error {
+		args := mock.MethodCalled("commitmentAcceptor", id, nv, view, primaryCV, replicaCV)
+		return args.Error(0)
+	}
+	countCommitment := func(view, primaryCV uint64) (done bool) {
+		args := mock.MethodCalled("commitmentCounter", view, primaryCV)
+		return args.Bool(0)
 	}
 	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	collect := makeCommitmentCollector(countCommitment, executeRequest)
+	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
 	n := randN()
 	view := randView()
+	primaryCV := rand.Uint64()
+	backupCV := rand.Uint64()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
 	clientID := rand.Uint32()
 
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
+	prepare.SetUI(&usig.UI{Counter: primaryCV})
 	commit := messageImpl.NewCommit(id, prepare)
+	commit.SetUI(&usig.UI{Counter: backupCV})
 
-	mock.On("commitmentCounter", primary, prepare).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(fmt.Errorf("Error")).Once()
 	err := collect(prepare)
-	assert.Error(t, err, "Failed to count Prepare")
+	assert.Error(t, err, "Failed to accept Prepare")
 
-	mock.On("commitmentCounter", id, prepare).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(fmt.Errorf("Error")).Once()
 	err = collect(commit)
-	assert.Error(t, err, "Failed to count Commit")
+	assert.Error(t, err, "Failed to accept Commit")
 
-	mock.On("commitmentCounter", primary, prepare).Return(false, nil).Once()
+	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(false).Once()
 	err = collect(prepare)
 	assert.NoError(t, err)
 
-	mock.On("commitmentCounter", id, prepare).Return(false, nil).Once()
+	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(false).Once()
 	err = collect(commit)
 	assert.NoError(t, err)
 
-	mock.On("commitmentCounter", primary, prepare).Return(true, nil).Once()
+	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(true).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(prepare)
 	assert.NoError(t, err)
 
-	mock.On("commitmentCounter", id, prepare).Return(true, nil).Once()
+	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(nil).Once()
+	mock.On("commitmentCounter", view, primaryCV).Return(true).Once()
 	mock.On("requestExecutor", request).Once()
 	err = collect(commit)
 	assert.NoError(t, err)
@@ -169,6 +182,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	var executedReqs []messages.Request
 	var lastSeq uint64
 
+	acceptCommitment := makeCommitmentAcceptor()
 	countCommitment := makeCommitmentCounter(nrFaulty)
 	executeRequest := func(req messages.Request) {
 		// Real requestExecutor ensures exactly-once
@@ -182,7 +196,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 		time.Sleep(time.Millisecond)
 		executedReqs = append(executedReqs, req)
 	}
-	collect := makeCommitmentCollector(countCommitment, executeRequest)
+	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
 	wg := new(sync.WaitGroup)
 	for id := 0; id < nrReplicas; id++ {
@@ -206,6 +220,7 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 					msg = prepare
 				} else {
 					msg = messageImpl.NewCommit(id, prepare)
+					msg.SetUI(&usig.UI{Counter: cv})
 				}
 
 				err := collect(msg)
@@ -221,160 +236,85 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 	}
 }
 
-func TestMakeCommitmentCounter(t *testing.T) {
-	// fault tolerance -> list of cases
-	cases := map[int][]struct {
-		desc      string
-		view      int
-		prepareCV int
-		replicaID int
-		ok        bool
-		done      bool
-	}{
-		// f=1
-		1: {{
-			desc:      "Commitment from primary",
-			prepareCV: 1,
-			replicaID: 0,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "One commitment from backup replica is enough",
-			prepareCV: 1,
-			replicaID: 1,
-			ok:        true,
-			done:      true,
-		}, {
-			desc:      "Extra commitment from another backup replica",
-			prepareCV: 1,
-			replicaID: 2,
-			ok:        true,
-			done:      true,
-		}, {
-			desc:      "Second commitment from primary",
-			prepareCV: 2,
-			replicaID: 0,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Third commitment from primary",
-			prepareCV: 3,
-			replicaID: 0,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Non-sequential commitment from backup replica",
-			prepareCV: 3,
-			replicaID: 2,
-			ok:        false,
-			done:      false,
-		}, {
-			desc:      "First commitment in a new view",
-			view:      1,
-			prepareCV: 2,
-			replicaID: 1,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Second commitment in a new view",
-			view:      1,
-			prepareCV: 3,
-			replicaID: 1,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Commitment for old view",
-			view:      0,
-			prepareCV: 2,
-			replicaID: 2,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Non-sequential commitment in a new view",
-			view:      1,
-			prepareCV: 3,
-			replicaID: 0,
-			ok:        false,
-		}, {
-			desc:      "First valid commitment from backup in a new view",
-			view:      1,
-			prepareCV: 2,
-			replicaID: 2,
-			ok:        true,
-			done:      true,
-		}},
-
-		// f=2
-		2: {{
-			desc:      "Commitment from primary",
-			prepareCV: 1,
-			replicaID: 0,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "First commitment from backup replica",
-			prepareCV: 1,
-			replicaID: 1,
-			ok:        true,
-		}, {
-			desc:      "Another commitment from primary",
-			prepareCV: 2,
-			replicaID: 0,
-			ok:        true,
-			done:      false,
-		}, {
-			desc:      "Another commitment for another Prepare",
-			prepareCV: 2,
-			replicaID: 1,
-			ok:        true,
-		}, {
-			desc:      "Duplicate commitment is not okay",
-			prepareCV: 1,
-			replicaID: 1,
-			ok:        false,
-		}, {
-			desc:      "Another commitment from backup replica is enough",
-			prepareCV: 1,
-			replicaID: 3,
-			ok:        true,
-			done:      true,
-		}, {
-			desc:      "The second Prepared request is done",
-			prepareCV: 2,
-			replicaID: 2,
-			ok:        true,
-			done:      true,
-		}, {
-			desc:      "Extra commitment for the first request",
-			prepareCV: 1,
-			replicaID: 2,
-			ok:        true,
-			done:      true,
-		}},
+func TestMakeCommitmentAcceptor(t *testing.T) {
+	var cases []struct {
+		ID        uint32
+		NewView   bool
+		View      uint64
+		PrimaryCV uint64
+		ReplicaCV uint64
+		Ok        bool
+	}
+	casesYAML := []byte(`
+- {id: 0, newview: n, view: 0, primarycv: 1, replicacv:  1, ok: y}
+- {id: 0, newview: n, view: 0, primarycv: 2, replicacv:  2, ok: y}
+- {id: 0, newview: n, view: 0, primarycv: 2, replicacv:  3, ok: n}
+- {id: 1, newview: n, view: 0, primarycv: 1, replicacv:  1, ok: y}
+- {id: 1, newview: n, view: 0, primarycv: 3, replicacv:  2, ok: n}
+- {id: 2, newview: n, view: 0, primarycv: 1, replicacv:  1, ok: y}
+- {id: 2, newview: n, view: 0, primarycv: 2, replicacv:  3, ok: n}
+- {id: 3, newview: n, view: 0, primarycv: 1, replicacv:  1, ok: y}
+- {id: 3, newview: n, view: 0, primarycv: 2, replicacv:  2, ok: y}
+- {id: 3, newview: y, view: 1, primarycv: 2, replicacv:  4, ok: y}
+- {id: 3, newview: n, view: 1, primarycv: 3, replicacv:  5, ok: y}
+- {id: 3, newview: y, view: 2, primarycv: 2, replicacv:  7, ok: y}
+- {id: 3, newview: y, view: 4, primarycv: 4, replicacv:  9, ok: y}
+- {id: 3, newview: n, view: 5, primarycv: 5, replicacv: 11, ok: n}
+- {id: 4, newview: y, view: 1, primarycv: 2, replicacv:  2, ok: y}
+- {id: 4, newview: n, view: 0, primarycv: 1, replicacv:  3, ok: n}
+- {id: 5, newview: y, view: 0, primarycv: 1, replicacv:  2, ok: n}
+- {id: 6, newview: y, view: 1, primarycv: 2, replicacv:  2, ok: y}
+- {id: 6, newview: y, view: 0, primarycv: 1, replicacv:  4, ok: n}
+`)
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
+		t.Fatal(err)
 	}
 
-	for f, caseList := range cases {
-		n := 2*f + 1
-		counter := makeCommitmentCounter(uint32(f))
-		for _, c := range caseList {
-			desc := fmt.Sprintf("f=%d: %s", f, c.desc)
-			v := c.view
-			p := v % n
-			cv := c.prepareCV
-			done, err := counter(uint32(c.replicaID), makePrepare(p, v, cv))
-			if c.ok {
-				require.NoError(t, err, desc)
-			} else {
-				require.Error(t, err, desc)
-			}
-			require.Equal(t, c.done, done, desc)
+	accept := makeCommitmentAcceptor()
+	for i, c := range cases {
+		desc := fmt.Sprintf("Case #%d", i)
+		err := accept(c.ID, c.NewView, c.View, c.PrimaryCV, c.ReplicaCV)
+		if c.Ok {
+			require.NoError(t, err, desc)
+		} else {
+			require.Error(t, err, desc)
 		}
 	}
 }
 
-func makePrepare(p, v, cv int) messages.Prepare {
-	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
-	prepare := messageImpl.NewPrepare(uint32(p), uint64(v), request)
-	prepare.SetUI(&usig.UI{Counter: uint64(cv)})
-	return prepare
+func TestMakeCommitmentCounter(t *testing.T) {
+	const f = 1
+
+	var cases []struct {
+		View uint64
+		CV   uint64
+		Done bool
+	}
+	casesYAML := []byte(`
+- {view: 0, cv: 1, done: n}
+- {view: 0, cv: 1, done: y}
+- {view: 0, cv: 1, done: y}
+- {view: 0, cv: 2, done: n}
+- {view: 0, cv: 3, done: n}
+- {view: 1, cv: 2, done: n}
+- {view: 1, cv: 3, done: n}
+- {view: 0, cv: 2, done: n}
+- {view: 0, cv: 2, done: n}
+- {view: 0, cv: 3, done: n}
+- {view: 0, cv: 3, done: n}
+- {view: 1, cv: 2, done: y}
+- {view: 1, cv: 3, done: y}
+- {view: 1, cv: 2, done: y}
+- {view: 1, cv: 3, done: y}
+`)
+	if err := yaml.UnmarshalStrict(casesYAML, &cases); err != nil {
+		t.Fatal(err)
+	}
+
+	count := makeCommitmentCounter(uint32(f))
+	for i, c := range cases {
+		desc := fmt.Sprintf("Case #%d", i)
+		done := count(c.View, c.CV)
+		require.Equal(t, c.Done, done, desc)
+	}
 }
