@@ -28,8 +28,8 @@ func newHello(r uint32) *hello {
 	}}
 }
 
-func newHelloFromPb(pbMsg *pb.Hello) *hello {
-	return &hello{pbMsg: pbMsg}
+func newHelloFromPb(pbMsg *pb.Hello) (*hello, error) {
+	return &hello{pbMsg: pbMsg}, nil
 }
 
 func (m *hello) MarshalBinary() ([]byte, error) {

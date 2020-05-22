@@ -168,10 +168,8 @@ func TestMakeRequestExecutor(t *testing.T) {
 	clientID := rand.Uint32()
 	replicaID := rand.Uint32()
 
-	expectedOperation := make([]byte, 1)
-	expectedResult := make([]byte, 1)
-	rand.Read(expectedOperation)
-	rand.Read(expectedResult)
+	expectedOperation := randBytes()
+	expectedResult := randBytes()
 
 	request := messageImpl.NewRequest(clientID, seq, expectedOperation)
 	expectedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
@@ -203,10 +201,8 @@ func TestMakeOperationExecutor(t *testing.T) {
 	consumer := mock_api.NewMockRequestConsumer(ctrl)
 	executor := makeOperationExecutor(consumer)
 
-	op := make([]byte, 1)
-	expectedRes := make([]byte, 1)
-	rand.Read(op)
-	rand.Read(expectedRes)
+	op := randBytes()
+	expectedRes := randBytes()
 	resChan := make(chan []byte, 1)
 
 	// Normal execution

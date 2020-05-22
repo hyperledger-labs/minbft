@@ -18,6 +18,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"github.com/hyperledger-labs/minbft/messages"
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 func MarshalOrPanic(m proto.Message) []byte {
@@ -48,6 +49,6 @@ func PrepareFromAPI(prep messages.Prepare) *Prepare {
 		ReplicaId: prep.ReplicaID(),
 		View:      prep.View(),
 		Request:   RequestFromAPI(prep.Request()),
-		Ui:        prep.UIBytes(),
+		Ui:        usig.MustMarshalUI(prep.UI()),
 	}
 }

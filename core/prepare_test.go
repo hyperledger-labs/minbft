@@ -26,7 +26,6 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/messages"
-	"github.com/hyperledger-labs/minbft/usig"
 )
 
 func TestMakePrepareValidator(t *testing.T) {
@@ -39,14 +38,10 @@ func TestMakePrepareValidator(t *testing.T) {
 	backup := randOtherReplicaID(primary, n)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
-	ui := &usig.UI{Counter: rand.Uint64()}
-	makePrepareMsg := func(id uint32) messages.Prepare {
-		return messageImpl.NewPrepare(id, view, request)
-	}
 
-	verifyUI := func(msg messages.CertifiedMessage) (*usig.UI, error) {
+	verifyUI := func(msg messages.CertifiedMessage) error {
 		args := mock.MethodCalled("uiVerifier", msg)
-		return args.Get(0).(*usig.UI), args.Error(1)
+		return args.Error(0)
 	}
 	validateRequest := func(request messages.Request) error {
 		args := mock.MethodCalled("requestValidator", request)
@@ -54,23 +49,23 @@ func TestMakePrepareValidator(t *testing.T) {
 	}
 	validate := makePrepareValidator(n, verifyUI, validateRequest)
 
-	prepare := makePrepareMsg(backup)
+	prepare := messageImpl.NewPrepare(backup, view, request)
 	err := validate(prepare)
 	assert.Error(t, err)
 
-	prepare = makePrepareMsg(primary)
+	prepare = messageImpl.NewPrepare(primary, view, request)
 
 	mock.On("requestValidator", request).Return(fmt.Errorf("Invalid signature")).Once()
 	err = validate(prepare)
 	assert.Error(t, err)
 
 	mock.On("requestValidator", request).Return(nil).Once()
-	mock.On("uiVerifier", prepare).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
+	mock.On("uiVerifier", prepare).Return(fmt.Errorf("UI not valid")).Once()
 	err = validate(prepare)
 	assert.Error(t, err)
 
 	mock.On("requestValidator", request).Return(nil).Once()
-	mock.On("uiVerifier", prepare).Return(ui, nil).Once()
+	mock.On("uiVerifier", prepare).Return(nil).Once()
 	err = validate(prepare)
 	assert.NoError(t, err)
 }

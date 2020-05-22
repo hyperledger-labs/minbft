@@ -33,11 +33,11 @@ func TestCommit(t *testing.T) {
 		require.Equal(t, r, comm.ReplicaID())
 		requirePrepEqual(t, prep, comm.Prepare())
 	})
-	t.Run("SetUIBytes", func(t *testing.T) {
+	t.Run("SetUI", func(t *testing.T) {
 		comm := randComm(impl)
-		uiBytes := randUI(messages.AuthenBytes(comm))
-		comm.SetUIBytes(uiBytes)
-		require.Equal(t, uiBytes, comm.UIBytes())
+		ui := randUI(messages.AuthenBytes(comm))
+		comm.SetUI(ui)
+		require.Equal(t, ui, comm.UI())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
 		comm := randComm(impl)
@@ -51,13 +51,12 @@ func randComm(impl messages.MessageImpl) messages.Commit {
 
 func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv uint64) messages.Commit {
 	comm := impl.NewCommit(r, prep)
-	uiBytes := newTestUI(cv, messages.AuthenBytes(comm))
-	comm.SetUIBytes(uiBytes)
+	comm.SetUI(newTestUI(cv, messages.AuthenBytes(comm)))
 	return comm
 }
 
 func requireCommEqual(t *testing.T, comm1, comm2 messages.Commit) {
 	require.Equal(t, comm1.ReplicaID(), comm2.ReplicaID())
 	requirePrepEqual(t, comm1.Prepare(), comm2.Prepare())
-	require.Equal(t, comm1.UIBytes(), comm2.UIBytes())
+	require.Equal(t, comm1.UI(), comm2.UI())
 }

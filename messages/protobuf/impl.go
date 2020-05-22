@@ -68,17 +68,17 @@ func (*impl) NewReqViewChange(r uint32, nv uint64) messages.ReqViewChange {
 func typedMessageFromPb(pbMsg *pb.Message) (messages.Message, error) {
 	switch t := pbMsg.Typed.(type) {
 	case *pb.Message_Hello:
-		return newHelloFromPb(t.Hello), nil
+		return newHelloFromPb(t.Hello)
 	case *pb.Message_Request:
-		return newRequestFromPb(t.Request), nil
+		return newRequestFromPb(t.Request)
 	case *pb.Message_Reply:
-		return newReplyFromPb(t.Reply), nil
+		return newReplyFromPb(t.Reply)
 	case *pb.Message_Prepare:
-		return newPrepareFromPb(t.Prepare), nil
+		return newPrepareFromPb(t.Prepare)
 	case *pb.Message_Commit:
-		return newCommitFromPb(t.Commit), nil
+		return newCommitFromPb(t.Commit)
 	case *pb.Message_ReqViewChange:
-		return newReqViewChangeFromPb(t.ReqViewChange), nil
+		return newReqViewChangeFromPb(t.ReqViewChange)
 	default:
 		return nil, xerrors.New("unknown message type")
 	}

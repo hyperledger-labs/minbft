@@ -31,8 +31,8 @@ func newRequest(cl uint32, seq uint64, op []byte) *request {
 	}}
 }
 
-func newRequestFromPb(pbMsg *pb.Request) *request {
-	return &request{pbMsg: pbMsg}
+func newRequestFromPb(pbMsg *pb.Request) (*request, error) {
+	return &request{pbMsg: pbMsg}, nil
 }
 
 func (m *request) MarshalBinary() ([]byte, error) {

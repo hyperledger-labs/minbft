@@ -46,9 +46,9 @@ func TestMakeCommitValidator(t *testing.T) {
 	primary := primaryID(n, view)
 	backup := randOtherReplicaID(primary, n)
 
-	verifyUI := func(msg messages.CertifiedMessage) (*usig.UI, error) {
+	verifyUI := func(msg messages.CertifiedMessage) error {
 		args := mock.MethodCalled("uiVerifier", msg)
-		return args.Get(0).(*usig.UI), args.Error(1)
+		return args.Error(0)
 	}
 	validatePrepare := func(prepare messages.Prepare) error {
 		args := mock.MethodCalled("prepareValidator", prepare)
@@ -59,28 +59,23 @@ func TestMakeCommitValidator(t *testing.T) {
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
 
-	ui := &usig.UI{Counter: rand.Uint64()}
-	makeCommitMsg := func(id uint32) messages.Commit {
-		return messageImpl.NewCommit(id, prepare)
-	}
-
-	commit := makeCommitMsg(primary)
+	commit := messageImpl.NewCommit(primary, prepare)
 	err := validate(commit)
 	assert.Error(t, err, "Commit from primary")
 
-	commit = makeCommitMsg(backup)
+	commit = messageImpl.NewCommit(backup, prepare)
 
 	mock.On("prepareValidator", prepare).Return(fmt.Errorf("UI not valid")).Once()
 	err = validate(commit)
 	assert.Error(t, err, "Invalid Prepare")
 
 	mock.On("prepareValidator", prepare).Return(nil).Once()
-	mock.On("uiVerifier", commit).Return((*usig.UI)(nil), fmt.Errorf("UI not valid")).Once()
+	mock.On("uiVerifier", commit).Return(fmt.Errorf("UI not valid")).Once()
 	err = validate(commit)
 	assert.Error(t, err, "Invalid UI")
 
 	mock.On("prepareValidator", prepare).Return(nil).Once()
-	mock.On("uiVerifier", commit).Return(ui, nil).Once()
+	mock.On("uiVerifier", commit).Return(nil).Once()
 	err = validate(commit)
 	assert.NoError(t, err)
 }
@@ -210,13 +205,8 @@ func TestMakeCommitmentCollectorConcurrent(t *testing.T) {
 					releaseSeq()
 				}
 
-				prepareUI := &usig.UI{
-					Counter: cv,
-				}
-				prepareUIBytes, _ := prepareUI.MarshalBinary()
-
 				prepare := messageImpl.NewPrepare(0, 0, request)
-				prepare.SetUIBytes(prepareUIBytes)
+				prepare.SetUI(&usig.UI{Counter: cv})
 				_ = prepareSeq(request)
 
 				err := collect(uint32(id), prepare)
@@ -384,13 +374,8 @@ func TestMakeCommitmentCounter(t *testing.T) {
 }
 
 func makePrepare(p, v, cv int) messages.Prepare {
-	prepareUI := &usig.UI{
-		Counter: uint64(cv),
-	}
-	prepareUIBytes, _ := prepareUI.MarshalBinary()
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(uint32(p), uint64(v), request)
-	prepare.SetUIBytes(prepareUIBytes)
-
+	prepare.SetUI(&usig.UI{Counter: uint64(cv)})
 	return prepare
 }

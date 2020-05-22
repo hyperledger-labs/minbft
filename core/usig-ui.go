@@ -38,9 +38,10 @@ type uiCapturer func(msg messages.CertifiedMessage) (new bool, release func())
 
 // uiVerifier verifies USIG certificate attached to a message.
 //
-// USIG certificate is verified and the UI is returned if it is valid
-// for the message. A UI with zero counter value is never valid.
-type uiVerifier func(msg messages.CertifiedMessage) (ui *usig.UI, err error)
+// It verifies if the UI assigned to the message is correct and its
+// USIG certificate is valid for the message. A UI with zero counter
+// value is never valid.
+type uiVerifier func(msg messages.CertifiedMessage) error
 
 // uiAssigner assigns a unique identifier to a message.
 //
@@ -51,36 +52,27 @@ type uiAssigner func(msg messages.CertifiedMessage)
 func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 	return func(msg messages.CertifiedMessage) (new bool, release func()) {
 		replicaID := msg.ReplicaID()
-		ui, err := parseMessageUI(msg)
-		if err != nil {
-			panic(err)
-		}
-
 		peerState := providePeerState(replicaID)
-
-		return peerState.CaptureUI(ui)
+		return peerState.CaptureUI(msg.UI())
 	}
 }
 
 // makeUIVerifier constructs uiVerifier using the supplied external
 // authenticator to verify USIG certificates.
 func makeUIVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) uiVerifier {
-	return func(msg messages.CertifiedMessage) (*usig.UI, error) {
-		ui, err := parseMessageUI(msg)
-		if err != nil {
-			return nil, err
-		}
-
+	return func(msg messages.CertifiedMessage) error {
+		ui := msg.UI()
 		if ui.Counter == uint64(0) {
-			return nil, fmt.Errorf("Invalid (zero) counter value")
+			return fmt.Errorf("Invalid (zero) counter value")
 		}
 
 		authenBytes := extractAuthenBytes(msg)
-		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), authenBytes, msg.UIBytes()); err != nil {
-			return nil, fmt.Errorf("Failed verifying USIG certificate: %s", err)
+		uiBytes := usig.MustMarshalUI(ui)
+		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), authenBytes, uiBytes); err != nil {
+			return fmt.Errorf("Failed verifying USIG certificate: %s", err)
 		}
 
-		return ui, nil
+		return nil
 	}
 }
 
@@ -93,17 +85,7 @@ func makeUIAssigner(authen api.Authenticator, extractAuthenBytes authenBytesExtr
 		if err != nil {
 			panic(err)
 		}
-
-		msg.SetUIBytes(uiBytes)
+		ui := usig.MustUnmarshalUI(uiBytes)
+		msg.SetUI(ui)
 	}
-}
-
-func parseMessageUI(msg messages.CertifiedMessage) (*usig.UI, error) {
-	ui := new(usig.UI)
-
-	if err := ui.UnmarshalBinary(msg.UIBytes()); err != nil {
-		return nil, fmt.Errorf("Failed unmarshaling UI: %s", err)
-	}
-
-	return ui, nil
 }

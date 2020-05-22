@@ -74,7 +74,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 			return fmt.Errorf("Invalid Prepare: %s", err)
 		}
 
-		if _, err := verifyUI(commit); err != nil {
+		if err := verifyUI(commit); err != nil {
 			return fmt.Errorf("UI is not valid: %s", err)
 		}
 
@@ -149,11 +149,7 @@ func makeCommitmentCounter(f uint32) commitmentCounter {
 	return func(replicaID uint32, prepare messages.Prepare) (done bool, err error) {
 		primaryID := prepare.ReplicaID()
 		prepareView := prepare.View()
-		prepareUI, err := parseMessageUI(prepare)
-		if err != nil {
-			panic(err)
-		}
-		prepareCV := prepareUI.Counter
+		prepareCV := prepare.UI().Counter
 
 		if prepareView < view {
 			return false, nil
