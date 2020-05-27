@@ -161,6 +161,9 @@ func TestMakeRequestValidator(t *testing.T) {
 }
 
 func TestMakeRequestExecutor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
@@ -174,62 +177,34 @@ func TestMakeRequestExecutor(t *testing.T) {
 	request := messageImpl.NewRequest(clientID, seq, expectedOperation)
 	expectedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)
 
-	execute := func(operation []byte) <-chan []byte {
-		args := mock.MethodCalled("operationExecutor", operation)
-		return args.Get(0).(chan []byte)
+	retireSeq := func(request messages.Request) (new bool) {
+		args := mock.MethodCalled("requestSeqRetirer", request)
+		return args.Bool(0)
 	}
+	stopReqTimer := func(request messages.Request) {
+		mock.MethodCalled("requestTimerStopper", request)
+	}
+	pendingReq := mock_requestlist.NewMockList(ctrl)
+	consumer := mock_api.NewMockRequestConsumer(ctrl)
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-	requestExecutor := makeRequestExecutor(replicaID, execute, handleGeneratedMessage)
+	requestExecutor := makeRequestExecutor(replicaID, retireSeq, pendingReq, stopReqTimer, consumer, handleGeneratedMessage)
+
+	mock.On("requestSeqRetirer", request).Return(false).Once()
+	requestExecutor(request)
 
 	resultChan := make(chan []byte, 1)
 	resultChan <- expectedResult
 	done := make(chan struct{})
-	mock.On("operationExecutor", expectedOperation).Return(resultChan).Once()
+	mock.On("requestSeqRetirer", request).Return(true).Once()
+	pendingReq.EXPECT().Remove(clientID)
+	mock.On("requestTimerStopper", request).Once()
+	consumer.EXPECT().Deliver(expectedOperation).Return(resultChan)
 	mock.On("generatedMessageHandler", expectedReply).Run(
 		func(testifymock.Arguments) { close(done) },
 	).Once()
 	requestExecutor(request)
-	<-done
-}
-
-func TestMakeOperationExecutor(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	consumer := mock_api.NewMockRequestConsumer(ctrl)
-	executor := makeOperationExecutor(consumer)
-
-	op := randBytes()
-	expectedRes := randBytes()
-	resChan := make(chan []byte, 1)
-
-	// Normal execution
-	resChan <- expectedRes
-	consumer.EXPECT().Deliver(op).Return(resChan)
-	res := <-executor(op)
-	assert.Equal(t, expectedRes, res)
-
-	// Concurrent execution
-	started := make(chan struct{})
-	exit := make(chan struct{})
-	done := make(chan struct{})
-	consumer.EXPECT().Deliver(op).Return(resChan).Do(func([]byte) {
-		close(started)
-		<-exit
-	})
-	go func() {
-		res := <-executor(op)
-		assert.Equal(t, expectedRes, res)
-		done <- struct{}{}
-	}()
-	<-started
-	assert.Panics(t, func() {
-		_ = executor(op)
-	})
-	close(exit)
-	resChan <- expectedRes
 	<-done
 }
 

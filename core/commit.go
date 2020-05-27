@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -41,24 +40,34 @@ type commitValidator func(commit messages.Commit) error
 // refers to the active view. It is safe to invoke concurrently.
 type commitApplier func(commit messages.Commit, active bool) error
 
-// commitmentCollector collects commitment on prepared Request.
+// commitmentCollector collects replica commitment.
 //
-// The supplied Prepare message is assumed to be valid and should have
-// a UI assigned. Once the threshold of matching commitments from
-// distinct replicas has been reached, it triggers further required
-// actions to complete the prepared Request. It is safe to invoke
-// concurrently.
-type commitmentCollector func(replicaID uint32, prepare messages.Prepare) error
+// Each supplied message representing a replica commitment should be
+// already validated and passed exactly once following the sequence of
+// the assigned UI. If the threshold of matching commitments from
+// distinct replicas has been reached, it triggers further actions to
+// execute the committed proposal. It is safe to invoke concurrently.
+type commitmentCollector func(msg messages.CertifiedMessage) error
 
-// commitmentCounter counts commitments on prepared Request.
+// commitmentAcceptor checks replica commitment for consistency.
 //
-// The supplied Prepare message is assumed to be valid and should have
-// a UI assigned. The return value done indicates if enough
-// commitments from different replicas are counted for the supplied
-// Prepare, such that the threshold to execute the prepared operation
-// has been reached. An error is returned if any inconsistency is
-// detected.
-type commitmentCounter func(replicaID uint32, prepare messages.Prepare) (done bool, err error)
+// It checks if the commitment represented by the supplied parameters
+// is consistent with previously accepted commitments. The parameter
+// replicaID specified the committed replica identifier. The parameter
+// newView indicates if the commitment refers to the first primary's
+// proposal in a new view. The parameters view, primaryCV, replicaCV
+// specify the view number, the primary's and the replica's UI counter
+// values respectively.
+type commitmentAcceptor func(replicaID uint32, newView bool, view, primaryCV, replicaCV uint64) error
+
+// commitmentCounter counts replica commitments.
+//
+// The supplied parameters represent primary's proposal referred by
+// the commitment. The return value indicates if the acceptance
+// threshold has been reached for the primary's proposal. The
+// parameters view and primaryCV specify the view number, and the
+// primary's UI counter value respectively.
+type commitmentCounter func(view, primaryCV uint64) (done bool)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
@@ -86,10 +95,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 // supplied abstractions.
 func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 	return func(commit messages.Commit, active bool) error {
-		replicaID := commit.ReplicaID()
-		prepare := commit.Prepare()
-
-		if err := collectCommitment(replicaID, prepare); err != nil {
+		if err := collectCommitment(commit); err != nil {
 			return fmt.Errorf("Commit cannot be taken into account: %s", err)
 		}
 
@@ -99,103 +105,97 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 
 // makeCommitmentCollector constructs an instance of
 // commitmentCollector using the supplied abstractions.
-func makeCommitmentCollector(countCommitment commitmentCounter, retireSeq requestSeqRetirer, pendingReq requestlist.List, stopReqTimer requestTimerStopper, executeRequest requestExecutor) commitmentCollector {
+func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitment commitmentCounter, executeRequest requestExecutor) commitmentCollector {
 	var lock sync.Mutex
 
-	return func(replicaID uint32, prepare messages.Prepare) error {
+	return func(msg messages.CertifiedMessage) error {
+		replicaID := msg.ReplicaID()
+
+		var prepare messages.Prepare
+		switch msg := msg.(type) {
+		case messages.Prepare:
+			prepare = msg
+		case messages.Commit:
+			prepare = msg.Prepare()
+		default:
+			return fmt.Errorf("Unexpected message type")
+		}
+
+		view := prepare.View()
+		primaryCV := prepare.UI().Counter
+		replicaCV := msg.UI().Counter
+
 		lock.Lock()
 		defer lock.Unlock()
 
-		if done, err := countCommitment(replicaID, prepare); err != nil {
-			return err
-		} else if !done {
+		if err := acceptCommitment(replicaID, false, view, primaryCV, replicaCV); err != nil {
+			return fmt.Errorf("Cannot accept commitment: %s", err)
+		}
+
+		if done := countCommitment(view, primaryCV); !done {
 			return nil
 		}
 
-		request := prepare.Request()
-
-		if new := retireSeq(request); !new {
-			return nil // request already accepted for execution
-		}
-
-		pendingReq.Remove(request.ClientID())
-		stopReqTimer(request)
-		executeRequest(request)
+		executeRequest(prepare.Request())
 
 		return nil
 	}
 }
 
-// makeCommitmentCounter constructs an instance of commitmentCounter
-// given the number of tolerated faulty nodes.
-func makeCommitmentCounter(f uint32) commitmentCounter {
-	// Replica ID -> committed
-	type replicasCommittedMap map[uint32]bool
-
+func makeCommitmentAcceptor() commitmentAcceptor {
 	var (
-		// Current view number
-		view uint64
-
-		// UI counter of the first Prepare in the view
-		firstCV uint64 = 1
-
-		// Primary UI counter of the last quorum
-		lastDoneCV uint64
-
-		// Primary UI counter -> replicasCommittedMap
-		prepareStates = make(map[uint64]replicasCommittedMap)
+		replicaViews   = make(map[uint32]uint64)
+		lastPrimaryCVs = make(map[uint32]uint64)
+		lastReplicaCVs = make(map[uint32]uint64)
 	)
 
-	return func(replicaID uint32, prepare messages.Prepare) (done bool, err error) {
-		primaryID := prepare.ReplicaID()
-		prepareView := prepare.View()
-		prepareCV := prepare.UI().Counter
-
-		if prepareView < view {
-			return false, nil
-		} else if prepareView > view {
-			view = prepareView
-			firstCV = prepareCV
-			lastDoneCV = 0
-			prepareStates = make(map[uint64]replicasCommittedMap)
-		}
-
-		if prepareCV <= lastDoneCV {
-			return true, nil
-		}
-
-		replicasCommitted := prepareStates[prepareCV]
-		if replicasCommitted == nil {
-			replicasCommitted = replicasCommittedMap{
-				primaryID: true,
+	return func(replicaID uint32, newView bool, view, primaryCV, replicaCV uint64) error {
+		if newView {
+			if view <= replicaViews[replicaID] {
+				return fmt.Errorf("Unexpected view number")
 			}
-			prepareStates[prepareCV] = replicasCommitted
-		}
-
-		if replicaID != primaryID {
-			for cv := prepareCV - 1; cv >= firstCV; cv-- {
-				s := prepareStates[cv]
-				if s[replicaID] {
-					break
-				} else if s != nil {
-					return false, fmt.Errorf("Skipped commitment")
-				}
+			replicaViews[replicaID] = view
+		} else {
+			if view != replicaViews[replicaID] {
+				return fmt.Errorf("Unexpected view number")
 			}
-
-			if replicasCommitted[replicaID] {
-				return false, fmt.Errorf("Duplicated commitment")
+			if primaryCV != lastPrimaryCVs[replicaID]+1 {
+				return fmt.Errorf("Non-sequential primary UI")
 			}
-
-			replicasCommitted[replicaID] = true
+			if replicaCV != lastReplicaCVs[replicaID]+1 {
+				return fmt.Errorf("Non-sequential replica UI")
+			}
 		}
 
-		if len(replicasCommitted) <= int(f) {
-			return false, nil
+		lastPrimaryCVs[replicaID] = primaryCV
+		lastReplicaCVs[replicaID] = replicaCV
+
+		return nil
+	}
+}
+
+func makeCommitmentCounter(f uint32) commitmentCounter {
+	var (
+		lastView = uint64(0)
+		highest  = make([]uint64, f)
+	)
+
+	return func(view, primaryCV uint64) (done bool) {
+		if view < lastView {
+			return false
+		}
+		if view > lastView {
+			lastView = view
+			highest = make([]uint64, f)
 		}
 
-		lastDoneCV = prepareCV
-		delete(prepareStates, prepareCV)
+		for i, cv := range highest {
+			if primaryCV > cv {
+				highest[i] = primaryCV
+				return false
+			}
+		}
 
-		return true, nil
+		return true
 	}
 }

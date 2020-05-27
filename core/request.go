@@ -19,7 +19,6 @@ package minbft
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	logging "github.com/op/go-logging"
@@ -67,12 +66,6 @@ type requestApplier func(request messages.Request, view uint64) error
 // operation, produces the corresponding Reply message ready for
 // delivery to the client, and hands it over for further processing.
 type requestExecutor func(request messages.Request)
-
-// operationExecutor executes an operation on the local instance of
-// the replicated state machine. The result of operation execution
-// will be send to the returned channel once it is ready. It is not
-// allowed to invoke concurrently.
-type operationExecutor func(operation []byte) (resultChan <-chan []byte)
 
 // requestSeqCapturer synchronizes beginning of processing of request
 // identifier in Request message.
@@ -214,33 +207,26 @@ func makeRequestReplier(provider clientstate.Provider) requestReplier {
 }
 
 // makeRequestExecutor constructs an instance of requestExecutor using
-// the supplied replica ID, operation executor, message signer, and
-// reply consumer.
-func makeRequestExecutor(id uint32, executor operationExecutor, handleGeneratedMessage generatedMessageHandler) requestExecutor {
+// the supplied replica ID and abstractions.
+func makeRequestExecutor(id uint32, retireSeq requestSeqRetirer, pendingReq requestlist.List, stopReqTimer requestTimerStopper, consumer api.RequestConsumer, handleGeneratedMessage generatedMessageHandler) requestExecutor {
 	return func(request messages.Request) {
-		resultChan := executor(request.Operation())
+		clientID := request.ClientID()
+		seq := request.Sequence()
+
+		if new := retireSeq(request); !new {
+			return // request already accepted for execution
+		}
+
+		pendingReq.Remove(clientID)
+		stopReqTimer(request)
+
+		resultChan := consumer.Deliver(request.Operation())
+
 		go func() {
 			result := <-resultChan
-
-			reply := messageImpl.NewReply(id, request.ClientID(), request.Sequence(), result)
+			reply := messageImpl.NewReply(id, clientID, seq, result)
 			handleGeneratedMessage(reply)
 		}()
-	}
-}
-
-// makeOperationExecutor constructs an instance of operationExecutor
-// using the supplied interface to external request consumer module.
-func makeOperationExecutor(consumer api.RequestConsumer) operationExecutor {
-	busy := uint32(0) // atomic flag to check for concurrent execution
-
-	return func(op []byte) <-chan []byte {
-		if wasBusy := atomic.SwapUint32(&busy, uint32(1)); wasBusy != uint32(0) {
-			panic("Concurrent operation execution detected")
-		}
-		resultChan := consumer.Deliver(op)
-		atomic.StoreUint32(&busy, uint32(0))
-
-		return resultChan
 	}
 }
 
