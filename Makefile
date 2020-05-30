@@ -24,7 +24,8 @@ prefix ?= sample
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 
-.PHONY: all build install uninstall clean check test lint generate
+.PHONY: all build install uninstall clean check test lint generate  \
+        docker docker-clean
 
 all: build check
 test: check
@@ -41,6 +42,8 @@ help:
 	@echo '  all (default)    - Build and test all'
 	@echo '  build            - Build all'
 	@echo '  install          - Build and install artifacts'
+	@echo '  docker           - Build a Docker image'
+	@echo '  docker-clean     - Remove a Docker image'
 	@echo '  uninstall        - Uninstall artifacts'
 	@echo '  clean            - Remove all build artifacts'
 	@echo '  check|test       - Run all tests'
@@ -60,6 +63,12 @@ install: build
 	$(INSTALL_PROGRAM) -D $(builddir)/peer $(bindir)/peer
 	$(INSTALL_DATA) -D usig/sgx/shim/libusig_shim.so $(libdir)/libusig_shim.so
 	$(INSTALL_DATA) -D usig/sgx/enclave/libusig.signed.so $(libdir)/libusig.signed.so
+
+docker:
+	docker build -f sample/docker/Dockerfile -t minbft .
+
+docker-clean:
+	docker rmi -f minbft
 
 uninstall:
 	rm -f $(bindir)/keytool
