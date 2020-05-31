@@ -64,6 +64,7 @@ install: build
 uninstall:
 	rm -f $(bindir)/keytool
 	rm -f $(bindir)/peer
+	rm -f $(libdir)/libusig_shim.so
 	rm -f $(libdir)/libusig.signed.so
 
 clean: usig-clean
