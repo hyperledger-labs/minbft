@@ -19,7 +19,7 @@ package protobuf
 import (
 	"golang.org/x/xerrors"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/messages/protobuf/pb"
