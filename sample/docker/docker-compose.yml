@@ -1,0 +1,23 @@
+version: "3"
+services:
+  replica0: &peer
+    container_name: replica0
+    image: minbft
+    volumes:
+      - ".:/data"
+    expose:
+      - "8000"
+    command: run 0
+    user: ${UID:-1000}
+  replica1:
+    <<: *peer
+    container_name: replica1
+    command: run 1
+  replica2:
+    <<: *peer
+    container_name: replica2
+    command: run 2
+  client:
+    <<: *peer
+    container_name: client
+    command: help

@@ -8,6 +8,12 @@
   * [What is MinBFT](#what-is-minbft)
   * [Why MinBFT](#why-minbft)
   * [Concepts](#concepts)
+  * [Quick Start](#quick-start)
+      * [Prerequisites](#prerequisites)
+      * [Building a Container Image](#building-a-container-image)
+      * [Running Replicas](#running-replicas)
+      * [Submitting Requests](#submitting-requests)
+      * [Tear Down](#tear-down)
   * [Requirements](#requirements)
       * [Operating System](#operating-system)
       * [Golang](#golang)
@@ -102,6 +108,117 @@ number of consenting nodes than PBFT.
 
 For more detailed description of the protocol, refer to [Efficient
 Byzantine Fault-Tolerance paper][minbft-paper].
+
+## Quick Start ##
+
+This quick start shows you how to run this project using Docker
+containers. This is the easiest way to try out this project with minimal
+setup. If you want to build and run without Docker, skip this section.
+
+### Prerequisites ###
+
+To run the containers, the following software must be installed on your
+system.
+
+ - [Docker Engine](https://docs.docker.com/engine/) (tested with version
+   19.03.6)
+ - [Docker Compose](https://docs.docker.com/compose/) (tested with
+   version 1.17.1)
+
+If you are using Ubuntu 18.04, they can be installed as follows:
+
+```sh
+sudo apt-get install docker.io docker-compose
+```
+
+Note that SGX-enabled CPU is not required to run the containers; they
+will run in the simulation mode provided by Intel SGX SDK. We plan to
+have another container image which runs in the HW mode (i.e. using
+"real" hardware features) in a future release.
+
+### Building a Container Image ###
+
+Build an image of the containers as follows:
+
+```sh
+sudo docker build -f sample/docker/Dockerfile -t minbft .
+```
+
+Note that, by defaut, the `docker` command needs to be executed by
+`root`. Refer to [Docker's
+document](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user)
+for details.
+
+If your system has the `make` command, the following command also can be
+used.
+
+```sh
+sudo make docker
+```
+
+### Running Replicas ###
+
+To start up an example consensus network of replicas, invoke the
+following commands:
+
+```sh
+sudo UID=$UID docker-compose -f sample/docker/docker-compose.yml up -d
+```
+
+This will start the replica nodes as 3 separate containers in
+background.
+
+### Submitting Requests ###
+
+Requests can be submitted for ordering and execution to the example
+consensus network as follows:
+
+```sh
+sudo docker-compose -f sample/docker/docker-compose.yml \
+  run client request "First request" "Second request" "Another request"
+```
+
+This command should produce the following output showing the result
+of ordering and execution of the submitted requests:
+
+```
+Reply: {"Height":1,"PrevBlockHash":null,"Payload":"Rmlyc3QgcmVxdWVzdA=="}
+Reply: {"Height":2,"PrevBlockHash":"DuAGbE1hVQCvgi+R0E5zWaKSlVYFEo3CjlRj9Eik5h4=","Payload":"U2Vjb25kIHJlcXVlc3Q="}
+Reply: {"Height":3,"PrevBlockHash":"963Kn659GbtX35MZYzguEwSH1UvF2cRYo6lNpIyuCUE=","Payload":"QW5vdGhlciByZXF1ZXN0"}
+```
+
+The output shows the submitted requests being ordered and executed by a
+sample blockchain service. The service executes request by simply
+appending a new block for each request to the trivial blockchain
+maintained by the service.
+
+### Tear Down ###
+
+The following command can be used to terminate running containers:
+
+```sh
+sudo docker-compose -f sample/docker/docker-compose.yml down
+```
+
+The containers create some files while running. These files can be
+deleted as follows.
+
+```sh
+rm -f sample/docker/keys.yaml sample/docker/.keys.yaml.lock
+```
+
+The Docker image can be deleted as follow.
+
+```sh
+sudo docker rmi minbft
+```
+
+If your system has the `make` command, the following command also can be
+used.
+
+```sh
+sudo make docker-clean
+```
 
 ## Requirements ##
 
