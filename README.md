@@ -4,28 +4,28 @@
 
 # MinBFT #
 
-  * [Status](#status)
-  * [What is MinBFT](#what-is-minbft)
-  * [Why MinBFT](#why-minbft)
-  * [Concepts](#concepts)
-  * [Quick Start](#quick-start)
+  1. [Status](#status)
+  2. [What is MinBFT](#what-is-minbft)
+  3. [Why MinBFT](#why-minbft)
+  4. [Concepts](#concepts)
+  5. [Quick Start](#quick-start)
       * [Prerequisites](#prerequisites)
       * [Building a Container Image](#building-a-container-image)
       * [Running Replicas](#running-replicas)
       * [Submitting Requests](#submitting-requests)
       * [Tear Down](#tear-down)
-  * [Requirements](#requirements)
+  6. [Requirements](#requirements)
       * [Operating System](#operating-system)
       * [Golang](#golang)
       * [Intel® SGX SDK](#intel-sgx-sdk)
-  * [Getting Started](#getting-started)
+  7. [Getting Started](#getting-started)
       * [Building](#building)
       * [Running Example](#running-example)
       * [Fault Tolerance](#fault-tolerance)
       * [Code Structure](#code-structure)
-  * [Roadmap](#roadmap)
-  * [Contributing](#contributing)
-  * [License](#license)
+  8. [Roadmap](#roadmap)
+  9. [Contributing](#contributing)
+  10. [License](#license)
 
 ## Status ##
 
