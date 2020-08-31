@@ -51,14 +51,15 @@ as an Intel® SGX enclave.
 
 ## Why MinBFT ##
 
-Byzantine fault-tolerant (BFT) protocols are able to achieve high
-transaction throughput in permission-based consensus networks with
-static configuration of connected nodes. However, existing components
-such as Practical Byzantine Fault Tolerance (PBFT) consensus plugin
-still incur high communication cost. Given the pervasive Trusted
-Execution Environments (TEE) on commodity platforms, we see a strong
-motivation to deploy more efficient BFT protocols that leverage the
-TEE applications as trust anchors even on faulty nodes.
+[Byzantine fault-tolerant][bft-wiki] (BFT) protocols are able to
+achieve high transaction throughput in permission-based consensus
+networks with static configuration of connected nodes. However,
+existing components such as [Practical Byzantine Fault Tolerance][pbft-paper]
+(PBFT) consensus plugin still incur high communication cost. Given
+the pervasive [Trusted Execution Environments][tee-wiki] (TEE) on
+commodity platforms, we see a strong motivation to deploy more
+efficient BFT protocols that leverage the TEE applications as trust
+anchors even on faulty nodes.
 
 TEEs are pervasive nowadays and supported by many commodity platforms.
 For instance, Intel® SGX is being deployed on many PCs and servers,
@@ -77,6 +78,10 @@ in PBFT.
 We hope that by evaluating this consensus component under the existing
 blockchain frameworks, the community will benefit from availability to
 leverage it in different practical use cases.
+
+[bft-wiki]: https://en.wikipedia.org/wiki/Byzantine_fault
+[pbft-paper]: http://pmg.csail.mit.edu/papers/osdi99.pdf
+[tee-wiki]: https://en.wikipedia.org/wiki/Trusted_execution_environment
 
 ## Concepts ##
 
