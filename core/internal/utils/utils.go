@@ -15,32 +15,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package minbft
+package utils
 
 import (
-	"fmt"
-
-	logging "github.com/op/go-logging"
-
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// messageSigner generates and attaches a normal replica signature to
+// MessageSigner generates and attaches a normal replica signature to
 // the supplied message modifying it directly.
-type messageSigner func(msg messages.SignedMessage)
+type MessageSigner func(msg messages.SignedMessage)
 
-// messageSignatureVerifier verifies the signature attached to a
+// MessageSignatureVerifier verifies the signature attached to a
 // message against the message data.
-type messageSignatureVerifier func(msg messages.SignedMessage) error
+type MessageSignatureVerifier func(msg messages.SignedMessage) error
 
-// authenBytesExtractor returns serialized representation of message's
+// AuthenBytesExtractor returns serialized representation of message's
 // authenticated content.
-type authenBytesExtractor func(msg messages.Message) []byte
+type AuthenBytesExtractor func(msg messages.Message) []byte
 
-// makeMessageSigner constructs an instance of messageSigner using the
+// MakeMessageSigner constructs an instance of MessageSigner using the
 // supplied external interface for message authentication.
-func makeMessageSigner(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) messageSigner {
+func MakeMessageSigner(authen api.Authenticator, extractAuthenBytes AuthenBytesExtractor) MessageSigner {
 	return func(msg messages.SignedMessage) {
 		authenBytes := extractAuthenBytes(msg.(messages.Message))
 		signature, err := authen.GenerateMessageAuthenTag(api.ReplicaAuthen, authenBytes)
@@ -51,10 +47,10 @@ func makeMessageSigner(authen api.Authenticator, extractAuthenBytes authenBytesE
 	}
 }
 
-// makeMessageSignatureVerifier constructs an instance of
-// messageSignatureVerifier using the supplied external interface for
+// MakeMessageSignatureVerifier constructs an instance of
+// MessageSignatureVerifier using the supplied external interface for
 // message authentication.
-func makeMessageSignatureVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) messageSignatureVerifier {
+func MakeMessageSignatureVerifier(authen api.Authenticator, extractAuthenBytes AuthenBytesExtractor) MessageSignatureVerifier {
 	return func(msg messages.SignedMessage) error {
 		var role api.AuthenticationRole
 		var id uint32
@@ -75,23 +71,8 @@ func makeMessageSignatureVerifier(authen api.Authenticator, extractAuthenBytes a
 	}
 }
 
-// isPrimary returns true if the replica is the primary node for the
+// IsPrimary returns true if the replica is the primary node for the
 // current view.
-func isPrimary(view uint64, id uint32, n uint32) bool {
+func IsPrimary(view uint64, id uint32, n uint32) bool {
 	return uint64(id) == view%uint64(n)
-}
-
-func makeLogger(id uint32, opts options) *logging.Logger {
-	logger := logging.MustGetLogger(module)
-	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
-	stringFormatter := logging.MustStringFormatter(logFormatString)
-	backend := logging.NewLogBackend(opts.logFile, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
-	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
-
-	logger.SetBackend(formattedLoggerBackend)
-
-	formattedLoggerBackend.SetLevel(opts.logLevel, module)
-
-	return logger
 }

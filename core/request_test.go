@@ -31,6 +31,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
@@ -60,8 +61,8 @@ func TestMakeRequestProcessor(t *testing.T) {
 	viewState := mock_viewstate.NewMockState(ctrl)
 	process := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 
-	n := randN()
-	view := randView()
+	n := utils.RandN()
+	view := utils.RandView()
 	newView := view + uint64(1+rand.Intn(int(n-1)))
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
@@ -108,10 +109,10 @@ func TestMakeRequestApplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	ownView := randView()
-	otherView := randOtherView(ownView)
-	id := primaryID(n, ownView)
+	n := utils.RandN()
+	ownView := utils.RandView()
+	otherView := utils.RandOtherView(ownView)
+	id := utils.PrimaryID(n, ownView)
 
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
@@ -146,16 +147,16 @@ func TestMakeRequestValidator(t *testing.T) {
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
 	verify := func(msg messages.SignedMessage) error {
-		args := mock.MethodCalled("messageSignatureVerifier", msg)
+		args := mock.MethodCalled("MessageSignatureVerifier", msg)
 		return args.Error(0)
 	}
 	validate := makeRequestValidator(verify)
 
-	mock.On("messageSignatureVerifier", request).Return(fmt.Errorf("invalid signature")).Once()
+	mock.On("MessageSignatureVerifier", request).Return(fmt.Errorf("invalid signature")).Once()
 	err := validate(request)
 	assert.Error(t, err)
 
-	mock.On("messageSignatureVerifier", request).Return(nil).Once()
+	mock.On("MessageSignatureVerifier", request).Return(nil).Once()
 	err = validate(request)
 	assert.NoError(t, err)
 }
@@ -171,8 +172,8 @@ func TestMakeRequestExecutor(t *testing.T) {
 	clientID := rand.Uint32()
 	replicaID := rand.Uint32()
 
-	expectedOperation := randBytes()
-	expectedResult := randBytes()
+	expectedOperation := utils.RandBytes()
+	expectedResult := utils.RandBytes()
 
 	request := messageImpl.NewRequest(clientID, seq, expectedOperation)
 	expectedReply := messageImpl.NewReply(replicaID, clientID, seq, expectedResult)

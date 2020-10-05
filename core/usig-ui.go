@@ -21,6 +21,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 )
@@ -59,7 +60,7 @@ func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 
 // makeUIVerifier constructs uiVerifier using the supplied external
 // authenticator to verify USIG certificates.
-func makeUIVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) uiVerifier {
+func makeUIVerifier(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) uiVerifier {
 	return func(msg messages.CertifiedMessage) error {
 		ui := msg.UI()
 		if ui.Counter == uint64(0) {
@@ -78,7 +79,7 @@ func makeUIVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtr
 
 // makeUIAssigner constructs uiAssigner using the supplied external
 // authentication interface to generate USIG UIs.
-func makeUIAssigner(authen api.Authenticator, extractAuthenBytes authenBytesExtractor) uiAssigner {
+func makeUIAssigner(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) uiAssigner {
 	return func(msg messages.CertifiedMessage) {
 		authenBytes := extractAuthenBytes(msg)
 		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, authenBytes)

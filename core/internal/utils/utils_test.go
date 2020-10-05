@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package minbft
+package utils
 
 import (
 	"fmt"
@@ -40,14 +40,14 @@ func TestMakeMessageSigner(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	extractAuthenBytes := func(m messages.Message) []byte {
-		args := mock.MethodCalled("authenBytesExtractor", m)
+		args := mock.MethodCalled("AuthenBytesExtractor", m)
 		return args.Get(0).([]byte)
 	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	signer := makeMessageSigner(authen, extractAuthenBytes)
+	signer := MakeMessageSigner(authen, extractAuthenBytes)
 
-	authenBytes := randBytes()
-	signature := randBytes()
+	authenBytes := RandBytes()
+	signature := RandBytes()
 
 	msg := struct {
 		*mock_messages.MockMessage
@@ -57,7 +57,7 @@ func TestMakeMessageSigner(t *testing.T) {
 		mock_messages.NewMockSignedMessage(ctrl),
 	}
 
-	mock.On("authenBytesExtractor", msg).Return(authenBytes)
+	mock.On("AuthenBytesExtractor", msg).Return(authenBytes)
 
 	err := fmt.Errorf("cannot sign")
 	authen.EXPECT().GenerateMessageAuthenTag(api.ReplicaAuthen, authenBytes).Return(nil, err)
@@ -76,17 +76,17 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	extractAuthenBytes := func(m messages.Message) []byte {
-		args := mock.MethodCalled("authenBytesExtractor", m)
+		args := mock.MethodCalled("AuthenBytesExtractor", m)
 		return args.Get(0).([]byte)
 	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	verify := makeMessageSignatureVerifier(authen, extractAuthenBytes)
+	verify := MakeMessageSignatureVerifier(authen, extractAuthenBytes)
 
 	clientID := rand.Uint32()
 	replicaID := rand.Uint32()
 
-	authenBytes := randBytes()
-	signature := randBytes()
+	authenBytes := RandBytes()
+	signature := RandBytes()
 
 	signedMsg := mock_messages.NewMockSignedMessage(ctrl)
 	signedMsg.EXPECT().Signature().Return(signature).AnyTimes()
@@ -105,8 +105,8 @@ func TestMakeMessageSignatureVerifier(t *testing.T) {
 		messages.SignedMessage
 	}{replicaMsg, signedMsg}
 
-	mock.On("authenBytesExtractor", signedClientMsg).Return(authenBytes)
-	mock.On("authenBytesExtractor", signedReplicaMsg).Return(authenBytes)
+	mock.On("AuthenBytesExtractor", signedClientMsg).Return(authenBytes)
+	mock.On("AuthenBytesExtractor", signedReplicaMsg).Return(authenBytes)
 
 	assert.Panics(t, func() { verify(signedMsg) }, "Message with no signer ID")
 

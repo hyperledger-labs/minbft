@@ -14,57 +14,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package minbft
+package utils
 
 import (
 	"math/rand"
 )
 
-// randN returns a random number of replicas for testing
-func randN() uint32 {
+// RandN returns a random number of replicas for testing
+func RandN() uint32 {
 	return uint32(rand.Intn(256-3) + 3)
 }
 
-// randView returns a random view for testing
-func randView() uint64 {
+// RandView returns a random view for testing
+func RandView() uint64 {
 	// Using uint32 gives enough room to increment the view number
 	// without overflowing uint64.
 	return uint64(rand.Uint32())
 }
 
-// randOtherView returns a distinct random view
-func randOtherView(view uint64) uint64 {
+// RandOtherView returns a distinct random view
+func RandOtherView(view uint64) uint64 {
 	for {
-		otherView := randView()
+		otherView := RandView()
 		if otherView != view {
 			return otherView
 		}
 	}
 }
 
-// primaryID returns primary replica ID
-func primaryID(n uint32, view uint64) uint32 {
+// PrimaryID returns primary replica ID
+func PrimaryID(n uint32, view uint64) uint32 {
 	return uint32(view % uint64(n))
 }
 
-// viewForPrimary returns a random view given its primary ID
-func viewForPrimary(n uint32, id uint32) uint64 {
-	otherView := randView()
+// ViewForPrimary returns a random view given its primary ID
+func ViewForPrimary(n uint32, id uint32) uint64 {
+	otherView := RandView()
 	return otherView - otherView%uint64(n) + uint64(id)
 }
 
-// randReplicaID return random replica ID
-func randReplicaID(n uint32) uint32 {
+// RandReplicaID return random replica ID
+func RandReplicaID(n uint32) uint32 {
 	return uint32(rand.Intn(int(n)))
 }
 
-// randOtherReplicaID returns an ID of some other replica
-func randOtherReplicaID(id, n uint32) uint32 {
+// RandOtherReplicaID returns an ID of some other replica
+func RandOtherReplicaID(id, n uint32) uint32 {
 	offset := rand.Intn(int(n)-1) + 1
 	return (id + uint32(offset)) % n
 }
 
-// randBytes returns a slice of random bytes
-func randBytes() []byte {
+// RandBytes returns a slice of random bytes
+func RandBytes() []byte {
 	return []byte{byte(rand.Int())} // nolint:gosec
 }

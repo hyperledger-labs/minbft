@@ -28,6 +28,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 
@@ -44,22 +45,22 @@ func TestMakeUIVerifier(t *testing.T) {
 	defer mock.AssertExpectations(t)
 
 	extractAuthenBytes := func(m messages.Message) []byte {
-		args := mock.MethodCalled("authenBytesExtractor", m)
+		args := mock.MethodCalled("AuthenBytesExtractor", m)
 		return args.Get(0).([]byte)
 	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
 	verifyUI := makeUIVerifier(authen, extractAuthenBytes)
 
 	id := rand.Uint32()
-	ui := &usig.UI{Counter: rand.Uint64(), Cert: randBytes()}
+	ui := &usig.UI{Counter: rand.Uint64(), Cert: utils.RandBytes()}
 	uiBytes := usig.MustMarshalUI(ui)
-	authenBytes := randBytes()
+	authenBytes := utils.RandBytes()
 	msg := mock_messages.NewMockCertifiedMessage(ctrl)
 	msg.EXPECT().ReplicaID().Return(id).AnyTimes()
 
 	// Correct UI
 	msg.EXPECT().UI().Return(ui)
-	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
+	mock.On("AuthenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
 		api.USIGAuthen, id, authenBytes, uiBytes,
 	).Return(nil)
@@ -68,7 +69,7 @@ func TestMakeUIVerifier(t *testing.T) {
 
 	// Failed USIG certificate verification
 	msg.EXPECT().UI().Return(ui)
-	mock.On("authenBytesExtractor", msg).Return(authenBytes).Once()
+	mock.On("AuthenBytesExtractor", msg).Return(authenBytes).Once()
 	authen.EXPECT().VerifyMessageAuthenTag(
 		api.USIGAuthen, id, authenBytes, uiBytes,
 	).Return(fmt.Errorf("USIG certificate invalid"))
@@ -76,7 +77,7 @@ func TestMakeUIVerifier(t *testing.T) {
 	assert.Error(t, err)
 
 	// Invalid (zero) counter value
-	msg.EXPECT().UI().Return(&usig.UI{Counter: 0, Cert: randBytes()})
+	msg.EXPECT().UI().Return(&usig.UI{Counter: 0, Cert: utils.RandBytes()})
 	err = verifyUI(msg)
 	assert.Error(t, err)
 }
@@ -93,7 +94,7 @@ func TestMakeUICapturer(t *testing.T) {
 
 	captureUI := makeUICapturer(providePeerState)
 
-	ui := &usig.UI{Counter: rand.Uint64(), Cert: randBytes()}
+	ui := &usig.UI{Counter: rand.Uint64(), Cert: utils.RandBytes()}
 	msg := mock_messages.NewMockCertifiedMessage(ctrl)
 	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
 	msg.EXPECT().UI().Return(ui).AnyTimes()

@@ -22,6 +22,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
+	logging "github.com/op/go-logging"
 
 	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
@@ -101,4 +102,19 @@ func (handle messageStreamHandler) HandleMessageStream(in <-chan []byte) <-chan 
 		handle(in, out)
 	}()
 	return out
+}
+
+func makeLogger(id uint32, opts options) *logging.Logger {
+	logger := logging.MustGetLogger(module)
+	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
+	stringFormatter := logging.MustStringFormatter(logFormatString)
+	backend := logging.NewLogBackend(opts.logFile, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
+	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
+
+	logger.SetBackend(formattedLoggerBackend)
+
+	formattedLoggerBackend.SetLevel(opts.logLevel, module)
+
+	return logger
 }

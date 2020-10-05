@@ -20,6 +20,7 @@ package minbft
 import (
 	"fmt"
 
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -48,7 +49,7 @@ func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest request
 		replicaID := prepare.ReplicaID()
 		view := prepare.View()
 
-		if !isPrimary(view, replicaID, n) {
+		if !utils.IsPrimary(view, replicaID, n) {
 			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
 		}
 

@@ -30,6 +30,7 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
@@ -366,9 +367,9 @@ func TestMakeEmbeddedMessageProcessor(t *testing.T) {
 
 	process := makeEmbeddedMessageProcessor(processMessage, logging.MustGetLogger(module))
 
-	n, view := randN(), randView()
-	primary := primaryID(n, view)
-	backup := randOtherReplicaID(primary, n)
+	n, view := utils.RandN(), utils.RandView()
+	primary := utils.PrimaryID(n, view)
+	backup := utils.RandOtherReplicaID(primary, n)
 	request := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(backup, prepare)
@@ -452,15 +453,15 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	}
 	process := makeViewMessageProcessor(viewState, applyPeerMessage)
 
-	n := randN()
-	primary := randReplicaID(n)
-	view := viewForPrimary(n, primary) + uint64(n)
+	n := utils.RandN()
+	primary := utils.RandReplicaID(n)
+	view := utils.ViewForPrimary(n, primary) + uint64(n)
 	oldView := view - uint64(1+rand.Intn(int(n-1)))
 	newView := view + uint64(1+rand.Intn(int(n-1)))
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
-	commit := messageImpl.NewCommit(randOtherReplicaID(primary, n), prepare)
+	commit := messageImpl.NewCommit(utils.RandOtherReplicaID(primary, n), prepare)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
@@ -571,7 +572,7 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 	defer ctrl.Finish()
 
 	sign := func(msg messages.SignedMessage) {
-		mock.MethodCalled("messageSigner", msg)
+		mock.MethodCalled("MessageSigner", msg)
 	}
 	assignUI := func(msg messages.CertifiedMessage) {
 		mock.MethodCalled("uiAssigner", msg)
@@ -596,7 +597,7 @@ func TestMakeGeneratedMessageHandler(t *testing.T) {
 	mock.On("generatedMessageConsumer", certifiedMsg).Once()
 	handle(certifiedMsg)
 
-	mock.On("messageSigner", signedMsg).Once()
+	mock.On("MessageSigner", signedMsg).Once()
 	mock.On("generatedMessageConsumer", signedMsg).Once()
 	handle(signedMsg)
 }

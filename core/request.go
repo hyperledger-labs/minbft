@@ -27,6 +27,7 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -143,7 +144,7 @@ type prepareTimeoutProvider func() time.Duration
 
 // makeRequestValidator constructs an instance of requestValidator
 // using the supplied abstractions.
-func makeRequestValidator(verify messageSignatureVerifier) requestValidator {
+func makeRequestValidator(verify utils.MessageSignatureVerifier) requestValidator {
 	return func(request messages.Request) error {
 		return verify(request)
 	}
@@ -187,7 +188,7 @@ func makeRequestApplier(id, n uint32, handleGeneratedMessage generatedMessageHan
 		// change, should the new primary be faulty.
 		startReqTimer(request, view)
 
-		if isPrimary(view, id, n) {
+		if utils.IsPrimary(view, id, n) {
 			handleGeneratedMessage(messageImpl.NewPrepare(id, view, request))
 		} else {
 			startPrepTimer(request, view)

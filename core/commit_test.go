@@ -30,6 +30,7 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 )
@@ -38,10 +39,10 @@ func TestMakeCommitValidator(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	view := randView()
-	primary := primaryID(n, view)
-	backup := randOtherReplicaID(primary, n)
+	n := utils.RandN()
+	view := utils.RandView()
+	primary := utils.PrimaryID(n, view)
+	backup := utils.RandOtherReplicaID(primary, n)
 
 	verifyUI := func(msg messages.CertifiedMessage) error {
 		args := mock.MethodCalled("uiVerifier", msg)
@@ -87,10 +88,10 @@ func TestMakeCommitApplier(t *testing.T) {
 	}
 	apply := makeCommitApplier(collectCommitment)
 
-	n := randN()
-	view := randView()
-	primary := primaryID(n, view)
-	id := randOtherReplicaID(primary, n)
+	n := utils.RandN()
+	view := utils.RandView()
+	primary := utils.PrimaryID(n, view)
+	id := utils.RandOtherReplicaID(primary, n)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
@@ -129,12 +130,12 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	}
 	collect := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
-	n := randN()
-	view := randView()
+	n := utils.RandN()
+	view := utils.RandView()
 	primaryCV := rand.Uint64()
 	backupCV := rand.Uint64()
-	primary := primaryID(n, view)
-	id := randOtherReplicaID(primary, n)
+	primary := utils.PrimaryID(n, view)
+	id := utils.RandOtherReplicaID(primary, n)
 	clientID := rand.Uint32()
 
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)

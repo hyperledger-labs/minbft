@@ -25,6 +25,7 @@ import (
 
 	testifymock "github.com/stretchr/testify/mock"
 
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -32,10 +33,10 @@ func TestMakePrepareValidator(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	view := randView()
-	primary := primaryID(n, view)
-	backup := randOtherReplicaID(primary, n)
+	n := utils.RandN()
+	view := utils.RandView()
+	primary := utils.PrimaryID(n, view)
+	backup := utils.RandOtherReplicaID(primary, n)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
@@ -74,10 +75,10 @@ func TestMakePrepareApplier(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	n := randN()
-	view := randView()
-	primary := primaryID(n, view)
-	id := randOtherReplicaID(primary, n)
+	n := utils.RandN()
+	view := utils.RandView()
+	primary := utils.PrimaryID(n, view)
+	id := utils.RandOtherReplicaID(primary, n)
 	prepareRequestSeq := func(request messages.Request) (new bool) {
 		args := mock.MethodCalled("requestSeqPreparer", request)
 		return args.Bool(0)
@@ -96,7 +97,7 @@ func TestMakePrepareApplier(t *testing.T) {
 
 	clientID := rand.Uint32()
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
-	ownPrepare := messageImpl.NewPrepare(id, viewForPrimary(n, id), request)
+	ownPrepare := messageImpl.NewPrepare(id, utils.ViewForPrimary(n, id), request)
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(id, prepare)
 

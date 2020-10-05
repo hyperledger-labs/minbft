@@ -27,6 +27,7 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
+	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -132,8 +133,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
 
-	verifyMessageSignature := makeMessageSignatureVerifier(stack, messages.AuthenBytes)
-	signMessage := makeMessageSigner(stack, messages.AuthenBytes)
+	verifyMessageSignature := utils.MakeMessageSignatureVerifier(stack, messages.AuthenBytes)
+	signMessage := utils.MakeMessageSigner(stack, messages.AuthenBytes)
 	verifyUI := makeUIVerifier(stack, messages.AuthenBytes)
 	assignUI := makeUIAssigner(stack, messages.AuthenBytes)
 
@@ -549,7 +550,7 @@ func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitAppli
 
 // makeGeneratedMessageHandler constructs generatedMessageHandler
 // using the supplied abstractions.
-func makeGeneratedMessageHandler(sign messageSigner, assignUI uiAssigner, consume generatedMessageConsumer) generatedMessageHandler {
+func makeGeneratedMessageHandler(sign utils.MessageSigner, assignUI uiAssigner, consume generatedMessageConsumer) generatedMessageHandler {
 	var uiLock sync.Mutex
 
 	return func(msg messages.ReplicaMessage) {
