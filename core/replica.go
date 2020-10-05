@@ -41,6 +41,10 @@ type Stack interface {
 	api.RequestConsumer
 }
 
+type NonDefaultMessageHandler interface {
+	GenerateMessageHandlers(id, n uint32, messageLog messagelog.MessageLog, unicastLogs map[uint32]messagelog.MessageLog, configer api.Configer, stack Stack, logger *logging.Logger) (MessageHandler, MessageHandler, MessageHandler, MessageHandler)
+}
+
 // Replica represents an instance of replica peer
 type replica struct {
 	handlePeerStream   messageStreamHandler
@@ -72,8 +76,14 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 		unicastLogs[peerID] = messagelog.New()
 	}
 
-	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
-	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs)
+	var handleOwnMessage, handlePeerMessage, handleClientMessage, handleHelloMessage MessageHandler
+	if nonDefaultStack, ok := stack.(NonDefaultMessageHandler); ok {
+		logger.Info("running with non-default message handlers for system testing\n")
+		handleOwnMessage, handlePeerMessage, handleClientMessage, handleHelloMessage = nonDefaultStack.GenerateMessageHandlers(id, n, messageLog, unicastLogs, configer, stack, logger)
+	} else {
+		handleOwnMessage, handlePeerMessage, handleClientMessage = defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
+		handleHelloMessage = MakeHelloHandler(id, n, messageLog, unicastLogs)
+	}
 
 	if err := startPeerConnections(id, n, stack, handlePeerMessage, logger); err != nil {
 		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
