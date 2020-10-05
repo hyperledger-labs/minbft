@@ -315,7 +315,7 @@ func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnec
 	}
 }
 
-func makeHelloHandler(ownID, n uint32, messageLog messagelog.MessageLog, unicastLogs map[uint32]messagelog.MessageLog) MessageHandler {
+func MakeHelloHandler(ownID, n uint32, messageLog messagelog.MessageLog, unicastLogs map[uint32]messagelog.MessageLog) MessageHandler {
 	return func(msg messages.Message) (<-chan messages.Message, bool, error) {
 		h, ok := msg.(messages.Hello)
 		if !ok {
