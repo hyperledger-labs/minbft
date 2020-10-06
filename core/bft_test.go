@@ -769,6 +769,193 @@ steps:
 	assert.Equal(t, uint64(2), replicaStacksBft[uint32(1)].BlockHeight())
 }
 
+func testMissingCommit(t *testing.T) {
+	input := `
+steps:
+  - type: send
+    messages:
+      - type: request
+        sender: 0
+        operation: test request message
+      - type: prepare
+        client: 0
+        sender: 0
+        receiver: 1
+        view: 0
+        seq: 0
+        prepareid: 0
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+  - type: check
+    messages:
+      - type: commit
+        sender: 1
+        receiver: 2
+        cv: 1
+      - type: commit
+        sender: 1
+        receiver: 0
+        cv: 1
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+`
+
+	result := runSimulator(input)
+
+	assert.True(t, result)
+	assert.Equal(t, uint64(1), replicaStacksBft[uint32(1)].BlockHeight())
+}
+
+func testReplayPrepare(t *testing.T) {
+	input := `
+steps:
+  - type: send
+    messages:
+      - type: request
+        sender: 0
+        operation: ''
+      - type: prepare
+        client: 0
+        sender: 0
+        receiver: 1
+        view: 0
+        seq: 0
+        prepareid: 0
+        duplicates: 1
+      - type: commit
+        sender: 2
+        receiver: 1
+        prepareid: 0
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+  - type: check
+    messages:
+      - type: commit
+        sender: 1
+        receiver: 0
+        cv: 1
+      - type: commit
+        sender: 1
+        receiver: 2
+        cv: 1
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+`
+
+	result := runSimulator(input)
+
+	assert.True(t, result)
+	assert.Equal(t, uint64(1), replicaStacksBft[uint32(1)].BlockHeight())
+}
+
+func testReplayCommit(t *testing.T) {
+	input := `
+steps:
+  - type: send
+    messages:
+      - type: request
+        sender: 0
+        operation: ''
+      - type: prepare
+        client: 0
+        sender: 0
+        receiver: 1
+        view: 0
+        seq: 0
+        prepareid: 0
+      - type: commit
+        sender: 2
+        receiver: 1
+        prepareid: 0
+        duplicates: 1
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+  - type: check
+    messages:
+      - type: commit
+        sender: 1
+        receiver: 2
+        cv: 1
+      - type: commit
+        sender: 1
+        receiver: 0
+        cv: 1
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+`
+
+	result := runSimulator(input)
+
+	assert.True(t, result)
+	assert.Equal(t, uint64(1), replicaStacksBft[uint32(1)].BlockHeight())
+}
+
+func testManipulatedOperation(t *testing.T) {
+	input := `
+steps:
+  - type: send
+    messages:
+      - type: request
+        sender: 0
+        operation: replaced message
+      - type: prepare
+        client: 0
+        sender: 0
+        receiver: 1
+        view: 0
+        seq: 0
+        prepareid: 0
+        request: '{"operation":"replaced message"}'
+      - type: commit
+        sender: 2
+        receiver: 1
+        prepareid: 0
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"cmVwbGFjZWQgbWVzc2FnZQ=="}'
+  - type: check
+    messages:
+      - type: commit
+        sender: 1
+        receiver: 2
+        cv: 1
+      - type: commit
+        sender: 1
+        receiver: 0
+        cv: 1
+      - type: reply
+        sender: 0
+        receiver: 0
+        seq: 0
+        result: '{"Height":1,"PrevBlockHash":null,"Payload":"dGVzdCByZXF1ZXN0IG1lc3NhZ2U="}'
+`
+
+	result := runSimulator(input)
+
+	assert.True(t, result)
+	assert.Equal(t, uint64(0), replicaStacksBft[uint32(1)].BlockHeight())
+}
+
 func TestSimulator(t *testing.T) {
 	testCases := []struct {
 		numReplica    int
@@ -779,6 +966,27 @@ func TestSimulator(t *testing.T) {
 		{numReplica: 3, numClient: 1, targetReplica: 1, testcase: testSimpleScenarioBackup},
 		{numReplica: 3, numClient: 1, targetReplica: 0, testcase: testSimpleScenarioPrimary},
 		{numReplica: 3, numClient: 2, targetReplica: 1, testcase: testTwoClientScenarioBackup},
+	}
+	for _, tc := range testCases {
+		initTestnetPeersBft(tc.numReplica, tc.numClient, tc.targetReplica)
+
+		testname := runtime.FuncForPC(reflect.ValueOf(tc.testcase).Pointer()).Name()
+		testname = filepath.Ext(testname)[1:]
+		t.Run(fmt.Sprintf("%s/r=%d/c=%d/t=%d", testname, tc.numReplica, tc.numClient, tc.targetReplica), tc.testcase)
+	}
+}
+
+func TestBft(t *testing.T) {
+	testCases := []struct {
+		numReplica    int
+		numClient     int
+		targetReplica int
+		testcase      func(t *testing.T)
+	}{
+		{numReplica: 3, numClient: 1, targetReplica: 1, testcase: testMissingCommit},
+		{numReplica: 3, numClient: 1, targetReplica: 1, testcase: testReplayPrepare},
+		{numReplica: 3, numClient: 1, targetReplica: 1, testcase: testReplayCommit},
+		{numReplica: 3, numClient: 1, targetReplica: 1, testcase: testManipulatedOperation},
 	}
 	for _, tc := range testCases {
 		initTestnetPeersBft(tc.numReplica, tc.numClient, tc.targetReplica)
