@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	usigui "github.com/hyperledger-labs/minbft/core/internal/usig-ui"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -71,7 +72,7 @@ type commitmentCounter func(view, primaryCV uint64) (done bool)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
-func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) commitValidator {
+func makeCommitValidator(verifyUI usigui.UIVerifier, validatePrepare prepareValidator) commitValidator {
 	return func(commit messages.Commit) error {
 		prepare := commit.Prepare()
 

@@ -20,6 +20,7 @@ package minbft
 import (
 	"fmt"
 
+	usigui "github.com/hyperledger-labs/minbft/core/internal/usig-ui"
 	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -44,7 +45,7 @@ type prepareApplier func(prepare messages.Prepare, active bool) error
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
 // interfaces.
-func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest requestValidator) prepareValidator {
+func makePrepareValidator(n uint32, verifyUI usigui.UIVerifier, validateRequest requestValidator) prepareValidator {
 	return func(prepare messages.Prepare) error {
 		replicaID := prepare.ReplicaID()
 		view := prepare.View()

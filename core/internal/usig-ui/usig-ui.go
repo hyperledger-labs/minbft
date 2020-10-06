@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package minbft
+package usigui
 
 import (
 	"fmt"
@@ -35,22 +35,22 @@ import (
 // needs to be processed. If so, the processing has to be completed by
 // invoking the returned release function. It is safe to invoke
 // concurrently.
-type uiCapturer func(msg messages.CertifiedMessage) (new bool, release func())
+type UICapturer func(msg messages.CertifiedMessage) (new bool, release func())
 
 // uiVerifier verifies USIG certificate attached to a message.
 //
 // It verifies if the UI assigned to the message is correct and its
 // USIG certificate is valid for the message. A UI with zero counter
 // value is never valid.
-type uiVerifier func(msg messages.CertifiedMessage) error
+type UIVerifier func(msg messages.CertifiedMessage) error
 
 // uiAssigner assigns a unique identifier to a message.
 //
 // USIG UI is assigned and attached to the supplied message.
-type uiAssigner func(msg messages.CertifiedMessage)
+type UIAssigner func(msg messages.CertifiedMessage)
 
 // makeUICapturer constructs uiCapturer using the supplied interface.
-func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
+func MakeUICapturer(providePeerState peerstate.Provider) UICapturer {
 	return func(msg messages.CertifiedMessage) (new bool, release func()) {
 		replicaID := msg.ReplicaID()
 		peerState := providePeerState(replicaID)
@@ -60,7 +60,7 @@ func makeUICapturer(providePeerState peerstate.Provider) uiCapturer {
 
 // makeUIVerifier constructs uiVerifier using the supplied external
 // authenticator to verify USIG certificates.
-func makeUIVerifier(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) uiVerifier {
+func MakeUIVerifier(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) UIVerifier {
 	return func(msg messages.CertifiedMessage) error {
 		ui := msg.UI()
 		if ui.Counter == uint64(0) {
@@ -79,7 +79,7 @@ func makeUIVerifier(authen api.Authenticator, extractAuthenBytes utils.AuthenByt
 
 // makeUIAssigner constructs uiAssigner using the supplied external
 // authentication interface to generate USIG UIs.
-func makeUIAssigner(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) uiAssigner {
+func MakeUIAssigner(authen api.Authenticator, extractAuthenBytes utils.AuthenBytesExtractor) UIAssigner {
 	return func(msg messages.CertifiedMessage) {
 		authenBytes := extractAuthenBytes(msg)
 		uiBytes, err := authen.GenerateMessageAuthenTag(api.USIGAuthen, authenBytes)

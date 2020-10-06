@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package minbft
+package usigui
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ func TestMakeUIVerifier(t *testing.T) {
 		return args.Get(0).([]byte)
 	}
 	authen := mock_api.NewMockAuthenticator(ctrl)
-	verifyUI := makeUIVerifier(authen, extractAuthenBytes)
+	verifyUI := MakeUIVerifier(authen, extractAuthenBytes)
 
 	id := rand.Uint32()
 	ui := &usig.UI{Counter: rand.Uint64(), Cert: utils.RandBytes()}
@@ -92,7 +92,7 @@ func TestMakeUICapturer(t *testing.T) {
 	replicaID := rand.Uint32()
 	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
 
-	captureUI := makeUICapturer(providePeerState)
+	captureUI := MakeUICapturer(providePeerState)
 
 	ui := &usig.UI{Counter: rand.Uint64(), Cert: utils.RandBytes()}
 	msg := mock_messages.NewMockCertifiedMessage(ctrl)

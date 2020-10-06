@@ -27,6 +27,7 @@ import (
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
+	usigui "github.com/hyperledger-labs/minbft/core/internal/usig-ui"
 	"github.com/hyperledger-labs/minbft/core/internal/utils"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -135,8 +136,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	verifyMessageSignature := utils.MakeMessageSignatureVerifier(stack, messages.AuthenBytes)
 	signMessage := utils.MakeMessageSigner(stack, messages.AuthenBytes)
-	verifyUI := makeUIVerifier(stack, messages.AuthenBytes)
-	assignUI := makeUIAssigner(stack, messages.AuthenBytes)
+	verifyUI := usigui.MakeUIVerifier(stack, messages.AuthenBytes)
+	assignUI := usigui.MakeUIAssigner(stack, messages.AuthenBytes)
 
 	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
 	peerStates := peerstate.NewProvider()
@@ -146,7 +147,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
 	pendingReq := requestlist.New()
-	captureUI := makeUICapturer(peerStates)
+	captureUI := usigui.MakeUICapturer(peerStates)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
@@ -473,7 +474,7 @@ func makeEmbeddedMessageProcessor(process messageProcessor, logger *logging.Logg
 	}
 }
 
-func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) uiMessageProcessor {
+func makeUIMessageProcessor(captureUI usigui.UICapturer, processViewMessage viewMessageProcessor) uiMessageProcessor {
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
 		new, release := captureUI(msg)
 		if !new {
@@ -550,7 +551,7 @@ func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitAppli
 
 // makeGeneratedMessageHandler constructs generatedMessageHandler
 // using the supplied abstractions.
-func makeGeneratedMessageHandler(sign utils.MessageSigner, assignUI uiAssigner, consume generatedMessageConsumer) generatedMessageHandler {
+func makeGeneratedMessageHandler(sign utils.MessageSigner, assignUI usigui.UIAssigner, consume generatedMessageConsumer) generatedMessageHandler {
 	var uiLock sync.Mutex
 
 	return func(msg messages.ReplicaMessage) {
