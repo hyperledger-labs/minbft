@@ -78,7 +78,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 
 	var handleOwnMessage, handlePeerMessage, handleClientMessage, handleHelloMessage MessageHandler
 	if nonDefaultStack, ok := stack.(NonDefaultMessageHandler); ok {
-		logger.Info("running with non-default message handlers for system testing\n")
+		logger.Info("Running with non-default message handlers for system testing")
 		handleOwnMessage, handlePeerMessage, handleClientMessage, handleHelloMessage = nonDefaultStack.GenerateMessageHandlers(id, n, messageLog, unicastLogs, configer, stack, logger)
 	} else {
 		handleOwnMessage, handlePeerMessage, handleClientMessage = defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
