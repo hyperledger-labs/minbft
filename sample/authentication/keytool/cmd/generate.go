@@ -48,7 +48,7 @@ var generateCmd = &cobra.Command{
 		if len(args) > 0 {
 			nrReplicas, err := strconv.Atoi(args[0])
 			if err != nil {
-				return fmt.Errorf("Failed to parse number of replicas "+
+				return fmt.Errorf("failed to parse number of replicas "+
 					"from positional argument: %s", err)
 			}
 			viper.Set("replicas.number", nrReplicas)
@@ -56,7 +56,7 @@ var generateCmd = &cobra.Command{
 		if len(args) > 1 {
 			nrClients, err := strconv.Atoi(args[1])
 			if err != nil {
-				return fmt.Errorf("Failed to parse number of clients "+
+				return fmt.Errorf("failed to parse number of clients "+
 					"from positional argument: %s", err)
 			}
 			viper.Set("clients.number", nrClients)
@@ -112,7 +112,7 @@ func init() {
 func generateKeys() error {
 	usigEnclaveFile, err := envsubst.String(viper.GetString("usig.enclaveFile"))
 	if err != nil {
-		return fmt.Errorf("Failed to parse USIG enclave filename: %s", err)
+		return fmt.Errorf("failed to parse USIG enclave filename: %s", err)
 	}
 	opts := &authen.TestnetKeyOpts{
 		NumberReplicas:  viper.GetInt("replicas.number"),
@@ -131,11 +131,11 @@ func generateKeys() error {
 
 	out, err := os.Create(outFileName)
 	if err != nil {
-		return fmt.Errorf("Failed to open output file: %s", err)
+		return fmt.Errorf("failed to open output file: %s", err)
 	}
 
 	if err := authen.GenerateTestnetKeys(out, opts); err != nil {
-		return fmt.Errorf("Failed to generate keys: %s", err)
+		return fmt.Errorf("failed to generate keys: %s", err)
 	}
 
 	return nil

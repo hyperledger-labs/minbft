@@ -51,7 +51,7 @@ type ReplicaServer interface {
 func ListenAndServe(s ReplicaServer, addr string, serverOpts ...grpc.ServerOption) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("Error listening on %s: %s", addr, err)
+		return fmt.Errorf("error listening on %s: %s", addr, err)
 	}
 	return s.Serve(lis)
 }
@@ -73,7 +73,7 @@ func (s *server) Serve(lis net.Listener, serverOpts ...grpc.ServerOption) error 
 
 	err := s.grpcServer.Serve(lis)
 	if err != nil {
-		return fmt.Errorf("Error serving: %s", err)
+		return fmt.Errorf("error serving: %s", err)
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func handleStream(stream rpcStream, in chan<- []byte, out <-chan []byte) error {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				err = fmt.Errorf("Error receiving from server stream: %s", err)
+				err = fmt.Errorf("error receiving from server stream: %s", err)
 				log.Println(err)
 				return err
 			}
@@ -131,7 +131,7 @@ func handleStream(stream rpcStream, in chan<- []byte, out <-chan []byte) error {
 		for msg := range out {
 			err := stream.Send(&proto.Message{Payload: msg})
 			if err != nil {
-				err = fmt.Errorf("Error sending to server stream: %s", err)
+				err = fmt.Errorf("error sending to server stream: %s", err)
 				log.Println(err)
 				return err
 			}

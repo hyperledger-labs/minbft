@@ -39,7 +39,7 @@ func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Sta
 		connector := makeReplicaConnector(i, stack)
 		inHandler := makeIncomingMessageHandler(i, handleReply)
 		if err := startReplicaConnection(outHandler, inHandler, connector); err != nil {
-			return fmt.Errorf("Error connecting to replica %d: %s", i, err)
+			return fmt.Errorf("error connecting to replica %d: %s", i, err)
 		}
 	}
 
@@ -115,7 +115,7 @@ func makeReplicaConnector(replicaID uint32, connector api.ReplicaConnector) repl
 	return func(out <-chan []byte) (<-chan []byte, error) {
 		streamHandler := connector.ReplicaMessageStreamHandler(replicaID)
 		if streamHandler == nil {
-			return nil, fmt.Errorf("Connection not possible")
+			return nil, fmt.Errorf("connection not possible")
 		}
 		in := streamHandler.HandleMessageStream(out)
 		return in, nil
@@ -161,7 +161,7 @@ func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenti
 func makeReplyAuthenticator(clientID uint32, authenticator api.Authenticator) replyAuthenticator {
 	return func(reply messages.Reply) error {
 		if reply.ClientID() != clientID {
-			return fmt.Errorf("Client ID mismatch")
+			return fmt.Errorf("client ID mismatch")
 		}
 
 		return authenticator.VerifyMessageAuthenTag(api.ReplicaAuthen, reply.ReplicaID(),

@@ -130,7 +130,7 @@ func TestProviderConcurrent(t *testing.T) {
 	for i, s1 := range peerStates {
 		for j, s2 := range peerStates[i+1:] {
 			if s1 == s2 && s1 != nil {
-				t.Errorf("Peers %d and %d got the same instance", i, j)
+				t.Errorf("peers %d and %d got the same instance", i, j)
 			}
 		}
 	}

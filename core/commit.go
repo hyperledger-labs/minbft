@@ -76,11 +76,11 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 		prepare := commit.Prepare()
 
 		if commit.ReplicaID() == prepare.ReplicaID() {
-			return fmt.Errorf("Commit from primary")
+			return fmt.Errorf("commit from primary")
 		}
 
 		if err := validatePrepare(prepare); err != nil {
-			return fmt.Errorf("Invalid Prepare: %s", err)
+			return fmt.Errorf("invalid Prepare: %s", err)
 		}
 
 		if err := verifyUI(commit); err != nil {
@@ -96,7 +96,7 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 	return func(commit messages.Commit, active bool) error {
 		if err := collectCommitment(commit); err != nil {
-			return fmt.Errorf("Commit cannot be taken into account: %s", err)
+			return fmt.Errorf("commit cannot be taken into account: %s", err)
 		}
 
 		return nil
@@ -118,7 +118,7 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 		case messages.Commit:
 			prepare = msg.Prepare()
 		default:
-			return fmt.Errorf("Unexpected message type")
+			return fmt.Errorf("unexpected message type")
 		}
 
 		view := prepare.View()
@@ -129,7 +129,7 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 		defer lock.Unlock()
 
 		if err := acceptCommitment(replicaID, false, view, primaryCV, replicaCV); err != nil {
-			return fmt.Errorf("Cannot accept commitment: %s", err)
+			return fmt.Errorf("cannot accept commitment: %s", err)
 		}
 
 		if done := countCommitment(view, primaryCV); !done {
@@ -152,18 +152,18 @@ func makeCommitmentAcceptor() commitmentAcceptor {
 	return func(replicaID uint32, newView bool, view, primaryCV, replicaCV uint64) error {
 		if newView {
 			if view <= replicaViews[replicaID] {
-				return fmt.Errorf("Unexpected view number")
+				return fmt.Errorf("unexpected view number")
 			}
 			replicaViews[replicaID] = view
 		} else {
 			if view != replicaViews[replicaID] {
-				return fmt.Errorf("Unexpected view number")
+				return fmt.Errorf("unexpected view number")
 			}
 			if primaryCV != lastPrimaryCVs[replicaID]+1 {
-				return fmt.Errorf("Non-sequential primary UI")
+				return fmt.Errorf("non-sequential primary UI")
 			}
 			if replicaCV != lastReplicaCVs[replicaID]+1 {
-				return fmt.Errorf("Non-sequential replica UI")
+				return fmt.Errorf("non-sequential replica UI")
 			}
 		}
 

@@ -55,7 +55,7 @@ func TestMakePrepareValidator(t *testing.T) {
 
 	prepare = messageImpl.NewPrepare(primary, view, request)
 
-	mock.On("requestValidator", request).Return(fmt.Errorf("Invalid signature")).Once()
+	mock.On("requestValidator", request).Return(fmt.Errorf("invalid signature")).Once()
 	err = validate(prepare)
 	assert.Error(t, err)
 
@@ -109,7 +109,7 @@ func TestMakePrepareApplier(t *testing.T) {
 	assert.Error(t, err, "Request ID already prepared")
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", ownPrepare).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", ownPrepare).Return(fmt.Errorf("error")).Once()
 	err = apply(ownPrepare, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
@@ -119,7 +119,7 @@ func TestMakePrepareApplier(t *testing.T) {
 	assert.NoError(t, err)
 
 	mock.On("requestSeqPreparer", request).Return(true).Once()
-	mock.On("commitmentCollector", prepare).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", prepare).Return(fmt.Errorf("error")).Once()
 	err = apply(prepare, true)
 	assert.Error(t, err, "Failed to collect commitment")
 

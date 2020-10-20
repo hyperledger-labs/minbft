@@ -73,7 +73,7 @@ func NewReplicaSide() ReplicaConnector {
 func (c *connector) ConnectReplica(replicaID uint32, target string, dialOpts ...grpc.DialOption) error {
 	connection, err := grpc.Dial(target, dialOpts...)
 	if err != nil {
-		return fmt.Errorf("Failed to dial replica: %s", err)
+		return fmt.Errorf("failed to dial replica: %s", err)
 	}
 
 	replica := &replica{

@@ -85,7 +85,7 @@ func TestMakeRequestProcessor(t *testing.T) {
 	viewState.EXPECT().HoldView().Return(view, view, func() {
 		mock.MethodCalled("viewReleaser")
 	})
-	mock.On("requestApplier", request, view).Return(fmt.Errorf("Failed")).Once()
+	mock.On("requestApplier", request, view).Return(fmt.Errorf("failed")).Once()
 	mock.On("viewReleaser").Once()
 	mock.On("requestSeqReleaser", request).Once()
 	_, err = process(request)
@@ -248,7 +248,7 @@ func TestMakeRequestSeqPreparer(t *testing.T) {
 	seq := rand.Uint64()
 	request := messageImpl.NewRequest(expectedClientID, seq, nil)
 
-	state.EXPECT().PrepareRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	state.EXPECT().PrepareRequestSeq(seq).Return(false, fmt.Errorf("error"))
 	assert.Panics(t, func() { prepareSeq(request) })
 
 	state.EXPECT().PrepareRequestSeq(seq).Return(false, nil)
@@ -272,7 +272,7 @@ func TestMakeRequestSeqRetirer(t *testing.T) {
 	seq := rand.Uint64()
 	request := messageImpl.NewRequest(expectedClientID, seq, nil)
 
-	state.EXPECT().RetireRequestSeq(seq).Return(false, fmt.Errorf("Error"))
+	state.EXPECT().RetireRequestSeq(seq).Return(false, fmt.Errorf("error"))
 	assert.Panics(t, func() { retireSeq(request) })
 
 	state.EXPECT().RetireRequestSeq(seq).Return(false, nil)

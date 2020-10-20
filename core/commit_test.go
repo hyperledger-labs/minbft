@@ -96,7 +96,7 @@ func TestMakeCommitApplier(t *testing.T) {
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(id, prepare)
 
-	mock.On("commitmentCollector", commit).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentCollector", commit).Return(fmt.Errorf("error")).Once()
 	err := apply(commit, true)
 	assert.Error(t, err, "Failed to collect commitment")
 
@@ -143,11 +143,11 @@ func TestMakeCommitmentCollector(t *testing.T) {
 	commit := messageImpl.NewCommit(id, prepare)
 	commit.SetUI(&usig.UI{Counter: backupCV})
 
-	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentAcceptor", primary, false, view, primaryCV, primaryCV).Return(fmt.Errorf("error")).Once()
 	err := collect(prepare)
 	assert.Error(t, err, "Failed to accept Prepare")
 
-	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(fmt.Errorf("Error")).Once()
+	mock.On("commitmentAcceptor", id, false, view, primaryCV, backupCV).Return(fmt.Errorf("error")).Once()
 	err = collect(commit)
 	assert.Error(t, err, "Failed to accept Commit")
 
