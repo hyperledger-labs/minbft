@@ -22,6 +22,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -29,15 +30,15 @@ import (
 // starts message exchange with them given a total number of replicas,
 // request buffer to add/fetch messages to/from and a stack of
 // interfaces to external modules.
-func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack) error {
+func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack, logger logger.Logger) error {
 	outHandler := makeOutgoingMessageHandler(buf)
 	authenticator := makeReplyAuthenticator(clientID, stack)
 	consumer := makeReplyConsumer(buf)
-	handleReply := makeReplyMessageHandler(consumer, authenticator)
+	handleReply := makeReplyMessageHandler(consumer, authenticator, logger)
 
 	for i := uint32(0); i < n; i++ {
 		connector := makeReplicaConnector(i, stack)
-		inHandler := makeIncomingMessageHandler(i, handleReply)
+		inHandler := makeIncomingMessageHandler(i, handleReply, logger)
 		if err := startReplicaConnection(outHandler, inHandler, connector); err != nil {
 			return fmt.Errorf("error connecting to replica %d: %s", i, err)
 		}
@@ -90,7 +91,7 @@ func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
 // makeIncomingMessageHandler constructs an incomingMessageHandler
 // using replicaID as the ID of replica which supplies incoming
 // messages, and the passed abstraction to handle Reply messages.
-func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler) incomingMessageHandler {
+func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler, logger logger.Logger) incomingMessageHandler {
 	return func(in <-chan []byte) {
 		for msgBytes := range in {
 			msg, err := messageImpl.NewFromBinary(msgBytes)
@@ -137,7 +138,7 @@ type replyConsumer func(reply messages.Reply) bool
 
 // makeReplyMessageHandler construct a replyMessageHandler using the
 // supplied abstractions.
-func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenticator) replyMessageHandler {
+func makeReplyMessageHandler(consumer replyConsumer, authenticator replyAuthenticator, logger logger.Logger) replyMessageHandler {
 	return func(reply messages.Reply) {
 		replicaID := reply.ReplicaID()
 

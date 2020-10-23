@@ -23,6 +23,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
@@ -34,8 +35,8 @@ type requestHandler func(operation []byte) <-chan []byte
 // makeRequestHandler constructs a requestHandler uisng the supplied
 // clientID, sequence number generator, authenticator, request buffer,
 // and number of tolerated faulty replicas.
-func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, f uint32) requestHandler {
-	submitter := makeRequestSubmitter(clientID, seq, authen, buf)
+func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, f uint32, logger logger.Logger) requestHandler {
+	submitter := makeRequestSubmitter(clientID, seq, authen, buf, logger)
 	collector := makeReplyCollector(f, buf)
 	return func(operation []byte) <-chan []byte {
 		return handleRequest(operation, submitter, collector)
@@ -111,8 +112,8 @@ type sequenceGenerator func() uint64
 // makeRequestSubmitter constructs a requestSubmitter using the
 // supplied client ID, sequence number generator, authenticator and
 // request buffer to add the produced Request message to.
-func makeRequestSubmitter(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T) requestSubmitter {
-	preparer := makeRequestPreparer(clientID, authen, seq)
+func makeRequestSubmitter(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, logger logger.Logger) requestSubmitter {
+	preparer := makeRequestPreparer(clientID, authen, seq, logger)
 	consumer := makeRequestConsumer(buf)
 	return func(operation []byte) <-chan messages.Reply {
 		return submitRequest(operation, preparer, consumer)
@@ -144,12 +145,12 @@ func submitRequest(operation []byte, preparer requestPreparer, consumer requestC
 
 // makeRequestPreparer constructs a requestPreparer using the supplied
 // client ID, authenticator, and sequence number generator.
-func makeRequestPreparer(clientID uint32, authenticator api.Authenticator, seq sequenceGenerator) requestPreparer {
+func makeRequestPreparer(clientID uint32, authenticator api.Authenticator, seq sequenceGenerator, logger logger.Logger) requestPreparer {
 	constructor := makeRequestConstructor(clientID, seq)
 	signer := makeRequestSigner(authenticator)
 
 	return func(operation []byte) messages.Request {
-		return prepareRequest(operation, constructor, signer)
+		return prepareRequest(operation, constructor, signer, logger)
 	}
 }
 
@@ -172,7 +173,7 @@ type requestSigner func(request messages.Request) error
 // prepareRequest prepares a new singed Request message given an
 // operation to execute by the replicated state machine, request
 // constructor and signer.
-func prepareRequest(operation []byte, constructor requestConstructor, signer requestSigner) messages.Request {
+func prepareRequest(operation []byte, constructor requestConstructor, signer requestSigner, logger logger.Logger) messages.Request {
 	request := constructor(operation)
 	if err := signer(request); err != nil {
 		logger.Fatalf("Failed to sign request message: %s", err)
