@@ -25,6 +25,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client"
+	"github.com/hyperledger-labs/minbft/common/logger"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
 	"github.com/hyperledger-labs/minbft/sample/conn/grpc/connector"
@@ -100,6 +101,13 @@ func requests(args []string) ([]byte, error) {
 	cfg := config.New()
 	cfg.LoadConfig(viper.GetString("consensusConf"))
 
+	loggingOpts, err := getLoggingOptions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logging options: %s", err)
+	}
+	clientLogger := logger.NewClientLogger(id, loggingOpts...)
+	clientOptions := client.WithLogger(clientLogger)
+
 	peerAddrs := make(map[uint32]string)
 	for _, p := range cfg.Peers() {
 		peerAddrs[uint32(p.ID)] = p.Addr
@@ -114,7 +122,7 @@ func requests(args []string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to connect to peers: %s", err)
 	}
 
-	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn})
+	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn}, clientOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client instance: %s", err)
 	}

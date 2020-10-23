@@ -21,6 +21,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/hyperledger-labs/minbft/common/logger"
+	"github.com/op/go-logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -67,6 +69,14 @@ func init() {
 	rootCmd.PersistentFlags().String("keys", defKeysFile, "keyset file")
 	must(viper.BindPFlag("keys",
 		rootCmd.PersistentFlags().Lookup("keys")))
+
+	rootCmd.PersistentFlags().String("logging-level", "", "logging level")
+	must(viper.BindPFlag("logging.level",
+		rootCmd.PersistentFlags().Lookup("logging-level")))
+
+	rootCmd.PersistentFlags().String("logging-file", "", "logging file")
+	must(viper.BindPFlag("logging.file",
+		rootCmd.PersistentFlags().Lookup("logging-file")))
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -85,4 +95,26 @@ func must(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func getLoggingOptions() ([]logger.Option, error) {
+	opts := []logger.Option{}
+
+	if viper.GetString("logging.level") != "" {
+		logLevel, err := logging.LogLevel(viper.GetString("logging.level"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set logging level: %s", err)
+		}
+		opts = append(opts, logger.WithLogLevel(logLevel))
+	}
+
+	if viper.GetString("logging.file") != "" {
+		logFile, err := os.OpenFile(viper.GetString("logging.file"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open logging file: %s", err)
+		}
+		opts = append(opts, logger.WithLogFile(logFile))
+	}
+
+	return opts, nil
 }
