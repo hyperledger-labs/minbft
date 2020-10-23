@@ -23,10 +23,10 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	logging "github.com/op/go-logging"
 	testifymock "github.com/stretchr/testify/mock"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
 
@@ -42,7 +42,7 @@ func TestMakeRequestTimeoutHandler(t *testing.T) {
 		return args.Bool(0)
 	}
 
-	handle := makeRequestTimeoutHandler(requestViewChange, logging.MustGetLogger(module))
+	handle := makeRequestTimeoutHandler(requestViewChange, logger.NewReplicaLogger(0))
 
 	view := rand.Uint64()
 

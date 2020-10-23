@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	logging "github.com/op/go-logging"
 	testifymock "github.com/stretchr/testify/mock"
 
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -334,8 +334,7 @@ func TestMakeRequestTimerStarter(t *testing.T) {
 		mock.MethodCalled("requestTimeoutHandler", view)
 	}
 
-	startTimer := makeRequestTimerStarter(provider, handleTimeout,
-		logging.MustGetLogger(module))
+	startTimer := makeRequestTimerStarter(provider, handleTimeout, logger.NewReplicaLogger(clientID))
 
 	request := messageImpl.NewRequest(clientID, seq, nil)
 
@@ -390,7 +389,7 @@ func TestMakePrepareTimerStarter(t *testing.T) {
 	unicastLogs := map[uint32]messagelog.MessageLog{
 		uint32(0): messagelog.New(),
 	}
-	startTimer := makePrepareTimerStarter(uint32(0), provider, unicastLogs, logging.MustGetLogger(module))
+	startTimer := makePrepareTimerStarter(uint32(0), provider, unicastLogs, logger.NewReplicaLogger(0))
 
 	request := messageImpl.NewRequest(clientID, seq, nil)
 

@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/common/logger"
 	minbft "github.com/hyperledger-labs/minbft/core"
 	authen "github.com/hyperledger-labs/minbft/sample/authentication"
 	"github.com/hyperledger-labs/minbft/sample/config"
@@ -122,11 +123,6 @@ func run() error {
 		}
 	}
 
-	loggingOpts, err := getLoggingOptions()
-	if err != nil {
-		return fmt.Errorf("failed to create logging options: %s", err)
-	}
-
 	conn := connector.NewReplicaSide()
 
 	// XXX: The connection destination should be authenticated;
@@ -135,7 +131,13 @@ func run() error {
 		return fmt.Errorf("failed to connect to peers: %s", err)
 	}
 
-	replica, err := minbft.New(id, cfg, &replicaStack{conn, auth, ledger}, loggingOpts...)
+	loggingOpts, err := getLoggingOptions()
+	if err != nil {
+		return fmt.Errorf("failed to create logging options: %s", err)
+	}
+	replicaLogger := logger.NewReplicaLogger(id, loggingOpts...)
+	replicaOptions := minbft.WithLogger(replicaLogger)
+	replica, err := minbft.New(id, cfg, &replicaStack{conn, auth, ledger}, replicaOptions)
 	if err != nil {
 		return fmt.Errorf("failed to create replica instance: %s", err)
 	}
@@ -158,15 +160,15 @@ func run() error {
 	return <-srvErrChan
 }
 
-func getLoggingOptions() ([]minbft.Option, error) {
-	opts := []minbft.Option{}
+func getLoggingOptions() ([]logger.Option, error) {
+	opts := []logger.Option{}
 
 	if viper.GetString("logging.level") != "" {
 		logLevel, err := logging.LogLevel(viper.GetString("logging.level"))
 		if err != nil {
 			return nil, fmt.Errorf("failed to set logging level: %s", err)
 		}
-		opts = append(opts, minbft.WithLogLevel(logLevel))
+		opts = append(opts, logger.WithLogLevel(logLevel))
 	}
 
 	if viper.GetString("logging.file") != "" {
@@ -174,7 +176,7 @@ func getLoggingOptions() ([]minbft.Option, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open logging file: %s", err)
 		}
-		opts = append(opts, minbft.WithLogFile(logFile))
+		opts = append(opts, logger.WithLogFile(logFile))
 	}
 
 	return opts, nil

@@ -17,8 +17,7 @@ package minbft
 import (
 	"sync"
 
-	logging "github.com/op/go-logging"
-
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 )
 
@@ -29,7 +28,7 @@ type viewChangeRequestor func(newView uint64) (ok bool)
 
 // makeRequestTimeoutHandler constructs an instance of
 // requestTimeoutHandler given the supplied abstractions.
-func makeRequestTimeoutHandler(requestViewChange viewChangeRequestor, logger *logging.Logger) requestTimeoutHandler {
+func makeRequestTimeoutHandler(requestViewChange viewChangeRequestor, logger logger.Logger) requestTimeoutHandler {
 	return func(view uint64) {
 		newView := view + 1
 

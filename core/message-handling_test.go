@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	logging "github.com/op/go-logging"
 	testifymock "github.com/stretchr/testify/mock"
 
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/messages"
 
@@ -364,7 +364,7 @@ func TestMakeEmbeddedMessageProcessor(t *testing.T) {
 		return args.Bool(0), args.Error(1)
 	}
 
-	process := makeEmbeddedMessageProcessor(processMessage, logging.MustGetLogger(module))
+	process := makeEmbeddedMessageProcessor(processMessage, logger.NewReplicaLogger(0))
 
 	n, view := randN(), randView()
 	primary := primaryID(n, view)
@@ -653,7 +653,7 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 		return clientState
 	}
 
-	consume := makeGeneratedMessageConsumer(log, clientStates, logging.MustGetLogger(module))
+	consume := makeGeneratedMessageConsumer(log, clientStates, logger.NewReplicaLogger(0))
 
 	t.Run("Reply", func(t *testing.T) {
 		reply := messageImpl.NewReply(rand.Uint32(), clientID, rand.Uint64(), nil)
