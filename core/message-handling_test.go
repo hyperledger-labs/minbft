@@ -53,7 +53,7 @@ func TestMakeOwnMessageHandler(t *testing.T) {
 		i int
 	}{i: rand.Int()}
 
-	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 	_, _, err := handle(msg)
 	assert.Error(t, err)
 
@@ -89,12 +89,12 @@ func TestMakePeerMessageHandler(t *testing.T) {
 		i int
 	}{i: rand.Int()}
 
-	mock.On("messageValidator", msg).Return(fmt.Errorf("Error")).Once()
+	mock.On("messageValidator", msg).Return(fmt.Errorf("error")).Once()
 	_, _, err := handle(msg)
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
-	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 	_, _, err = handle(msg)
 	assert.Error(t, err)
 
@@ -149,12 +149,12 @@ func TestMakeClientMessageHandler(t *testing.T) {
 	_, _, err := handle(msg)
 	assert.Error(t, err, "Unexpected message")
 
-	mock.On("requestValidator", req).Return(fmt.Errorf("Error")).Once()
+	mock.On("requestValidator", req).Return(fmt.Errorf("error")).Once()
 	_, _, err = handle(req)
 	assert.Error(t, err)
 
 	mock.On("requestValidator", req).Return(nil).Once()
-	mock.On("requestProcessor", req).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("requestProcessor", req).Return(false, fmt.Errorf("error")).Once()
 	_, _, err = handle(req)
 	assert.Error(t, err)
 
@@ -209,7 +209,7 @@ func TestMakeMessageValidator(t *testing.T) {
 		assert.Panics(t, func() { validateMessage(msg) }, "Unknown message type")
 	})
 	t.Run("Request", func(t *testing.T) {
-		mock.On("requestValidator", request).Return(fmt.Errorf("Error")).Once()
+		mock.On("requestValidator", request).Return(fmt.Errorf("error")).Once()
 		err := validateMessage(request)
 		assert.Error(t, err, "Invalid Request")
 
@@ -218,7 +218,7 @@ func TestMakeMessageValidator(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		mock.On("prepareValidator", prepare).Return(fmt.Errorf("Error")).Once()
+		mock.On("prepareValidator", prepare).Return(fmt.Errorf("error")).Once()
 		err := validateMessage(prepare)
 		assert.Error(t, err, "Invalid Prepare")
 
@@ -227,7 +227,7 @@ func TestMakeMessageValidator(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("commitValidator", commit).Return(fmt.Errorf("Error")).Once()
+		mock.On("commitValidator", commit).Return(fmt.Errorf("error")).Once()
 		err := validateMessage(commit)
 		assert.Error(t, err, "Invalid Commit")
 
@@ -261,7 +261,7 @@ func TestMakeMessageProcessor(t *testing.T) {
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 	t.Run("Request", func(t *testing.T) {
-		mock.On("requestProcessor", request).Return(false, fmt.Errorf("Error")).Once()
+		mock.On("requestProcessor", request).Return(false, fmt.Errorf("error")).Once()
 		_, err := process(request)
 		assert.Error(t, err, "Failed to process Request")
 
@@ -333,7 +333,7 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		assert.NoError(t, err)
 
 		mock.On("embeddedMessageProcessor", msg).Once()
-		mock.On("uiMessageProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
+		mock.On("uiMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 		_, err = process(msg)
 		assert.Error(t, err, "Failed to finish processing certified message")
 
@@ -418,7 +418,7 @@ func TestMakeUIMessageProcessor(t *testing.T) {
 	assert.False(t, new)
 
 	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(false, fmt.Errorf("Error")).Once()
+	mock.On("viewMessageProcessor", uiMsg).Return(false, fmt.Errorf("error")).Once()
 	mock.On("uiReleaser", uiMsg).Once()
 	_, err = process(uiMsg)
 	assert.Error(t, err, "Failed to process message in current view")
@@ -536,7 +536,7 @@ func TestMakePeerMessageApplier(t *testing.T) {
 		assert.Panics(t, func() { apply(msg, true) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		mock.On("prepareApplier", prepare, true).Return(fmt.Errorf("Error")).Once()
+		mock.On("prepareApplier", prepare, true).Return(fmt.Errorf("error")).Once()
 		err := apply(prepare, true)
 		assert.Error(t, err, "Failed to apply Prepare")
 
@@ -549,7 +549,7 @@ func TestMakePeerMessageApplier(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("commitApplier", commit, true).Return(fmt.Errorf("Error")).Once()
+		mock.On("commitApplier", commit, true).Return(fmt.Errorf("error")).Once()
 		err := apply(commit, true)
 		assert.Error(t, err, "Failed to apply Commit")
 
@@ -661,7 +661,7 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 		clientState.EXPECT().AddReply(reply).Return(nil)
 		consume(reply)
 
-		clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("Invalid request ID"))
+		clientState.EXPECT().AddReply(reply).Return(fmt.Errorf("invalid request ID"))
 		assert.Panics(t, func() { consume(reply) })
 	})
 	t.Run("PeerMessage", func(t *testing.T) {

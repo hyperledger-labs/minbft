@@ -89,12 +89,12 @@ func requests(args []string) ([]byte, error) {
 
 	keysFile, err := os.Open(viper.GetString("keys"))
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open keyset file: %s", err)
+		return nil, fmt.Errorf("failed to open keyset file: %s", err)
 	}
 
 	auth, err := authen.New([]api.AuthenticationRole{api.ClientAuthen}, id, keysFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create authenticator: %s", err)
+		return nil, fmt.Errorf("failed to create authenticator: %s", err)
 	}
 
 	cfg := config.New()
@@ -111,12 +111,12 @@ func requests(args []string) ([]byte, error) {
 	// grpc.WithInsecure() option is passed here for simplicity.
 	err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to peers: %s", err)
+		return nil, fmt.Errorf("failed to connect to peers: %s", err)
 	}
 
 	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create client instance: %s", err)
+		return nil, fmt.Errorf("failed to create client instance: %s", err)
 	}
 
 	if len(args) > 0 {

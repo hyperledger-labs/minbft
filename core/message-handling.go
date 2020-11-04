@@ -257,7 +257,7 @@ func startPeerConnections(ownID, n uint32, connector api.ReplicaConnector, handl
 		connect := makePeerConnector(peerID, connector)
 		handleReplyStream := makeMessageStreamHandler(handleMessage, remote, logger)
 		if err := startPeerConnection(ownID, connect, handleReplyStream); err != nil {
-			return fmt.Errorf("Cannot connect to replica %d: %s", peerID, err)
+			return fmt.Errorf("cannot connect to replica %d: %s", peerID, err)
 		}
 	}
 
@@ -294,7 +294,7 @@ func startPeerConnection(ownID uint32, connect peerConnector, handleReplyStream 
 func handleOwnPeerMessages(log messagelog.MessageLog, handleOwnMessage messageHandler, logger *logging.Logger) {
 	for msg := range log.Stream(nil) {
 		if _, new, err := handleOwnMessage(msg); err != nil {
-			panic(fmt.Errorf("Error handling own message: %s", err))
+			panic(fmt.Errorf("error handling own message: %s", err))
 		} else if new {
 			logger.Debugf("Handled own %s", messages.Stringify(msg))
 		}
@@ -307,7 +307,7 @@ func makePeerConnector(peerID uint32, connector api.ReplicaConnector) peerConnec
 	return func(out <-chan []byte) (in <-chan []byte, err error) {
 		sh := connector.ReplicaMessageStreamHandler(peerID)
 		if sh == nil {
-			return nil, fmt.Errorf("Connection not possible")
+			return nil, fmt.Errorf("connection not possible")
 		}
 		return sh.HandleMessageStream(out), nil
 	}
@@ -317,11 +317,11 @@ func makeHelloHandler(ownID, n uint32, messageLog messagelog.MessageLog, unicast
 	return func(msg messages.Message) (<-chan messages.Message, bool, error) {
 		h, ok := msg.(messages.Hello)
 		if !ok {
-			return nil, false, fmt.Errorf("Unexpected message type")
+			return nil, false, fmt.Errorf("unexpected message type")
 		}
 		peerID := h.ReplicaID()
 		if peerID >= n || peerID == ownID {
-			return nil, false, fmt.Errorf("Unexpected peer ID")
+			return nil, false, fmt.Errorf("unexpected peer ID")
 		}
 
 		var replyChan = make(chan messages.Message)
@@ -353,7 +353,7 @@ func makeOwnMessageHandler(process messageProcessor) messageHandler {
 	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
 		new, err = process(msg)
 		if err != nil {
-			return nil, false, fmt.Errorf("Error processing message: %s", err)
+			return nil, false, fmt.Errorf("error processing message: %s", err)
 		}
 
 		return nil, new, nil
@@ -364,12 +364,12 @@ func makePeerMessageHandler(validate messageValidator, process messageProcessor)
 	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
 		err = validate(msg)
 		if err != nil {
-			return nil, false, fmt.Errorf("Validation failed: %s", err)
+			return nil, false, fmt.Errorf("validation failed: %s", err)
 		}
 
 		new, err = process(msg)
 		if err != nil {
-			return nil, false, fmt.Errorf("Error processing message: %s", err)
+			return nil, false, fmt.Errorf("error processing message: %s", err)
 		}
 
 		return nil, new, nil
@@ -380,17 +380,17 @@ func makeClientMessageHandler(validateRequest requestValidator, processRequest r
 	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
 		req, ok := msg.(messages.Request)
 		if !ok {
-			return nil, false, fmt.Errorf("Unexpected message type")
+			return nil, false, fmt.Errorf("unexpected message type")
 		}
 
 		err = validateRequest(req)
 		if err != nil {
-			return nil, false, fmt.Errorf("Invalid Reqeust: %s", err)
+			return nil, false, fmt.Errorf("invalid Reqeust: %s", err)
 		}
 
 		new, err = processRequest(req)
 		if err != nil {
-			return nil, false, fmt.Errorf("Error processing Request: %s", err)
+			return nil, false, fmt.Errorf("error processing Request: %s", err)
 		}
 
 		replyChan := make(chan messages.Message, 1)
@@ -416,7 +416,7 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 		case messages.Commit:
 			return validateCommit(msg)
 		case messages.ReqViewChange:
-			return fmt.Errorf("Not implemented")
+			return fmt.Errorf("not implemented")
 		default:
 			panic("Unknown message type")
 		}
@@ -518,14 +518,14 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 				// that this replica would transition
 				// into the new view before processing
 				// the message.
-				return false, fmt.Errorf("Message refers to unexpected view")
+				return false, fmt.Errorf("message refers to unexpected view")
 			}
 		default:
 			panic("Unknown message type")
 		}
 
 		if err := applyPeerMessage(msg, active); err != nil {
-			return false, fmt.Errorf("Failed to apply message: %s", err)
+			return false, fmt.Errorf("failed to apply message: %s", err)
 		}
 
 		return true, nil
@@ -576,7 +576,7 @@ func makeGeneratedMessageConsumer(log messagelog.MessageLog, provider clientstat
 			clientID := msg.ClientID()
 			if err := provider(clientID).AddReply(msg); err != nil {
 				// Erroneous Reply must never be supplied
-				panic(fmt.Errorf("Failed to consume generated Reply: %s", err))
+				panic(fmt.Errorf("failed to consume generated Reply: %s", err))
 			}
 		case messages.ReplicaMessage:
 			log.Append(msg)

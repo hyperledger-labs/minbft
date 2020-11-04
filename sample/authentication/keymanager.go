@@ -444,7 +444,7 @@ func GenerateTestnetKeys(w io.Writer, opts *TestnetKeyOpts) error {
 	enc := yaml.NewEncoder(w)
 	err = enc.Encode(keys)
 	if err != nil {
-		return fmt.Errorf("Failed to marshal simpleKeyStoreFile to yaml: %v", err)
+		return fmt.Errorf("failed to marshal simpleKeyStoreFile to yaml: %v", err)
 	}
 	return enc.Close()
 }

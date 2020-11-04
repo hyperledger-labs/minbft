@@ -57,13 +57,13 @@ type Client interface {
 // a stack of external interfaces.
 func New(id uint32, n, f uint32, stack Stack) (Client, error) {
 	if n < f*2+1 {
-		return nil, fmt.Errorf("Insufficient number of replica nodes")
+		return nil, fmt.Errorf("insufficient number of replica nodes")
 	}
 
 	buf := requestbuffer.New()
 
 	if err := startReplicaConnections(id, n, buf, stack); err != nil {
-		return nil, fmt.Errorf("Failed to initiate connections to replicas: %s", err)
+		return nil, fmt.Errorf("failed to initiate connections to replicas: %s", err)
 	}
 
 	seq := makeSequenceGenerator()

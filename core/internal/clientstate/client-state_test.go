@@ -55,7 +55,7 @@ func TestProviderConcurrent(t *testing.T) {
 	for i, s1 := range clientStates {
 		for j, s2 := range clientStates[i+1:] {
 			if s1 == s2 && s1 != nil {
-				t.Errorf("Clients %d and %d got the same instance", i, j)
+				t.Errorf("clients %d and %d got the same instance", i, j)
 			}
 		}
 	}

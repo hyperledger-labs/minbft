@@ -76,7 +76,7 @@ func (t stdTimer) Expired() <-chan time.Time {
 
 func (t stdTimer) Reset(d time.Duration) {
 	if t.Stop() {
-		panic(fmt.Errorf("Resetting active timer"))
+		panic(fmt.Errorf("resetting active timer"))
 	}
 	t.Timer.Reset(d)
 }

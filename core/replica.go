@@ -75,7 +75,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs)
 
 	if err := startPeerConnections(id, n, stack, handlePeerMessage, logger); err != nil {
-		return nil, fmt.Errorf("Failed to start peer connections: %s", err)
+		return nil, fmt.Errorf("failed to start peer connections: %s", err)
 	}
 
 	go handleOwnPeerMessages(messageLog, handleOwnMessage, logger)

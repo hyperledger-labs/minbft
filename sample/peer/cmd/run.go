@@ -51,7 +51,7 @@ var runCmd = &cobra.Command{
 		if len(args) > 0 {
 			id, err := strconv.Atoi(args[0])
 			if err != nil {
-				return fmt.Errorf("Failed to parse replica ID "+
+				return fmt.Errorf("failed to parse replica ID "+
 					"from positional argument: %s", err)
 			}
 			viper.Set("replica.id", id)
@@ -93,17 +93,17 @@ func run() error {
 
 	usigEnclaveFile, err := envsubst.String(viper.GetString("usig.enclaveFile"))
 	if err != nil {
-		return fmt.Errorf("Failed to parse USIG enclave filename: %s", err)
+		return fmt.Errorf("failed to parse USIG enclave filename: %s", err)
 	}
 
 	keysFile, err := os.Open(viper.GetString("keys"))
 	if err != nil {
-		return fmt.Errorf("Failed to open keyset file: %s", err)
+		return fmt.Errorf("failed to open keyset file: %s", err)
 	}
 
 	auth, err := authen.NewWithSGXUSIG([]api.AuthenticationRole{api.ReplicaAuthen, api.USIGAuthen}, id, keysFile, usigEnclaveFile)
 	if err != nil {
-		return fmt.Errorf("Failed to create authenticator: %s", err)
+		return fmt.Errorf("failed to create authenticator: %s", err)
 	}
 
 	cfg := config.New()
@@ -124,7 +124,7 @@ func run() error {
 
 	loggingOpts, err := getLoggingOptions()
 	if err != nil {
-		return fmt.Errorf("Failed to create logging options: %s", err)
+		return fmt.Errorf("failed to create logging options: %s", err)
 	}
 
 	conn := connector.NewReplicaSide()
@@ -132,12 +132,12 @@ func run() error {
 	// XXX: The connection destination should be authenticated;
 	// grpc.WithInsecure() option is passed here for simplicity.
 	if err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure()); err != nil {
-		return fmt.Errorf("Failed to connect to peers: %s", err)
+		return fmt.Errorf("failed to connect to peers: %s", err)
 	}
 
 	replica, err := minbft.New(id, cfg, &replicaStack{conn, auth, ledger}, loggingOpts...)
 	if err != nil {
-		return fmt.Errorf("Failed to create replica instance: %s", err)
+		return fmt.Errorf("failed to create replica instance: %s", err)
 	}
 	replicaServer := server.New(replica)
 
@@ -149,7 +149,7 @@ func run() error {
 		// appropriate gRPC server options are omitted here
 		// for simplicity.
 		if err := server.ListenAndServe(replicaServer, listenAddr); err != nil {
-			err = fmt.Errorf("Network server failed: %s", err)
+			err = fmt.Errorf("network server failed: %s", err)
 			fmt.Println(err)
 			srvErrChan <- err
 		}
@@ -164,7 +164,7 @@ func getLoggingOptions() ([]minbft.Option, error) {
 	if viper.GetString("logging.level") != "" {
 		logLevel, err := logging.LogLevel(viper.GetString("logging.level"))
 		if err != nil {
-			return nil, fmt.Errorf("Failed to set logging level: %s", err)
+			return nil, fmt.Errorf("failed to set logging level: %s", err)
 		}
 		opts = append(opts, minbft.WithLogLevel(logLevel))
 	}
@@ -172,7 +172,7 @@ func getLoggingOptions() ([]minbft.Option, error) {
 	if viper.GetString("logging.file") != "" {
 		logFile, err := os.OpenFile(viper.GetString("logging.file"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to open logging file: %s", err)
+			return nil, fmt.Errorf("failed to open logging file: %s", err)
 		}
 		opts = append(opts, minbft.WithLogFile(logFile))
 	}

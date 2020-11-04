@@ -192,7 +192,7 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 
 	fingerprint, err := makeUSIGKeyFingerprint(pubKey)
 	if err != nil {
-		return fmt.Errorf("Failed to calculate USIG key fingerprint: %s", err)
+		return fmt.Errorf("failed to calculate USIG key fingerprint: %s", err)
 	}
 
 	au.lock.Lock()
@@ -220,13 +220,13 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 	if !ok && ui.Counter == uint64(1) {
 		epoch, _, err = sgxusig.ParseCert(ui.Cert)
 		if err != nil {
-			return fmt.Errorf("Failed to parse UI certificate: %s", err)
+			return fmt.Errorf("failed to parse UI certificate: %s", err)
 		}
 	}
 
 	usigID, err := sgxusig.MakeID(epoch, pubKey)
 	if err != nil {
-		return fmt.Errorf("Failed to construct USIG identity: %s", err)
+		return fmt.Errorf("failed to construct USIG identity: %s", err)
 	}
 
 	if err := au.usig.VerifyUI(m, &ui, usigID); err != nil {

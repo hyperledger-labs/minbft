@@ -170,7 +170,7 @@ func makeRequestProcessor(captureSeq requestSeqCapturer, pendingReq requestlist.
 		}
 
 		if err := applyRequest(request, currentView); err != nil {
-			return false, fmt.Errorf("Failed to apply Request: %s", err)
+			return false, fmt.Errorf("failed to apply Request: %s", err)
 		}
 
 		return true, nil

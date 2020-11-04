@@ -63,13 +63,13 @@ func makeUIVerifier(authen api.Authenticator, extractAuthenBytes authenBytesExtr
 	return func(msg messages.CertifiedMessage) error {
 		ui := msg.UI()
 		if ui.Counter == uint64(0) {
-			return fmt.Errorf("Invalid (zero) counter value")
+			return fmt.Errorf("invalid (zero) counter value")
 		}
 
 		authenBytes := extractAuthenBytes(msg)
 		uiBytes := usig.MustMarshalUI(ui)
 		if err := authen.VerifyMessageAuthenTag(api.USIGAuthen, msg.ReplicaID(), authenBytes, uiBytes); err != nil {
-			return fmt.Errorf("Failed verifying USIG certificate: %s", err)
+			return fmt.Errorf("failed verifying USIG certificate: %s", err)
 		}
 
 		return nil

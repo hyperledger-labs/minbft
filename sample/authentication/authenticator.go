@@ -94,7 +94,7 @@ func new(roles []api.AuthenticationRole, id uint32, ks BftKeyStorer, usig usig.U
 	for _, r := range ks.NodeRoles() {
 		ksName := ks.NodeKeySpec(r)
 		if (r == api.USIGAuthen) != (ksName == keySpecSgxEcdsa) {
-			return nil, fmt.Errorf("Cannot use %s keyspec for %s role", ksName, r)
+			return nil, fmt.Errorf("cannot use %s keyspec for %s role", ksName, r)
 		}
 		switch ksName {
 		case keySpecEcdsa:
@@ -105,11 +105,11 @@ func new(roles []api.AuthenticationRole, id uint32, ks BftKeyStorer, usig usig.U
 			}
 			sgxUSIG, ok := usig.(*sgxusig.USIG)
 			if !ok {
-				return nil, fmt.Errorf("Cannot use supplied USIG: %s keyspec requires SGX USIG", ksName)
+				return nil, fmt.Errorf("cannot use supplied USIG: %s keyspec requires SGX USIG", ksName)
 			}
 			a.authschemes[r] = NewSGXUSIGAuthenticationScheme(sgxUSIG)
 		default:
-			return nil, fmt.Errorf("Cannot find an authentication scheme corresponding to the keyspec '%s'", ks.KeySpec(r))
+			return nil, fmt.Errorf("cannot find an authentication scheme corresponding to the keyspec '%s'", ks.KeySpec(r))
 		}
 	}
 	return a, nil
@@ -125,10 +125,10 @@ func (a *Authenticator) VerifyMessageAuthenTag(role api.AuthenticationRole, id u
 	}
 	authscheme := a.authschemes[role]
 	if authscheme == nil {
-		return fmt.Errorf("Unknown role: %v", role)
+		return fmt.Errorf("unknown role: %v", role)
 	}
 	if err := authscheme.VerifyAuthenticationTag(msg, authenTag, pk); err != nil {
-		return fmt.Errorf("Invalid authentication tag: %v", err)
+		return fmt.Errorf("invalid authentication tag: %v", err)
 	}
 	return nil
 }
