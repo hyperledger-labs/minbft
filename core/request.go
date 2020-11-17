@@ -21,9 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	logging "github.com/op/go-logging"
-
 	"github.com/hyperledger-labs/minbft/api"
+	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
@@ -277,7 +276,7 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 
 // makeRequestTimerStarter constructs an instance of
 // requestTimerStarter.
-func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTimeout requestTimeoutHandler, logger *logging.Logger) requestTimerStarter {
+func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTimeout requestTimeoutHandler, logger logger.Logger) requestTimerStarter {
 	return func(request messages.Request, view uint64) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
@@ -312,7 +311,7 @@ func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
 
 // makePrepareTimerStarter constructs an instance of
 // prepareTimerStarter.
-func makePrepareTimerStarter(n uint32, provideClientState clientstate.Provider, unicastLogs map[uint32]messagelog.MessageLog, logger *logging.Logger) prepareTimerStarter {
+func makePrepareTimerStarter(n uint32, provideClientState clientstate.Provider, unicastLogs map[uint32]messagelog.MessageLog, logger logger.Logger) prepareTimerStarter {
 	return func(request messages.Request, view uint64) {
 		clientID := request.ClientID()
 		seq := request.Sequence()

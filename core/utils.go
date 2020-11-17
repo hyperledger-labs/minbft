@@ -18,10 +18,6 @@
 package minbft
 
 import (
-	"fmt"
-
-	logging "github.com/op/go-logging"
-
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/messages"
 )
@@ -79,19 +75,4 @@ func makeMessageSignatureVerifier(authen api.Authenticator, extractAuthenBytes a
 // current view.
 func isPrimary(view uint64, id uint32, n uint32) bool {
 	return uint64(id) == view%uint64(n)
-}
-
-func makeLogger(id uint32, opts options) *logging.Logger {
-	logger := logging.MustGetLogger(module)
-	logFormatString := fmt.Sprintf("%s Replica %d: %%{message}", defaultLogPrefix, id)
-	stringFormatter := logging.MustStringFormatter(logFormatString)
-	backend := logging.NewLogBackend(opts.logFile, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, stringFormatter)
-	formattedLoggerBackend := logging.AddModuleLevel(backendFormatter)
-
-	logger.SetBackend(formattedLoggerBackend)
-
-	formattedLoggerBackend.SetLevel(opts.logLevel, module)
-
-	return logger
 }

@@ -21,14 +21,10 @@ import (
 	"fmt"
 
 	"github.com/hyperledger-labs/minbft/api"
+	commonLogger "github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 
 	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
-)
-
-const (
-	module           = "minbft"
-	defaultLogPrefix = `%{color}[%{module}] %{time:15:04:05.000} %{longfunc} ▶ %{level:.4s} %{id:03x}%{color:reset}`
 )
 
 var messageImpl = protobufMessages.NewImpl()
@@ -46,6 +42,32 @@ type replica struct {
 	handleClientStream messageStreamHandler
 }
 
+type options struct {
+	logger commonLogger.Logger
+}
+
+//Option is a function to set replica optional parameters
+type Option func(*options)
+
+func makeDefaultOptions(id uint32, opts ...Option) options {
+	opt := options{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if opt.logger == nil {
+		l := commonLogger.NewReplicaLogger(id)
+		opt.logger = l
+	}
+	return opt
+}
+
+//WithLogger sets an externally created logger
+func WithLogger(logger commonLogger.Logger) Option {
+	return func(o *options) {
+		o.logger = logger
+	}
+}
+
 // New creates a new instance of replica node
 func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Replica, error) {
 	n := configer.N()
@@ -55,8 +77,7 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 		return nil, fmt.Errorf("%d nodes is not enough to tolerate %d faulty", n, f)
 	}
 
-	logOpts := newOptions(opts...)
-	logger := makeLogger(id, logOpts)
+	logger := makeDefaultOptions(id, opts...).logger
 
 	messageLog := messagelog.New()
 	unicastLogs := make(map[uint32]messagelog.MessageLog)

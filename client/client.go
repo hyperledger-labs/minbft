@@ -21,19 +21,13 @@ package client
 import (
 	"fmt"
 
-	logging "github.com/op/go-logging"
-
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/client/internal/requestbuffer"
+	commonLogger "github.com/hyperledger-labs/minbft/common/logger"
 
 	protobufMessages "github.com/hyperledger-labs/minbft/messages/protobuf"
 )
 
-const (
-	module = "client"
-)
-
-var logger = logging.MustGetLogger(module)
 var messageImpl = protobufMessages.NewImpl()
 
 // Stack combines the interfaces of the external modules
@@ -52,22 +46,49 @@ type Client interface {
 	Request(operation []byte) (resultChan <-chan []byte)
 }
 
+type options struct {
+	logger commonLogger.Logger
+}
+
+//Option is a function to set client optional parameters
+type Option func(*options)
+
+func makeDefaultOptions(id uint32, opts ...Option) options {
+	opt := options{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	if opt.logger == nil {
+		l := commonLogger.NewClientLogger(id)
+		opt.logger = l
+	}
+	return opt
+}
+
+//WithLogger sets an externally created logger
+func WithLogger(logger commonLogger.Logger) Option {
+	return func(o *options) {
+		o.logger = logger
+	}
+}
+
 // New creates an instance of Client given a client ID, total number
 // of replica nodes n, number of tolerated faulty replica nodes f, and
 // a stack of external interfaces.
-func New(id uint32, n, f uint32, stack Stack) (Client, error) {
+func New(id uint32, n, f uint32, stack Stack, opts ...Option) (Client, error) {
 	if n < f*2+1 {
 		return nil, fmt.Errorf("insufficient number of replica nodes")
 	}
 
 	buf := requestbuffer.New()
+	logger := makeDefaultOptions(id, opts...).logger
 
-	if err := startReplicaConnections(id, n, buf, stack); err != nil {
+	if err := startReplicaConnections(id, n, buf, stack, logger); err != nil {
 		return nil, fmt.Errorf("failed to initiate connections to replicas: %s", err)
 	}
 
 	seq := makeSequenceGenerator()
-	return makeRequestHandler(id, seq, stack, buf, f), nil
+	return makeRequestHandler(id, seq, stack, buf, f, logger), nil
 }
 
 // Request implements Client interface on requestHandler
