@@ -245,7 +245,7 @@ and 1.14). For installation instructions please visit
 ### Intel® SGX SDK ###
 
 The Intel® SGX enclave implementation has been tested with Intel® SGX
-SDK for Linux version 2.9.1. For installation instuctions please visit
+SDK for Linux version 2.12. For installation instuctions please visit
 [download page][sgx-downloads].
 Please note that Intel SGX has two operation modes and required software
 components depend on operation mode.
