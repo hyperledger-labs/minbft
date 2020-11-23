@@ -126,11 +126,11 @@ To run the containers, the following software must be installed on your
 system.
 
  - [Docker Engine](https://docs.docker.com/engine/) (tested with version
-   19.03.6)
+   19.03.8)
  - [Docker Compose](https://docs.docker.com/compose/) (tested with
-   version 1.17.1)
+   version 1.25.0)
 
-If you are using Ubuntu 18.04, they can be installed as follows:
+If you are using Ubuntu 20.04, they can be installed as follows:
 
 ```sh
 sudo apt-get install docker.io docker-compose
