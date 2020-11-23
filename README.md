@@ -229,7 +229,7 @@ sudo make docker-clean
 
 ### Operating System ###
 
-The project has been tested on Ubuntu 18.04 LTS (Bionic Beaver).
+The project has been tested on Ubuntu 18.04 and 20.04 LTS.
 Additional required packages can be installed as follows:
 
 ```sh
@@ -239,7 +239,7 @@ sudo apt-get install build-essential pkg-config
 ### Golang ###
 
 Go 1.11 or later is required to build this project (tested with Go 1.11
-and 1.14). For installation instructions please visit
+and 1.15). For installation instructions please visit
 [this page](https://golang.org/doc/install).
 
 ### Intel® SGX SDK ###

@@ -6,11 +6,12 @@ env:
 
 jobs:
   build:
-    name: Build with Go ${{ matrix.go }}
-    runs-on: ubuntu-18.04
+    name: Build with Go ${{ matrix.go }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go: [1.11, 1.14]
+        os: [ubuntu-18.04, ubuntu-20.04]
+        go: [1.11, 1.15]
     steps:
       - uses: actions/setup-go@v2
         with:
