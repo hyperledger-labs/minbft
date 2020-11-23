@@ -3,7 +3,6 @@ on: [push, pull_request]
 env:
   SGX_SDK_URL: https://download.01.org/intel-sgx/sgx-linux/2.9.1/distro/ubuntu18.04-server/sgx_linux_x64_sdk_2.9.101.2.bin
   GOLANGCI_LINT_URL: https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
-  GOLANGCI_LINT_VERSION: v1.27.0
   SGX_MODE: SIM
 
 jobs:
@@ -28,7 +27,7 @@ jobs:
           go version
       - name: Install GolangCI-Lint
         run: |
-          curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin $GOLANGCI_LINT_VERSION
+          curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin
       - uses: actions/checkout@v2
       - name: Test
         run: |
