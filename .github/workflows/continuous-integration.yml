@@ -15,9 +15,6 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
-      - name: Print Go version
-        run: |
-          go version
       - name: Install GolangCI-Lint
         run: |
           curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin
