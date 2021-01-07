@@ -126,11 +126,11 @@ To run the containers, the following software must be installed on your
 system.
 
  - [Docker Engine](https://docs.docker.com/engine/) (tested with version
-   19.03.6)
+   19.03.8)
  - [Docker Compose](https://docs.docker.com/compose/) (tested with
-   version 1.17.1)
+   version 1.25.0)
 
-If you are using Ubuntu 18.04, they can be installed as follows:
+If you are using Ubuntu 20.04, they can be installed as follows:
 
 ```sh
 sudo apt-get install docker.io docker-compose
@@ -229,7 +229,7 @@ sudo make docker-clean
 
 ### Operating System ###
 
-The project has been tested on Ubuntu 18.04 LTS (Bionic Beaver).
+The project has been tested on Ubuntu 18.04 and 20.04 LTS.
 Additional required packages can be installed as follows:
 
 ```sh
@@ -239,13 +239,13 @@ sudo apt-get install build-essential pkg-config
 ### Golang ###
 
 Go 1.11 or later is required to build this project (tested with Go 1.11
-and 1.14). For installation instructions please visit
+and 1.15). For installation instructions please visit
 [this page](https://golang.org/doc/install).
 
 ### Intel® SGX SDK ###
 
 The Intel® SGX enclave implementation has been tested with Intel® SGX
-SDK for Linux version 2.9.1. For installation instuctions please visit
+SDK for Linux version 2.12. For installation instuctions please visit
 [download page][sgx-downloads].
 Please note that Intel SGX has two operation modes and required software
 components depend on operation mode.

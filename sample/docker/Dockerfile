@@ -1,24 +1,18 @@
-FROM ubuntu:18.04 AS build
-COPY --from=golang:1.14.4-buster /usr/local/go /usr/local/go/
+FROM ubuntu:20.04 AS build
+COPY --from=golang:1.15-buster /usr/local/go /usr/local/go/
 ENV PATH /usr/local/go/bin:$PATH
-ENV SGX_SDK_URL https://download.01.org/intel-sgx/sgx-linux/2.9.1/distro/ubuntu18.04-server/sgx_linux_x64_sdk_2.9.101.2.bin
 RUN apt-get update && apt-get install -y --no-install-recommends \
-		build-essential \
 		ca-certificates \
-		pkg-config \
-		python \
-		wget \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& wget -q -O sgx_linux_x64_sdk.bin $SGX_SDK_URL \
-	&& chmod +x sgx_linux_x64_sdk.bin \
-	&& echo -e "no\n/opt/intel" | ./sgx_linux_x64_sdk.bin
+		curl \
+		pkg-config
 COPY . minbft/
 ENV SGX_MODE SIM
 RUN cd minbft \
+	&& ./tools/install-sgx-sdk.sh \
 	&& . /opt/intel/sgxsdk/environment \
 	&& make prefix=/opt/minbft install
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		libssl1.1 \
 	&& rm -rf /var/lib/apt/lists/*

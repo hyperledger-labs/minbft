@@ -1,35 +1,28 @@
 name: Continuous integration
 on: [push, pull_request]
 env:
-  SGX_SDK_URL: https://download.01.org/intel-sgx/sgx-linux/2.9.1/distro/ubuntu18.04-server/sgx_linux_x64_sdk_2.9.101.2.bin
   GOLANGCI_LINT_URL: https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
-  GOLANGCI_LINT_VERSION: v1.27.0
   SGX_MODE: SIM
 
 jobs:
   build:
-    name: Build with Go ${{ matrix.go }}
-    runs-on: ubuntu-18.04
+    name: Build with Go ${{ matrix.go }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go: [1.11, 1.14]
+        os: [ubuntu-18.04, ubuntu-20.04]
+        go: [1.11, 1.15]
     steps:
-      - name: Install Intel SGX SDK
-        run: |
-          curl -s $SGX_SDK_URL -o sgx_linux_x64_sdk.bin
-          chmod +x sgx_linux_x64_sdk.bin
-          echo -e "no\n/opt/intel" | sudo ./sgx_linux_x64_sdk.bin
-          rm sgx_linux_x64_sdk.bin
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
-      - name: Print Go version
-        run: |
-          go version
       - name: Install GolangCI-Lint
         run: |
-          curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin $GOLANGCI_LINT_VERSION
+          curl -sfL $GOLANGCI_LINT_URL | sudo sh -s -- -b /usr/local/bin
       - uses: actions/checkout@v2
+      - name: Install Intel SGX SDK
+        run: |
+          sudo ./tools/install-sgx-sdk.sh
       - name: Test
         run: |
           source /opt/intel/sgxsdk/environment
