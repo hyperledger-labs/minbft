@@ -341,27 +341,42 @@ func TestMakeRequestReplier(t *testing.T) {
 	request := messageImpl.NewRequest(expectedClientID, seq, nil)
 	reply := messageImpl.NewReply(rand.Uint32(), expectedClientID, seq, nil)
 
-	replier := makeRequestReplier(provider)
+	cancel := make(chan struct{})
+	replier := makeRequestReplier(provider, cancel)
 
 	// Matching Reply sent after
 	in := make(chan messages.Reply, 1)
-	state.EXPECT().ReplyChannel(seq).Return(in)
+	state.EXPECT().ReplyChannel(seq, gomock.Any()).DoAndReturn(func(seq uint64, cancel <-chan struct{}) <-chan messages.Reply {
+		out := make(chan messages.Reply, 1)
+
+		go func() {
+			defer close(out)
+
+			select {
+			case r := <-in:
+				out <- r
+			case <-cancel:
+			}
+		}()
+
+		return out
+	}).AnyTimes()
+
 	out := replier(request)
 	in <- reply
-	close(in)
 	assert.Equal(t, reply, <-out)
-	_, more := <-out
-	assert.False(t, more, "Channel should be closed")
+	assert.Nil(t, <-out, "Channel should be closed")
 
 	// Matching Reply sent before
-	in = make(chan messages.Reply, 1)
 	in <- reply
-	close(in)
-	state.EXPECT().ReplyChannel(seq).Return(in)
 	out = replier(request)
 	assert.Equal(t, reply, <-out)
-	_, more = <-out
-	assert.False(t, more, "Channel should be closed")
+	assert.Nil(t, <-out, "Channel should be closed")
+
+	// Canceled
+	close(cancel)
+	out = replier(request)
+	assert.Nil(t, <-out, "Channel should be closed")
 }
 
 func TestMakeRequestTimerStarter(t *testing.T) {

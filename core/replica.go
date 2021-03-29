@@ -19,6 +19,7 @@ package minbft
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hyperledger-labs/minbft/api"
 	commonLogger "github.com/hyperledger-labs/minbft/common/logger"
@@ -36,10 +37,17 @@ type Stack interface {
 	api.RequestConsumer
 }
 
+type Replica interface {
+	api.Replica
+	Terminate()
+}
+
 // Replica represents an instance of replica peer
 type replica struct {
 	handlePeerStream   messageStreamHandler
 	handleClientStream messageStreamHandler
+	stopChan           chan struct{}
+	wg                 *sync.WaitGroup
 }
 
 type options struct {
@@ -69,7 +77,7 @@ func WithLogger(logger commonLogger.Logger) Option {
 }
 
 // New creates a new instance of replica node
-func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Replica, error) {
+func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (Replica, error) {
 	n := configer.N()
 	f := configer.F()
 
@@ -92,19 +100,32 @@ func New(id uint32, configer api.Configer, stack Stack, opts ...Option) (api.Rep
 		unicastLogs[peerID] = messagelog.New()
 	}
 
-	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, unicastLogs, configer, stack, logger)
-	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs)
+	stop := make(chan struct{})
+	handleOwnMessage, handlePeerMessage, handleClientMessage := defaultMessageHandlers(id, messageLog, unicastLogs, stop, configer, stack, logger)
+	handleHelloMessage := makeHelloHandler(id, n, messageLog, unicastLogs, stop)
 
-	if err := startPeerConnections(id, n, stack, handlePeerMessage, logger); err != nil {
+	wg := new(sync.WaitGroup)
+	if err := startPeerConnections(id, n, stack, handlePeerMessage, stop, wg, logger); err != nil {
 		return nil, fmt.Errorf("failed to start peer connections: %s", err)
 	}
 
-	go handleOwnPeerMessages(messageLog, handleOwnMessage, logger)
+	wg.Add(1)
+	go func() {
+		handleOwnPeerMessages(messageLog, handleOwnMessage, stop, logger)
+		wg.Done()
+	}()
 
 	return &replica{
-		handlePeerStream:   makeMessageStreamHandler(handleHelloMessage, "peer", logger),
-		handleClientStream: makeMessageStreamHandler(handleClientMessage, "client", logger),
+		handlePeerStream:   makeMessageStreamHandler(handleHelloMessage, "peer", stop, logger),
+		handleClientStream: makeMessageStreamHandler(handleClientMessage, "client", stop, logger),
+		stopChan:           stop,
+		wg:                 wg,
 	}, nil
+}
+
+func (r *replica) Terminate() {
+	close(r.stopChan)
+	r.wg.Wait()
 }
 
 func (r *replica) PeerMessageStreamHandler() api.MessageStreamHandler {

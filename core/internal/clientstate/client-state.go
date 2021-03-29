@@ -173,7 +173,7 @@ type State interface {
 	UnprepareRequestSeq()
 
 	AddReply(reply messages.Reply)
-	ReplyChannel(seq uint64) <-chan messages.Reply
+	ReplyChannel(seq uint64, cancel <-chan struct{}) <-chan messages.Reply
 
 	StartRequestTimer(seq uint64, handleTimeout func())
 	StopRequestTimer(seq uint64)

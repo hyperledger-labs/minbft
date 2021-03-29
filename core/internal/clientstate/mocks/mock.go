@@ -128,17 +128,17 @@ func (mr *MockStateMockRecorder) PrepareRequestSeq(arg0 interface{}) *gomock.Cal
 }
 
 // ReplyChannel mocks base method
-func (m *MockState) ReplyChannel(arg0 uint64) <-chan messages.Reply {
+func (m *MockState) ReplyChannel(arg0 uint64, arg1 <-chan struct{}) <-chan messages.Reply {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReplyChannel", arg0)
+	ret := m.ctrl.Call(m, "ReplyChannel", arg0, arg1)
 	ret0, _ := ret[0].(<-chan messages.Reply)
 	return ret0
 }
 
 // ReplyChannel indicates an expected call of ReplyChannel
-func (mr *MockStateMockRecorder) ReplyChannel(arg0 interface{}) *gomock.Call {
+func (mr *MockStateMockRecorder) ReplyChannel(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplyChannel", reflect.TypeOf((*MockState)(nil).ReplyChannel), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplyChannel", reflect.TypeOf((*MockState)(nil).ReplyChannel), arg0, arg1)
 }
 
 // RetireRequestSeq mocks base method

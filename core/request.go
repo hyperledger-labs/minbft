@@ -216,10 +216,10 @@ func makePendingRequestApplier(pendingReqList requestlist.List, applyRequest req
 
 // makeRequestReplier constructs an instance of requestReplier using
 // the supplied client state provider.
-func makeRequestReplier(clientStates clientstate.Provider) requestReplier {
+func makeRequestReplier(provider clientstate.Provider, stop <-chan struct{}) requestReplier {
 	return func(request messages.Request) <-chan messages.Reply {
-		state := clientStates.ClientState(request.ClientID())
-		return state.ReplyChannel(request.Sequence())
+		state := provider.ClientState(request.ClientID())
+		return state.ReplyChannel(request.Sequence(), stop)
 	}
 }
 
