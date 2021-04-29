@@ -122,6 +122,7 @@ func requests(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create client instance: %s", err)
 	}
+	defer client.Terminate()
 
 	if len(args) > 0 {
 		for _, arg := range args {
