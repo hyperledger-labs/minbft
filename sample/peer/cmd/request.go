@@ -45,11 +45,7 @@ and output the result. The requests are one or more string arguments.
 If no string argument is given, requests are constructed from standard input, where
 each line is passed to a separate request.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := requests(args)
-		if err != nil {
-			return err
-		}
-		return nil
+		return requests(args)
 	},
 }
 
@@ -85,17 +81,17 @@ func request(client client.Client, arg string) {
 	}
 }
 
-func requests(args []string) ([]byte, error) {
+func requests(args []string) error {
 	id := uint32(viper.GetInt("client.id"))
 
 	keysFile, err := os.Open(viper.GetString("keys"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to open keyset file: %s", err)
+		return fmt.Errorf("failed to open keyset file: %s", err)
 	}
 
 	auth, err := authen.New([]api.AuthenticationRole{api.ClientAuthen}, id, keysFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create authenticator: %s", err)
+		return fmt.Errorf("failed to create authenticator: %s", err)
 	}
 
 	cfg := config.New()
@@ -103,7 +99,7 @@ func requests(args []string) ([]byte, error) {
 
 	loggingOpts, err := getLoggingOptions()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create logging options: %s", err)
+		return fmt.Errorf("failed to create logging options: %s", err)
 	}
 	clientLogger := logger.NewClientLogger(id, loggingOpts...)
 	clientOptions := client.WithLogger(clientLogger)
@@ -119,12 +115,12 @@ func requests(args []string) ([]byte, error) {
 	// grpc.WithInsecure() option is passed here for simplicity.
 	err = connector.ConnectManyReplicas(conn, peerAddrs, grpc.WithInsecure())
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to peers: %s", err)
+		return fmt.Errorf("failed to connect to peers: %s", err)
 	}
 
 	client, err := client.New(id, cfg.N(), cfg.F(), clientStack{auth, conn}, clientOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client instance: %s", err)
+		return fmt.Errorf("failed to create client instance: %s", err)
 	}
 
 	if len(args) > 0 {
@@ -138,5 +134,5 @@ func requests(args []string) ([]byte, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
