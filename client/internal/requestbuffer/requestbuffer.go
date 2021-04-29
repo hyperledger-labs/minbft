@@ -56,16 +56,21 @@ func New() *T {
 // AddReply. The returned channel is closed when RemoveRequest is
 // invoked for the Request message. The returned boolean value
 // indicates if the message was accepted.
-func (rb *T) AddRequest(msg messages.Request) (<-chan messages.Reply, bool) {
+func (rb *T) AddRequest(msg messages.Request, cancel <-chan struct{}) (<-chan messages.Reply, bool) {
 	rb.lock.Lock()
-	defer rb.lock.Unlock()
-
 	for rb.request != nil {
+		seq := rb.lastSeq
 		req := rb.request
+
 		rb.lock.Unlock()
-		<-req.removed
+		select {
+		case <-req.removed:
+		case <-cancel:
+			rb.RemoveRequest(seq)
+		}
 		rb.lock.Lock()
 	}
+	defer rb.lock.Unlock()
 
 	if msg.Sequence() <= rb.lastSeq {
 		return nil, false
@@ -81,8 +86,8 @@ func (rb *T) AddRequest(msg messages.Request) (<-chan messages.Reply, bool) {
 		}
 	}
 
-	replyChannel := make(chan messages.Reply)
-	go rb.request.supplyReplies(replyChannel)
+	replyChannel := make(chan messages.Reply, 1)
+	go rb.request.supplyReplies(replyChannel, cancel)
 
 	return replyChannel, true
 }
@@ -192,8 +197,16 @@ func (r *request) addReply(msg messages.Reply) bool {
 	return r.replySet.addReply(msg)
 }
 
-func (r *request) supplyReplies(ch chan<- messages.Reply) {
-	r.replySet.supplyReplies(ch, r.removed)
+func (r *request) supplyReplies(ch chan<- messages.Reply, cancel <-chan struct{}) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case <-r.removed:
+		case <-cancel:
+		}
+	}()
+	r.replySet.supplyReplies(ch, done)
 }
 
 type replySet struct {

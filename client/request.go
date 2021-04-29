@@ -35,8 +35,8 @@ type requestHandler func(operation []byte) <-chan []byte
 // makeRequestHandler constructs a requestHandler uisng the supplied
 // clientID, sequence number generator, authenticator, request buffer,
 // and number of tolerated faulty replicas.
-func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, f uint32, logger logger.Logger) requestHandler {
-	submitter := makeRequestSubmitter(clientID, seq, authen, buf, logger)
+func makeRequestHandler(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, f uint32, stop <-chan struct{}, logger logger.Logger) requestHandler {
+	submitter := makeRequestSubmitter(clientID, seq, authen, buf, stop, logger)
 	collector := makeReplyCollector(f, buf)
 	return func(operation []byte) <-chan []byte {
 		return handleRequest(operation, submitter, collector)
@@ -59,7 +59,10 @@ type replyCollector func(in <-chan messages.Reply, out chan<- []byte)
 func handleRequest(operation []byte, submitter requestSubmitter, collector replyCollector) <-chan []byte {
 	resultChan := make(chan []byte, 1)
 	replyChan := submitter(operation)
-	go collector(replyChan, resultChan)
+	go func() {
+		defer close(resultChan)
+		collector(replyChan, resultChan)
+	}()
 	return resultChan
 }
 
@@ -92,7 +95,7 @@ func collectReplies(f uint32, replyChan <-chan messages.Reply, remover requestRe
 		if matchingResults[hash] > f {
 			remover(reply.Sequence())
 			resultChan <- result
-			break
+			return
 		}
 	}
 }
@@ -112,9 +115,9 @@ type sequenceGenerator func() uint64
 // makeRequestSubmitter constructs a requestSubmitter using the
 // supplied client ID, sequence number generator, authenticator and
 // request buffer to add the produced Request message to.
-func makeRequestSubmitter(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, logger logger.Logger) requestSubmitter {
+func makeRequestSubmitter(clientID uint32, seq sequenceGenerator, authen api.Authenticator, buf *requestbuffer.T, stop <-chan struct{}, logger logger.Logger) requestSubmitter {
 	preparer := makeRequestPreparer(clientID, authen, seq, logger)
-	consumer := makeRequestConsumer(buf)
+	consumer := makeRequestConsumer(buf, stop)
 	return func(operation []byte) <-chan messages.Reply {
 		return submitRequest(operation, preparer, consumer)
 	}
@@ -157,9 +160,9 @@ func makeRequestPreparer(clientID uint32, authenticator api.Authenticator, seq s
 // makeRequestConsumer constructs a requestConsumer using the supplied
 // request buffer to add the Request message to and retrieve
 // corresponding Reply messages from
-func makeRequestConsumer(buf *requestbuffer.T) requestConsumer {
+func makeRequestConsumer(buf *requestbuffer.T, stop <-chan struct{}) requestConsumer {
 	return func(request messages.Request) (<-chan messages.Reply, bool) {
-		return buf.AddRequest(request)
+		return buf.AddRequest(request, stop)
 	}
 }
 

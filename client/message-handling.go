@@ -30,15 +30,15 @@ import (
 // starts message exchange with them given a total number of replicas,
 // request buffer to add/fetch messages to/from and a stack of
 // interfaces to external modules.
-func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack, logger logger.Logger) error {
-	outHandler := makeOutgoingMessageHandler(buf)
+func startReplicaConnections(clientID, n uint32, buf *requestbuffer.T, stack Stack, stop <-chan struct{}, logger logger.Logger) error {
+	outHandler := makeOutgoingMessageHandler(buf, stop)
 	authenticator := makeReplyAuthenticator(clientID, stack)
 	consumer := makeReplyConsumer(buf)
 	handleReply := makeReplyMessageHandler(consumer, authenticator, logger)
 
 	for i := uint32(0); i < n; i++ {
 		connector := makeReplicaConnector(i, stack)
-		inHandler := makeIncomingMessageHandler(i, handleReply, logger)
+		inHandler := makeIncomingMessageHandler(i, handleReply, stop, logger)
 		if err := startReplicaConnection(outHandler, inHandler, connector); err != nil {
 			return fmt.Errorf("error connecting to replica %d: %s", i, err)
 		}
@@ -68,7 +68,10 @@ func startReplicaConnection(outHandler outgoingMessageHandler, inHandler incomin
 		return err
 	}
 
-	go outHandler(out)
+	go func() {
+		defer close(out)
+		outHandler(out)
+	}()
 	go inHandler(in)
 
 	return nil
@@ -76,14 +79,18 @@ func startReplicaConnection(outHandler outgoingMessageHandler, inHandler incomin
 
 // makeOutgoingMessageHandler construct an outgoingMessageHandler
 // using the supplied request buffer as a source of outgoing messages.
-func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
+func makeOutgoingMessageHandler(buf *requestbuffer.T, stop <-chan struct{}) outgoingMessageHandler {
 	return func(out chan<- []byte) {
-		for req := range buf.RequestStream(nil) {
+		for req := range buf.RequestStream(stop) {
 			mBytes, err := req.MarshalBinary()
 			if err != nil {
 				panic(err)
 			}
-			out <- mBytes
+			select {
+			case out <- mBytes:
+			case <-stop:
+				return
+			}
 		}
 	}
 }
@@ -91,20 +98,29 @@ func makeOutgoingMessageHandler(buf *requestbuffer.T) outgoingMessageHandler {
 // makeIncomingMessageHandler constructs an incomingMessageHandler
 // using replicaID as the ID of replica which supplies incoming
 // messages, and the passed abstraction to handle Reply messages.
-func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler, logger logger.Logger) incomingMessageHandler {
+func makeIncomingMessageHandler(replicaID uint32, handleReply replyMessageHandler, stop <-chan struct{}, logger logger.Logger) incomingMessageHandler {
 	return func(in <-chan []byte) {
-		for msgBytes := range in {
-			msg, err := messageImpl.NewFromBinary(msgBytes)
-			if err != nil {
-				logger.Warningf("Error unmarshaling message from replica %d: %v", replicaID, err)
-				continue
-			}
+		for {
+			select {
+			case msgBytes, ok := <-in:
+				if !ok {
+					return
+				}
 
-			switch msg := msg.(type) {
-			case messages.Reply:
-				handleReply(msg)
-			default:
-				logger.Warningf("Received unknown message from replica %d", replicaID)
+				msg, err := messageImpl.NewFromBinary(msgBytes)
+				if err != nil {
+					logger.Warningf("Error unmarshaling message from replica %d: %v", replicaID, err)
+					continue
+				}
+
+				switch msg := msg.(type) {
+				case messages.Reply:
+					handleReply(msg)
+				default:
+					logger.Warningf("Received unknown message from replica %d", replicaID)
+				}
+			case <-stop:
+				return
 			}
 		}
 	}
