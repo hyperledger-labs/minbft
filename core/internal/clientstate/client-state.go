@@ -198,17 +198,17 @@ func newClientState(timerProvider timer.Provider, requestTimeout, prepareTimeout
 }
 
 func (s *clientState) StartRequestTimer(seq uint64, handleTimeout func()) {
-	s.requestTimer.StartTimer(seq, handleTimeout)
+	s.requestTimer.Start(seq, handleTimeout)
 }
 
 func (s *clientState) StopRequestTimer(seq uint64) {
-	s.requestTimer.StopTimer(seq)
+	s.requestTimer.Stop(seq)
 }
 
 func (s *clientState) StartPrepareTimer(seq uint64, handleTimeout func()) {
-	s.prepareTimer.StartTimer(seq, handleTimeout)
+	s.prepareTimer.Start(seq, handleTimeout)
 }
 
 func (s *clientState) StopPrepareTimer(seq uint64) {
-	s.prepareTimer.StopTimer(seq)
+	s.prepareTimer.Stop(seq)
 }
