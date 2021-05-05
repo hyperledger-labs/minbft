@@ -24,7 +24,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	testifymock "github.com/stretchr/testify/mock"
 
@@ -429,10 +428,8 @@ func TestMakePrepareTimeoutProvider(t *testing.T) {
 
 func setupClientStateProviderMock(t *testing.T, ctrl *gomock.Controller, expectedClientID uint32) (clientstate.Provider, *mock_clientstate.MockState) {
 	state := mock_clientstate.NewMockState(ctrl)
-	provider := func(clientID uint32) clientstate.State {
-		require.Equal(t, expectedClientID, clientID)
-		return state
-	}
+	provider := mock_clientstate.NewMockProvider(ctrl)
+	provider.EXPECT().ClientState(expectedClientID).Return(state).AnyTimes()
 
 	return provider, state
 }

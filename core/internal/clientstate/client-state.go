@@ -27,9 +27,14 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// Provider returns an instance of state representation associated
-// with a client given its ID. It is safe to invoke concurrently.
-type Provider func(clientID uint32) State
+// Provider represents the replica state maintained for the clients.
+// It is safe to use concurrently.
+//
+// ClientState method returns the piece of replica state associated
+// with a client, given the client ID.
+type Provider interface {
+	ClientState(clientID uint32) State
+}
 
 // Option represents a parameter to initialize State with.
 type Option func(*options)
@@ -50,6 +55,17 @@ func WithTimerProvider(timerProvider timer.Provider) Option {
 	}
 }
 
+type provider struct {
+	sync.Mutex
+	options
+
+	requestTimeout func() time.Duration
+	prepareTimeout func() time.Duration
+
+	// Client ID -> client state
+	clientStates map[uint32]*clientState
+}
+
 // NewProvider creates an instance of Provider. Optional parameters
 // can be specified as args.
 func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, args ...Option) Provider {
@@ -58,24 +74,25 @@ func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time
 		opt(&opts)
 	}
 
-	var (
-		lock sync.Mutex
-		// Client ID -> client state
-		clientStates = make(map[uint32]State)
-	)
-
-	return func(clientID uint32) State {
-		lock.Lock()
-		defer lock.Unlock()
-
-		state := clientStates[clientID]
-		if state == nil {
-			state = newClientState(opts.timerProvider, requestTimeout, prepareTimeout)
-			clientStates[clientID] = state
-		}
-
-		return state
+	return &provider{
+		options:        opts,
+		requestTimeout: requestTimeout,
+		prepareTimeout: prepareTimeout,
+		clientStates:   make(map[uint32]*clientState),
 	}
+}
+
+func (p *provider) ClientState(clientID uint32) State {
+	p.Lock()
+	defer p.Unlock()
+
+	state := p.clientStates[clientID]
+	if state == nil {
+		state = newClientState(p.timerProvider, p.requestTimeout, p.prepareTimeout)
+		p.clientStates[clientID] = state
+	}
+
+	return state
 }
 
 // State represents the state maintained by the replica for each

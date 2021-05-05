@@ -198,9 +198,9 @@ func makeRequestApplier(id, n uint32, handleGeneratedMessage generatedMessageHan
 
 // makeRequestReplier constructs an instance of requestReplier using
 // the supplied client state provider.
-func makeRequestReplier(provider clientstate.Provider) requestReplier {
+func makeRequestReplier(clientStates clientstate.Provider) requestReplier {
 	return func(request messages.Request) <-chan messages.Reply {
-		state := provider(request.ClientID())
+		state := clientStates.ClientState(request.ClientID())
 		return state.ReplyChannel(request.Sequence())
 	}
 }
@@ -231,23 +231,23 @@ func makeRequestExecutor(id uint32, retireSeq requestSeqRetirer, pendingReq requ
 
 // makeRequestSeqCapturer constructs an instance of requestSeqCapturer
 // using the supplied client state provider.
-func makeRequestSeqCapturer(provideClientState clientstate.Provider) requestSeqCapturer {
+func makeRequestSeqCapturer(clientStates clientstate.Provider) requestSeqCapturer {
 	return func(request messages.Request) (new bool, release func()) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
 
-		return provideClientState(clientID).CaptureRequestSeq(seq)
+		return clientStates.ClientState(clientID).CaptureRequestSeq(seq)
 	}
 }
 
 // makeRequestSeqPreparer constructs an instance of requestSeqPreparer
 // using the supplied interface.
-func makeRequestSeqPreparer(provideClientState clientstate.Provider) requestSeqPreparer {
+func makeRequestSeqPreparer(clientStates clientstate.Provider) requestSeqPreparer {
 	return func(request messages.Request) (new bool) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
 
-		if new, err := provideClientState(clientID).PrepareRequestSeq(seq); err != nil {
+		if new, err := clientStates.ClientState(clientID).PrepareRequestSeq(seq); err != nil {
 			panic(err)
 		} else if !new {
 			return false
@@ -259,12 +259,12 @@ func makeRequestSeqPreparer(provideClientState clientstate.Provider) requestSeqP
 
 // makeRequestSeqRetirer constructs an instance of requestSeqRetirer
 // using the supplied interface.
-func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRetirer {
+func makeRequestSeqRetirer(clientStates clientstate.Provider) requestSeqRetirer {
 	return func(request messages.Request) (new bool) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
 
-		if new, err := provideClientState(clientID).RetireRequestSeq(seq); err != nil {
+		if new, err := clientStates.ClientState(clientID).RetireRequestSeq(seq); err != nil {
 			panic(err)
 		} else if !new {
 			return false
@@ -276,11 +276,11 @@ func makeRequestSeqRetirer(provideClientState clientstate.Provider) requestSeqRe
 
 // makeRequestTimerStarter constructs an instance of
 // requestTimerStarter.
-func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTimeout requestTimeoutHandler, logger logger.Logger) requestTimerStarter {
+func makeRequestTimerStarter(clientStates clientstate.Provider, handleTimeout requestTimeoutHandler, logger logger.Logger) requestTimerStarter {
 	return func(request messages.Request, view uint64) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
-		provideClientState(clientID).StartRequestTimer(seq, func() {
+		clientStates.ClientState(clientID).StartRequestTimer(seq, func() {
 			logger.Warningf("Request timer expired: client=%d seq=%d view=%d", clientID, seq, view)
 			handleTimeout(view)
 		})
@@ -289,9 +289,9 @@ func makeRequestTimerStarter(provideClientState clientstate.Provider, handleTime
 
 // makeRequestTimerStopper constructs an instance of
 // requestTimerStopper.
-func makeRequestTimerStopper(provideClientState clientstate.Provider) requestTimerStopper {
+func makeRequestTimerStopper(clientStates clientstate.Provider) requestTimerStopper {
 	return func(request messages.Request) {
-		provideClientState(request.ClientID()).StopRequestTimer(request.Sequence())
+		clientStates.ClientState(request.ClientID()).StopRequestTimer(request.Sequence())
 	}
 }
 
@@ -311,11 +311,11 @@ func makeRequestTimeoutProvider(config api.Configer) requestTimeoutProvider {
 
 // makePrepareTimerStarter constructs an instance of
 // prepareTimerStarter.
-func makePrepareTimerStarter(n uint32, provideClientState clientstate.Provider, unicastLogs map[uint32]messagelog.MessageLog, logger logger.Logger) prepareTimerStarter {
+func makePrepareTimerStarter(n uint32, clientStates clientstate.Provider, unicastLogs map[uint32]messagelog.MessageLog, logger logger.Logger) prepareTimerStarter {
 	return func(request messages.Request, view uint64) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
-		provideClientState(clientID).StartPrepareTimer(seq, func() {
+		clientStates.ClientState(clientID).StartPrepareTimer(seq, func() {
 			logger.Infof("Prepare timer expired: client=%d seq=%d view=%d", clientID, seq, view)
 			unicastLogs[uint32(view%uint64(n))].Append(request)
 		})
@@ -324,9 +324,9 @@ func makePrepareTimerStarter(n uint32, provideClientState clientstate.Provider, 
 
 // makePrepareTimerStopper constructs an instance of
 // prepareTimerStopper.
-func makePrepareTimerStopper(provideClientState clientstate.Provider) prepareTimerStopper {
+func makePrepareTimerStopper(clientStates clientstate.Provider) prepareTimerStopper {
 	return func(request messages.Request) {
-		provideClientState(request.ClientID()).StopPrepareTimer(request.Sequence())
+		clientStates.ClientState(request.ClientID()).StopPrepareTimer(request.Sequence())
 	}
 }
 

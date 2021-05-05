@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/core/internal/clientstate State
+//go:generate mockgen -destination=mock.go github.com/hyperledger-labs/minbft/core/internal/clientstate Provider,State
 
 package mock_clientstate //nolint

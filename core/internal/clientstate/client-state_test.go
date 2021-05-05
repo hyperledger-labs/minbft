@@ -43,7 +43,7 @@ func TestProviderConcurrent(t *testing.T) {
 			defer wg.Done()
 
 			assertMsg := fmt.Sprintf("Worker %d", workerID)
-			state := provider(uint32(workerID))
+			state := provider.ClientState(uint32(workerID))
 			if assert.NotNil(t, state, assertMsg) {
 				clientStates[workerID] = state
 			}
