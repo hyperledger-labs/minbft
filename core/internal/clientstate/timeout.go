@@ -63,9 +63,19 @@ func (s *timerState) Stop(seq uint64) {
 		return
 	}
 
-	if s.timer == nil {
-		return
-	}
+	s.stopAnyLocked()
+}
 
-	s.timer.Stop()
+func (s *timerState) StopAny() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.stopAnyLocked()
+}
+
+func (s *timerState) stopAnyLocked() {
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+	}
 }

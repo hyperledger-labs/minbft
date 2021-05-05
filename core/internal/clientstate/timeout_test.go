@@ -70,7 +70,7 @@ func testStartTimeout(t *testing.T) {
 	s.StartPrepareTimer(seq, handlePrepareTimeout)
 
 	// Restart timeout
-	mockTimer.EXPECT().Stop().Times(2)
+	mockTimer.EXPECT().Stop().Return(true).Times(2)
 	timeout = randTimeout()
 	mockTimer = timermock.NewMockTimer(ctrl)
 	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).DoAndReturn(
@@ -119,12 +119,11 @@ func testStopTimeout(t *testing.T) {
 	s.StopPrepareTimer(seq2)
 
 	// Stop timers
-	mockTimer.EXPECT().Stop().Times(2)
+	mockTimer.EXPECT().Stop().Return(true).Times(2)
 	s.StopRequestTimer(seq)
 	s.StopPrepareTimer(seq)
 
 	// Stop again
-	mockTimer.EXPECT().Stop().Times(2)
 	s.StopRequestTimer(seq)
 	s.StopPrepareTimer(seq)
 }
