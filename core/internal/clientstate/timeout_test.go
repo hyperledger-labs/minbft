@@ -31,11 +31,12 @@ import (
 )
 
 func TestTimeout(t *testing.T) {
-	t.Run("Start", testStartTimeout)
-	t.Run("Stop", testStopTimeout)
+	t.Run("Start", testStartTimer)
+	t.Run("Stop", testStopTimer)
+	t.Run("StopAll", testStopAllTimers)
 }
 
-func testStartTimeout(t *testing.T) {
+func testStartTimer(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
@@ -46,14 +47,14 @@ func testStartTimeout(t *testing.T) {
 
 	seq := randSeq()
 
-	// Start with disabled timeout
+	// Start with disabled timer
 	mock.On("requestTimeout").Return(time.Duration(0)).Once()
 	s.StartRequestTimer(seq, handleRequestTimeout)
 
 	mock.On("prepareTimeout").Return(time.Duration(0)).Once()
 	s.StartPrepareTimer(seq, handlePrepareTimeout)
 
-	// Start with enabled timeout
+	// Start with enabled timer
 	timeout := randTimeout()
 	mockTimer := timermock.NewMockTimer(ctrl)
 	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).DoAndReturn(
@@ -69,7 +70,7 @@ func testStartTimeout(t *testing.T) {
 	mock.On("prepareTimeoutHandler").Once()
 	s.StartPrepareTimer(seq, handlePrepareTimeout)
 
-	// Restart timeout
+	// Restart timer
 	mockTimer.EXPECT().Stop().Return(true).Times(2)
 	timeout = randTimeout()
 	mockTimer = timermock.NewMockTimer(ctrl)
@@ -87,7 +88,7 @@ func testStartTimeout(t *testing.T) {
 	s.StartPrepareTimer(seq, handlePrepareTimeout)
 }
 
-func testStopTimeout(t *testing.T) {
+func testStopTimer(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
@@ -126,6 +127,33 @@ func testStopTimeout(t *testing.T) {
 	// Stop again
 	s.StopRequestTimer(seq)
 	s.StopPrepareTimer(seq)
+}
+
+func testStopAllTimers(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s, timerProvider, handleRequestTimeout, handlePrepareTimeout := setupTimeoutMock(mock, ctrl)
+
+	timeout := randTimeout()
+	mock.On("requestTimeout").Return(timeout)
+	mock.On("prepareTimeout").Return(timeout)
+
+	assert.NotPanics(t, func() { s.StopAllTimers() })
+
+	// Start timers
+	mockTimer := timermock.NewMockTimer(ctrl)
+	timerProvider.EXPECT().AfterFunc(timeout, gomock.Any()).Return(mockTimer).Times(2)
+	seq := randSeq()
+	s.StartRequestTimer(seq, handleRequestTimeout)
+	s.StartPrepareTimer(seq, handlePrepareTimeout)
+
+	// Stop all timers
+	mockTimer.EXPECT().Stop().Return(true).Times(2)
+	s.StopAllTimers()
 }
 
 func setupTimeoutMock(mock *testifymock.Mock, ctrl *gomock.Controller) (state State, timerProvider *timermock.MockProvider, handleRequestTimeout func(), handlePrepareTimeout func()) {

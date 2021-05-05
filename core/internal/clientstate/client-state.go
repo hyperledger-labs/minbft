@@ -164,6 +164,8 @@ func (p *provider) Clients() (clientIDs []uint32) {
 //
 // StopPrepareTimer stops timer started for the same request
 // identifier by StartPrepareTimer, if any.
+//
+// StopAllTimers stops any timer maintained in the client state.
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
@@ -178,6 +180,8 @@ type State interface {
 
 	StartPrepareTimer(seq uint64, handleTimeout func())
 	StopPrepareTimer(seq uint64)
+
+	StopAllTimers()
 }
 
 type clientState struct {
@@ -211,4 +215,9 @@ func (s *clientState) StartPrepareTimer(seq uint64, handleTimeout func()) {
 
 func (s *clientState) StopPrepareTimer(seq uint64) {
 	s.prepareTimer.Stop(seq)
+}
+
+func (s *clientState) StopAllTimers() {
+	s.requestTimer.StopAny()
+	s.prepareTimer.StopAny()
 }

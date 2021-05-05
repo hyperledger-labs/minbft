@@ -180,6 +180,18 @@ func (mr *MockStateMockRecorder) StartRequestTimer(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRequestTimer", reflect.TypeOf((*MockState)(nil).StartRequestTimer), arg0, arg1)
 }
 
+// StopAllTimers mocks base method
+func (m *MockState) StopAllTimers() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "StopAllTimers")
+}
+
+// StopAllTimers indicates an expected call of StopAllTimers
+func (mr *MockStateMockRecorder) StopAllTimers() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopAllTimers", reflect.TypeOf((*MockState)(nil).StopAllTimers))
+}
+
 // StopPrepareTimer mocks base method
 func (m *MockState) StopPrepareTimer(arg0 uint64) {
 	m.ctrl.T.Helper()
