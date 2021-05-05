@@ -48,6 +48,20 @@ func (mr *MockProviderMockRecorder) ClientState(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientState", reflect.TypeOf((*MockProvider)(nil).ClientState), arg0)
 }
 
+// Clients mocks base method
+func (m *MockProvider) Clients() []uint32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clients")
+	ret0, _ := ret[0].([]uint32)
+	return ret0
+}
+
+// Clients indicates an expected call of Clients
+func (mr *MockProviderMockRecorder) Clients() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clients", reflect.TypeOf((*MockProvider)(nil).Clients))
+}
+
 // MockState is a mock of State interface
 type MockState struct {
 	ctrl     *gomock.Controller

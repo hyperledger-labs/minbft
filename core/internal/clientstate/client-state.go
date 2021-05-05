@@ -32,8 +32,11 @@ import (
 //
 // ClientState method returns the piece of replica state associated
 // with a client, given the client ID.
+//
+// Clients method returns a slice of maintained client IDs.
 type Provider interface {
 	ClientState(clientID uint32) State
+	Clients() (clientIDs []uint32)
 }
 
 // Option represents a parameter to initialize State with.
@@ -93,6 +96,18 @@ func (p *provider) ClientState(clientID uint32) State {
 	}
 
 	return state
+}
+
+func (p *provider) Clients() (clientIDs []uint32) {
+	p.Lock()
+	defer p.Unlock()
+
+	clientIDs = make([]uint32, 0, len(p.clientStates))
+	for c := range p.clientStates {
+		clientIDs = append(clientIDs, c)
+	}
+
+	return clientIDs
 }
 
 // State represents the state maintained by the replica for each
