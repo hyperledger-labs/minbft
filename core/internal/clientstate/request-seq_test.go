@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hyperledger-labs/minbft/core/internal/timer"
 )
 
 func TestReqeustSeq(t *testing.T) {
@@ -31,7 +33,7 @@ func TestReqeustSeq(t *testing.T) {
 }
 
 func testCaptureReleaseRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -69,7 +71,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 	seqs := make([]bool, nrSeqs)
 	wg := new(sync.WaitGroup)
 
-	state := New(defaultTimeout, defaultTimeout)
+	state := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {
@@ -96,7 +98,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 }
 
 func testPrepareRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -160,7 +162,7 @@ func testPrepareRequestSeq(t *testing.T) {
 }
 
 func testRetireRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string

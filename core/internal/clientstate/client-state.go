@@ -31,9 +31,33 @@ import (
 // with a client given its ID. It is safe to invoke concurrently.
 type Provider func(clientID uint32) State
 
+// Option represents a parameter to initialize State with.
+type Option func(*options)
+
+type options struct {
+	timerProvider timer.Provider
+}
+
+var defaultOptions = options{
+	timerProvider: timer.Standard(),
+}
+
+// WithTimerProvider specifies the abstract timer implementation to
+// use. Standard timer implementation is used by default.
+func WithTimerProvider(timerProvider timer.Provider) Option {
+	return func(opts *options) {
+		opts.timerProvider = timerProvider
+	}
+}
+
 // NewProvider creates an instance of Provider. Optional parameters
-// can be specified as opts.
-func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) Provider {
+// can be specified as args.
+func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, args ...Option) Provider {
+	opts := defaultOptions
+	for _, opt := range args {
+		opt(&opts)
+	}
+
 	var (
 		lock sync.Mutex
 		// Client ID -> client state
@@ -46,7 +70,7 @@ func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time
 
 		state := clientStates[clientID]
 		if state == nil {
-			state = New(requestTimeout, prepareTimeout, opts...)
+			state = newClientState(opts.timerProvider, requestTimeout, prepareTimeout)
 			clientStates[clientID] = state
 		}
 
@@ -121,50 +145,21 @@ type State interface {
 	StopPrepareTimer(seq uint64)
 }
 
-// New creates a new instance of client state representation. Optional
-// arguments opts specify initialization parameters.
-func New(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) State {
-	s := &clientState{opts: defaultOptions}
-
-	for _, opt := range opts {
-		opt(&s.opts)
-	}
-
-	s.seqState = newSeqState()
-	s.replyState = newReplyState()
-	s.requestTimer = newTimerState(s.opts.timerProvider, requestTimeout)
-	s.prepareTimer = newTimerState(s.opts.timerProvider, prepareTimeout)
-
-	return s
-}
-
-// Option represents a parameter to initialize State with.
-type Option func(*options)
-
-type options struct {
-	timerProvider timer.Provider
-}
-
-var defaultOptions = options{
-	timerProvider: timer.Standard(),
-}
-
-// WithTimerProvider specifies the abstract timer implementation to
-// use. Standard timer implementation is used by default.
-func WithTimerProvider(timerProvider timer.Provider) Option {
-	return func(opts *options) {
-		opts.timerProvider = timerProvider
-	}
-}
-
 type clientState struct {
 	*seqState
 	*replyState
 
 	requestTimer *timerState
 	prepareTimer *timerState
+}
 
-	opts options
+func newClientState(timerProvider timer.Provider, requestTimeout, prepareTimeout func() time.Duration) *clientState {
+	return &clientState{
+		seqState:     newSeqState(),
+		replyState:   newReplyState(),
+		requestTimer: newTimerState(timerProvider, requestTimeout),
+		prepareTimer: newTimerState(timerProvider, prepareTimeout),
+	}
 }
 
 func (s *clientState) StartRequestTimer(seq uint64, handleTimeout func()) {

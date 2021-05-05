@@ -145,7 +145,7 @@ func setupTimeoutMock(mock *testifymock.Mock, ctrl *gomock.Controller) (state St
 		return args.Get(0).(time.Duration)
 	}
 	timerProvider = timermock.NewMockProvider(ctrl)
-	state = New(requestTimeout, prepareTimeout, WithTimerProvider(timerProvider))
+	state = newClientState(timerProvider, requestTimeout, prepareTimeout)
 	return state, timerProvider, handleRequestTimeout, handlePrepareTimeout
 }
 
