@@ -31,7 +31,7 @@ func NewChannelClient(cc grpc.ClientConnInterface) ChannelClient {
 }
 
 func (c *channelClient) ClientChat(ctx context.Context, opts ...grpc.CallOption) (Channel_ClientChatClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Channel_ServiceDesc.Streams[0], "/proto.Channel/ClientChat", opts...)
+	stream, err := c.cc.NewStream(ctx, &Channel_ServiceDesc.Streams[0], "/minbft.sample.conn.Channel/ClientChat", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (x *channelClientChatClient) Recv() (*Message, error) {
 }
 
 func (c *channelClient) PeerChat(ctx context.Context, opts ...grpc.CallOption) (Channel_PeerChatClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Channel_ServiceDesc.Streams[1], "/proto.Channel/PeerChat", opts...)
+	stream, err := c.cc.NewStream(ctx, &Channel_ServiceDesc.Streams[1], "/minbft.sample.conn.Channel/PeerChat", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (x *channelPeerChatServer) Recv() (*Message, error) {
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Channel_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.Channel",
+	ServiceName: "minbft.sample.conn.Channel",
 	HandlerType: (*ChannelServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
