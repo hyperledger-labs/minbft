@@ -18,6 +18,7 @@
 syntax = "proto3";
 
 package proto;
+option go_package = "github.com/hyperledger-labs/minbft/sample/conn/grpc/proto";
 
 service Channel {
     rpc ClientChat (stream Message) returns (stream Message) {}

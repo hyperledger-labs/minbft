@@ -4,7 +4,6 @@ require (
 	github.com/a8m/envsubst v1.2.0
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/mock v1.5.0
-	github.com/golang/protobuf v1.5.2
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
