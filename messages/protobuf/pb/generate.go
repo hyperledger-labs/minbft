@@ -14,6 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate protoc messages.proto --go_out=plugins=grpc:.
+//go:generate protoc --go_out=. --go_opt=paths=source_relative messages.proto
 
 package pb

@@ -238,9 +238,11 @@ sudo apt-get install build-essential pkg-config
 
 ### Golang ###
 
-Go 1.11 or later is required to build this project (tested with Go 1.11
-and 1.15). For installation instructions please visit
-[this page](https://golang.org/doc/install).
+Go 1.13 or later is required to build this project (tested against
+1.13, 1.15 and 1.16). Official installation instructions can be found
+[here][go-install].
+
+[go-install]: https://golang.org/doc/install
 
 ### Intel® SGX SDK ###
 

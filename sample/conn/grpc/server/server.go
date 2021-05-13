@@ -57,6 +57,7 @@ func ListenAndServe(s ReplicaServer, addr string, serverOpts ...grpc.ServerOptio
 }
 
 type server struct {
+	proto.UnimplementedChannelServer
 	replica    api.ConnectionHandler
 	grpcServer *grpc.Server
 }
