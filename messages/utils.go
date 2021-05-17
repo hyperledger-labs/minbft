@@ -50,9 +50,20 @@ func Stringify(msg Message) string {
 	case ReqViewChange:
 		return fmt.Sprintf("<REQ-VIEW-CHANGE replica=%d newView=%d>",
 			msg.ReplicaID(), msg.NewView())
+	case ViewChange:
+		return fmt.Sprintf("<VIEW-CHANGE cv=%d replica=%d newView=%d vcCert=%s>",
+			cv, msg.ReplicaID(), msg.NewView(), vcCertString(msg.ViewChangeCert()))
 	}
 
 	return "(unknown message)"
+}
+
+func vcCertString(vcCert []ReqViewChange) string {
+	q := make([]uint32, 0, len(vcCert))
+	for _, rvc := range vcCert {
+		q = append(q, rvc.ReplicaID())
+	}
+	return fmt.Sprintf("<quorum=%v>", q)
 }
 
 func shortString(str string, max int) string {

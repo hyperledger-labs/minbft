@@ -79,11 +79,3 @@ func (m *prepare) SetUI(ui *usig.UI) {
 func (prepare) ImplementsReplicaMessage() {}
 func (prepare) ImplementsPeerMessage()    {}
 func (prepare) ImplementsPrepare()        {}
-
-func pbPrepareFromAPI(m messages.Prepare) *pb.Prepare {
-	if m, ok := m.(*prepare); ok {
-		return m.pbMsg
-	}
-
-	return pb.PrepareFromAPI(m)
-}

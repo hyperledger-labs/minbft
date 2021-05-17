@@ -29,9 +29,49 @@ func MarshalOrPanic(m proto.Message) []byte {
 	return bytes
 }
 
+func WrapMessage(m proto.Message) *Message {
+	switch m := m.(type) {
+	case *Hello:
+		return &Message{Typed: &Message_Hello{Hello: m}}
+	case *Request:
+		return &Message{Typed: &Message_Request{Request: m}}
+	case *Reply:
+		return &Message{Typed: &Message_Reply{Reply: m}}
+	case *Prepare:
+		return &Message{Typed: &Message_Prepare{Prepare: m}}
+	case *Commit:
+		return &Message{Typed: &Message_Commit{Commit: m}}
+	case *ReqViewChange:
+		return &Message{Typed: &Message_ReqViewChange{ReqViewChange: m}}
+	case *ViewChange:
+		return &Message{Typed: &Message_ViewChange{ViewChange: m}}
+	default:
+		panic("unknown message type")
+	}
+}
+
 func HelloFromAPI(h messages.Hello) *Hello {
 	return &Hello{
 		ReplicaId: h.ReplicaID(),
+	}
+}
+
+func MessageFromAPI(m messages.Message) proto.Message {
+	switch m := m.(type) {
+	case messages.Request:
+		return RequestFromAPI(m)
+	case messages.Reply:
+		return ReplyFromAPI(m)
+	case messages.Prepare:
+		return PrepareFromAPI(m)
+	case messages.Commit:
+		return CommitFromAPI(m)
+	case messages.ReqViewChange:
+		return ReqViewChangeFromAPI(m)
+	case messages.ViewChange:
+		return ViewChangeFromAPI(m)
+	default:
+		panic("unknown message type")
 	}
 }
 
@@ -44,6 +84,16 @@ func RequestFromAPI(req messages.Request) *Request {
 	}
 }
 
+func ReplyFromAPI(reply messages.Reply) *Reply {
+	return &Reply{
+		ReplicaId: reply.ReplicaID(),
+		ClientId:  reply.ClientID(),
+		Seq:       reply.Sequence(),
+		Result:    reply.Result(),
+		Signature: reply.Signature(),
+	}
+}
+
 func PrepareFromAPI(prep messages.Prepare) *Prepare {
 	return &Prepare{
 		ReplicaId: prep.ReplicaID(),
@@ -51,4 +101,46 @@ func PrepareFromAPI(prep messages.Prepare) *Prepare {
 		Request:   RequestFromAPI(prep.Request()),
 		Ui:        usig.MustMarshalUI(prep.UI()),
 	}
+}
+
+func CommitFromAPI(comm messages.Commit) *Commit {
+	return &Commit{
+		ReplicaId: comm.ReplicaID(),
+		Prepare:   PrepareFromAPI(comm.Prepare()),
+		Ui:        usig.MustMarshalUI(comm.UI()),
+	}
+}
+
+func ReqViewChangeFromAPI(rvc messages.ReqViewChange) *ReqViewChange {
+	return &ReqViewChange{
+		ReplicaId: rvc.ReplicaID(),
+		NewView:   rvc.NewView(),
+		Signature: rvc.Signature(),
+	}
+}
+
+func ViewChangeFromAPI(vc messages.ViewChange) *ViewChange {
+	return &ViewChange{
+		ReplicaId: vc.ReplicaID(),
+		NewView:   vc.NewView(),
+		Log:       messageLogFromAPI(vc.MessageLog()),
+		VcCert:    viewChangeCertFromAPI(vc.ViewChangeCert()),
+		Ui:        usig.MustMarshalUI(vc.UI()),
+	}
+}
+
+func messageLogFromAPI(log messages.MessageLog) []*Message {
+	pbLog := make([]*Message, 0, len(log))
+	for _, m := range log {
+		pbLog = append(pbLog, WrapMessage(MessageFromAPI(m)))
+	}
+	return pbLog
+}
+
+func viewChangeCertFromAPI(cert messages.ViewChangeCert) []*ReqViewChange {
+	pbCert := make([]*ReqViewChange, 0, len(cert))
+	for _, m := range cert {
+		pbCert = append(pbCert, ReqViewChangeFromAPI(m))
+	}
+	return pbCert
 }
