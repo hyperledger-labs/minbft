@@ -48,13 +48,15 @@ type messageLog struct {
 	// Messages in order added
 	msgs []messages.Message
 
-	// Buffered channels to notify about new messages
-	newAdded []chan<- struct{}
+	// Channel to close and recreate when adding new messages
+	newAdded chan struct{}
 }
 
 // New creates a new instance of the message log.
 func New() MessageLog {
-	return &messageLog{}
+	return &messageLog{
+		newAdded: make(chan struct{}),
+	}
 }
 
 func (log *messageLog) Append(msg messages.Message) {
@@ -62,13 +64,8 @@ func (log *messageLog) Append(msg messages.Message) {
 	defer log.Unlock()
 
 	log.msgs = append(log.msgs, msg)
-
-	for _, newAdded := range log.newAdded {
-		select {
-		case newAdded <- struct{}{}:
-		default:
-		}
-	}
+	close(log.newAdded)
+	log.newAdded = make(chan struct{})
 }
 
 func (log *messageLog) Stream(done <-chan struct{}) <-chan messages.Message {
@@ -80,14 +77,10 @@ func (log *messageLog) Stream(done <-chan struct{}) <-chan messages.Message {
 func (log *messageLog) supplyMessages(ch chan<- messages.Message, done <-chan struct{}) {
 	defer close(ch)
 
-	newAdded := make(chan struct{}, 1)
-	log.Lock()
-	log.newAdded = append(log.newAdded, newAdded)
-	log.Unlock()
-
 	next := 0
 	for {
 		log.RLock()
+		newAdded := log.newAdded
 		msgs := log.msgs[next:]
 		next = len(log.msgs)
 		log.RUnlock()
