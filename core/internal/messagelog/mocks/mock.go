@@ -45,6 +45,32 @@ func (mr *MockMessageLogMockRecorder) Append(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Append", reflect.TypeOf((*MockMessageLog)(nil).Append), arg0)
 }
 
+// Messages mocks base method
+func (m *MockMessageLog) Messages() []messages.Message {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Messages")
+	ret0, _ := ret[0].([]messages.Message)
+	return ret0
+}
+
+// Messages indicates an expected call of Messages
+func (mr *MockMessageLogMockRecorder) Messages() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Messages", reflect.TypeOf((*MockMessageLog)(nil).Messages))
+}
+
+// Reset mocks base method
+func (m *MockMessageLog) Reset(arg0 []messages.Message) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Reset", arg0)
+}
+
+// Reset indicates an expected call of Reset
+func (mr *MockMessageLogMockRecorder) Reset(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockMessageLog)(nil).Reset), arg0)
+}
+
 // Stream mocks base method
 func (m *MockMessageLog) Stream(arg0 <-chan struct{}) <-chan messages.Message {
 	m.ctrl.T.Helper()
