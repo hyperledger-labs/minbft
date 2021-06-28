@@ -164,7 +164,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit)
+	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
+	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
@@ -187,7 +188,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
-	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage)
+
+	collectReqViewChange := makeReqViewChangeCollector(f)
+	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
+	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
+
+	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
 	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
@@ -405,7 +411,7 @@ func makeClientMessageHandler(validateRequest requestValidator, processRequest r
 
 // makeMessageValidator constructs an instance of messageValidator
 // using the supplied abstractions.
-func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator) messageValidator {
+func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) messageValidator {
 	return func(msg messages.Message) error {
 		switch msg := msg.(type) {
 		case messages.Request:
@@ -415,7 +421,7 @@ func makeMessageValidator(validateRequest requestValidator, validatePrepare prep
 		case messages.Commit:
 			return validateCommit(msg)
 		case messages.ReqViewChange:
-			return fmt.Errorf("not implemented")
+			return validateReqViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}
@@ -437,13 +443,15 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
 		processEmbedded(msg)
 
 		switch msg := msg.(type) {
 		case messages.CertifiedMessage:
 			return processUIMessage(msg)
+		case messages.ReqViewChange:
+			return processReqViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}
