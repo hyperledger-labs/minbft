@@ -3,11 +3,8 @@ run:
 linters:
   enable:
     - gocyclo
-    - golint
-    - maligned
-    - megacheck
+    - revive
     - dupl
-    - interfacer
     - unconvert
     - goconst
     - gosec
