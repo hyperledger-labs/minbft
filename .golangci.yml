@@ -1,22 +1,12 @@
 run:
   tests: false
 linters:
-  # Default set of linters from gometalinter v2.0.12, gofmt, and misspell
-  # https://github.com/alecthomas/gometalinter/blob/v2.0.12/README.md#supported-linters
-  disable-all: true
   enable:
-    - govet
-    - typecheck
-    - deadcode
     - gocyclo
     - golint
-    - varcheck
-    - structcheck
     - maligned
-    - errcheck
     - megacheck
     - dupl
-    - ineffassign
     - interfacer
     - unconvert
     - goconst
