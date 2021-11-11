@@ -134,21 +134,7 @@ func requireVCEqual(t *testing.T, vc1, vc2 messages.ViewChange) {
 func requireMsgLogEqual(t *testing.T, log1, log2 messages.MessageLog) {
 	require.Equal(t, len(log1), len(log2))
 	for i, m1 := range log1 {
-		m2 := log2[i]
-		switch m1 := m1.(type) {
-		case messages.Prepare:
-			m2, ok := m2.(messages.Prepare)
-			require.True(t, ok)
-			requirePrepEqual(t, m1, m2)
-		case messages.Commit:
-			m2, ok := m2.(messages.Commit)
-			require.True(t, ok)
-			requireCommEqual(t, m1, m2)
-		case messages.ViewChange:
-			m2, ok := m2.(messages.ViewChange)
-			require.True(t, ok)
-			requireVCEqual(t, m1, m2)
-		}
+		requireCertMsgEqual(t, m1, log2[i])
 	}
 }
 

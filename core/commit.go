@@ -73,14 +73,19 @@ type commitmentCounter func(view, primaryCV uint64) (done bool)
 // the supplied abstractions.
 func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) commitValidator {
 	return func(commit messages.Commit) error {
-		prepare := commit.Prepare()
+		prop := commit.Proposal()
 
-		if commit.ReplicaID() == prepare.ReplicaID() {
+		if commit.ReplicaID() == prop.ReplicaID() {
 			return fmt.Errorf("commit from primary")
 		}
 
-		if err := validatePrepare(prepare); err != nil {
-			return fmt.Errorf("invalid Prepare: %s", err)
+		switch m := prop.(type) {
+		case messages.Prepare:
+			if err := validatePrepare(m); err != nil {
+				return fmt.Errorf("invalid Prepare: %s", err)
+			}
+		default:
+			panic("Unexpected proposal message type")
 		}
 
 		if err := verifyUI(commit); err != nil {
@@ -111,18 +116,25 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 	return func(msg messages.CertifiedMessage) error {
 		replicaID := msg.ReplicaID()
 
-		var prepare messages.Prepare
+		var prop messages.CertifiedMessage
 		switch msg := msg.(type) {
 		case messages.Prepare:
-			prepare = msg
+			prop = msg
 		case messages.Commit:
-			prepare = msg.Prepare()
+			prop = msg.Proposal()
 		default:
-			return fmt.Errorf("unexpected message type")
+			return fmt.Errorf("unexpected commitment message type")
 		}
 
-		view := prepare.View()
-		primaryCV := prepare.UI().Counter
+		var view uint64
+		switch prop := prop.(type) {
+		case messages.Prepare:
+			view = prop.View()
+		default:
+			return fmt.Errorf("unexpected proposal message type")
+		}
+
+		primaryCV := prop.UI().Counter
 		replicaCV := msg.UI().Counter
 
 		lock.Lock()
@@ -136,7 +148,12 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 			return nil
 		}
 
-		executeRequest(prepare.Request())
+		switch prop := prop.(type) {
+		case messages.Prepare:
+			executeRequest(prop.Request())
+		default:
+			panic("Unexpected proposal message type")
+		}
 
 		return nil
 	}

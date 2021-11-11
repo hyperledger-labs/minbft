@@ -31,7 +31,7 @@ func TestCommit(t *testing.T) {
 		prep := randPrep(impl)
 		comm := impl.NewCommit(r, prep)
 		require.Equal(t, r, comm.ReplicaID())
-		requirePrepEqual(t, prep, comm.Prepare())
+		requireCertMsgEqual(t, prep, comm.Proposal())
 	})
 	t.Run("SetUI", func(t *testing.T) {
 		comm := randComm(impl)
@@ -57,6 +57,6 @@ func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv 
 
 func requireCommEqual(t *testing.T, comm1, comm2 messages.Commit) {
 	require.Equal(t, comm1.ReplicaID(), comm2.ReplicaID())
-	requirePrepEqual(t, comm1.Prepare(), comm2.Prepare())
+	requireCertMsgEqual(t, comm1.Proposal(), comm2.Proposal())
 	require.Equal(t, comm1.UI(), comm2.UI())
 }

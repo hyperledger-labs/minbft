@@ -27,7 +27,7 @@ type MessageImpl interface {
 	NewHello(replicaID uint32) Hello
 	NewRequest(clientID uint32, sequence uint64, operation []byte) Request
 	NewPrepare(replicaID uint32, view uint64, request Request) Prepare
-	NewCommit(replicaID uint32, prepare Prepare) Commit
+	NewCommit(replicaID uint32, proposal CertifiedMessage) Commit
 	NewReply(replicaID, clientID uint32, sequence uint64, result []byte) Reply
 	NewReqViewChange(replicaID uint32, newView uint64) ReqViewChange
 	NewViewChange(replicaID uint32, newView uint64, log MessageLog, vcCert ViewChangeCert) ViewChange
@@ -96,7 +96,7 @@ type Prepare interface {
 
 type Commit interface {
 	CertifiedMessage
-	Prepare() Prepare
+	Proposal() CertifiedMessage
 	ImplementsPeerMessage()
 	ImplementsCommit()
 }

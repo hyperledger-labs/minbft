@@ -66,10 +66,10 @@ func writeAuthenBytes(buf io.Writer, m Message) {
 		_ = binary.Write(buf, binary.BigEndian, req.ClientID())
 		writeAuthenBytes(buf, req)
 	case Commit:
-		prep := m.Prepare()
-		_ = binary.Write(buf, binary.BigEndian, prep.ReplicaID())
-		writeAuthenBytes(buf, prep)
-		_ = binary.Write(buf, binary.BigEndian, prep.UI().Counter)
+		prop := m.Proposal()
+		_ = binary.Write(buf, binary.BigEndian, prop.ReplicaID())
+		_, _ = buf.Write(AuthenBytes(prop))
+		_ = binary.Write(buf, binary.BigEndian, prop.UI().Counter)
 	case ReqViewChange:
 		_ = binary.Write(buf, binary.BigEndian, m.NewView())
 	case ViewChange:

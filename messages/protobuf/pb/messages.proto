@@ -93,8 +93,8 @@ message Commit {
     // Replica identifier
     uint32 replica_id = 1;
 
-    // Primary's PREPARE
-    Prepare prepare = 2;
+    // Primary's proposal
+    Message proposal = 2;
 
     // Replica's UI
     bytes ui = 3;

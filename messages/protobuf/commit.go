@@ -24,30 +24,32 @@ import (
 
 type commit struct {
 	pbMsg *pb.Commit
-	prep  messages.Prepare
+	prop  messages.CertifiedMessage
 	ui    *usig.UI
 }
 
-func newCommit(r uint32, prep messages.Prepare) *commit {
+func newCommit(r uint32, prop messages.CertifiedMessage) *commit {
 	return &commit{
 		pbMsg: &pb.Commit{
 			ReplicaId: r,
-			Prepare:   pbPrepareFromAPI(prep),
+			Proposal:  pb.WrapMessage(pbMessageFromAPI(prop)),
 		},
-		prep: prep,
+		prop: prop,
 	}
 }
 
 func newCommitFromPb(pbMsg *pb.Commit) (*commit, error) {
-	prep, err := newPrepareFromPb(pbMsg.GetPrepare())
-	if err != nil {
-		return nil, xerrors.Errorf("cannot unmarshal embedded Prepare: %w", err)
+	var prop messages.CertifiedMessage
+	if m, err := typedMessageFromPb(pbMsg.GetProposal()); err != nil {
+		return nil, xerrors.Errorf("cannot unmarshal embedded proposal: %w", err)
+	} else if prop, _ = m.(messages.CertifiedMessage); prop == nil {
+		return nil, xerrors.New("unexpected proposal message type")
 	}
 	ui := new(usig.UI)
 	if err := ui.UnmarshalBinary(pbMsg.GetUi()); err != nil {
 		return nil, xerrors.Errorf("cannot unmarshal UI: %w", err)
 	}
-	return &commit{pbMsg: pbMsg, prep: prep, ui: ui}, nil
+	return &commit{pbMsg: pbMsg, prop: prop, ui: ui}, nil
 }
 
 func (m *commit) MarshalBinary() ([]byte, error) {
@@ -58,8 +60,8 @@ func (m *commit) ReplicaID() uint32 {
 	return m.pbMsg.GetReplicaId()
 }
 
-func (m *commit) Prepare() messages.Prepare {
-	return m.prep
+func (m *commit) Proposal() messages.CertifiedMessage {
+	return m.prop
 }
 
 func (m *commit) UI() *usig.UI {

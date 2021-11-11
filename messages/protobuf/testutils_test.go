@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"hash/crc32"
 	"math/rand"
+	"testing"
 
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
+	"github.com/stretchr/testify/require"
 )
 
 func randBytes() []byte {
@@ -54,4 +56,21 @@ func newTestUI(cv uint64, data []byte) *usig.UI {
 
 func randUI(data []byte) *usig.UI {
 	return newTestUI(rand.Uint64(), data)
+}
+
+func requireCertMsgEqual(t *testing.T, m1, m2 messages.CertifiedMessage) {
+	switch m1 := m1.(type) {
+	case messages.Prepare:
+		m2, ok := m2.(messages.Prepare)
+		require.True(t, ok)
+		requirePrepEqual(t, m1, m2)
+	case messages.Commit:
+		m2, ok := m2.(messages.Commit)
+		require.True(t, ok)
+		requireCommEqual(t, m1, m2)
+	case messages.ViewChange:
+		m2, ok := m2.(messages.ViewChange)
+		require.True(t, ok)
+		requireVCEqual(t, m1, m2)
+	}
 }
