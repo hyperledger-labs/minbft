@@ -15,6 +15,7 @@
 package protobuf
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,42 @@ import (
 )
 
 func TestCommit(t *testing.T) {
+	const f = 1
+	const n = 3
+	const maxNrViews = 3
+	const maxNrRequests = 2
+
 	impl := NewImpl()
 
+	reqs := make([]messages.Request, maxNrRequests)
+	for i := range reqs {
+		reqs[i] = newTestReq(impl, 0, uint64(i), nil)
+	}
+
+	for k := len(reqs); k >= 0; k-- {
+		reqs := reqs[:k]
+		for v := uint64(1); v < maxNrViews; v++ {
+			p := uint32(v % uint64(n))
+			i := 0
+			for logs := range generateMessageLogs(impl, f, n, v, reqs) {
+				for j, m := range logs[p] {
+					for r := uint32(0); r < n; r++ {
+						if r == p {
+							continue
+						}
+						cv := lastLogCV(logs[r])
+						t.Run(fmt.Sprintf("NrRequests=%d/View=%d/Log=%d/Proposal=%d/Replica=%d", k, v, i, j, r), func(t *testing.T) {
+							testCommit(t, impl, r, m, cv)
+						})
+					}
+				}
+				i++
+			}
+			if testing.Short() {
+				return
+			}
+		}
+	}
 	// TODO: Test against different new-view certificates
 	nv := newTestNV(impl, 1, 1, newTestNVCert(impl), 2)
 	testCommit(t, impl, 2, nv, 2)
