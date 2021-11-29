@@ -15,6 +15,7 @@
 package protobuf
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -23,10 +24,40 @@ import (
 )
 
 func TestNewView(t *testing.T) {
+	const f = 1
+	const n = 3
+	const maxNrViews = 3
+	const maxNrRequests = 2
+
 	impl := NewImpl()
 
-	// TODO: Test against different new-view certificates
-	testNewView(t, impl, 1, 1, newTestNVCert(impl), 2)
+	reqs := make([]messages.Request, maxNrRequests)
+	for i := range reqs {
+		reqs[i] = newTestReq(impl, 0, uint64(i), nil)
+	}
+
+	for k := len(reqs); k >= 0; k-- {
+		reqs := reqs[:k]
+		for v := uint64(1); v < maxNrViews; v++ {
+			p := uint32(v % uint64(n))
+			i := 0
+			for logs := range generateMessageLogs(impl, f, n, v-1, reqs) {
+				_, vcs := terminateMessageLogs(impl, f, n, v-1, logs)
+				cv := vcs[p].UI().Counter
+				j := 0
+				for nvCert := range generateNewViewCertificates(impl, f, n, v, vcs) {
+					t.Run(fmt.Sprintf("NrRequests=%d/View=%d/Log=%d/Cert=%d", k, v, i, j), func(t *testing.T) {
+						testNewView(t, impl, p, v, nvCert, cv)
+					})
+					j++
+				}
+				i++
+			}
+		}
+		if testing.Short() {
+			return
+		}
+	}
 }
 
 func newTestNVCert(impl messages.MessageImpl) messages.NewViewCert {
