@@ -27,61 +27,37 @@ import (
 func TestViewChange(t *testing.T) {
 	const f = 1
 	const n = 3
-	const maxView = 3
-	const maxRequests = 2
+	const maxNrViews = 3
+	const maxNrRequests = 2
 
 	impl := NewImpl()
 
-	preps := make([]messages.Prepare, maxRequests)
-	for i := range preps {
-		c := uint64(i) + 1
-		preps[i] = newTestPrep(impl, 0, 0, randReq(impl), c)
+	reqs := make([]messages.Request, maxNrRequests)
+	for i := range reqs {
+		reqs[i] = newTestReq(impl, 0, uint64(i), nil)
 	}
 
-	var logs [][][]messages.MessageLog // r -> v -> i -> log
-	for r := uint32(0); r < n; r++ {
-		logs = append(logs, [][]messages.MessageLog{})
-		for v := uint64(0); v <= maxView; v++ {
-			logs[r] = append(logs[r], []messages.MessageLog{})
-			if v == 0 {
-				var log messages.MessageLog
-				for i, prep := range preps {
-					if r == uint32(v%n) {
-						log = append(log, prep)
-					} else {
-						log = append(log, newTestComm(impl, r, prep, uint64(i)+1))
-					}
+	for k := len(reqs); k >= 0; k-- {
+		reqs := reqs[:k]
+		for v := uint64(1); v < maxNrViews; v++ {
+			i := 0
+			for logs := range generateMessageLogs(impl, f, n, v-1, reqs) {
+				for r := uint32(0); r < n; r++ {
+					cv := lastLogCV(logs[r])
+					t.Run(fmt.Sprintf("NrRequests=%d/View=%d/Log=%d/Replica=%d", k, v, i, r), func(t *testing.T) {
+						testViewChange(t, impl, r, v, logs[r], randVCCert(impl, f, n, v), cv)
+					})
 				}
-				for l := 0; l < len(log); l++ {
-					logs[r][v] = append(logs[r][v], log[:l])
-				}
-			} else {
-				// TODO: Test against logs with NewView messages
-				for _, log := range logs[r][v-1] {
-					lastCV := lastLogCV(log)
-					vc := newTestVC(impl, r, v, log, randVCCert(impl, f, n, v), lastCV+1)
-					logs[r][v] = append(logs[r][v], messages.MessageLog{vc})
-				}
+				i++
 			}
-		}
-	}
-
-	for i, logs := range logs {
-		r := uint32(i)
-		for i, logs := range logs {
-			v := uint64(i)
-			for i, log := range logs {
-				t.Run(fmt.Sprintf("Replica=%d/View=%d/Log=%d", r, v, i), func(t *testing.T) {
-					testViewChange(t, impl, r, v, log, randVCCert(impl, f, n, v))
-				})
+			if testing.Short() {
+				return
 			}
 		}
 	}
 }
 
-func testViewChange(t *testing.T, impl messages.MessageImpl, r uint32, v uint64, log messages.MessageLog, vcCert messages.ViewChangeCert) {
-	lastCV := lastLogCV(log)
-
+func testViewChange(t *testing.T, impl messages.MessageImpl, r uint32, v uint64, log messages.MessageLog, vcCert messages.ViewChangeCert, cv uint64) {
 	t.Run("Fields", func(t *testing.T) {
 		vc := impl.NewViewChange(r, v, log, vcCert)
 		require.Equal(t, r, vc.ReplicaID())
@@ -91,12 +67,12 @@ func testViewChange(t *testing.T, impl messages.MessageImpl, r uint32, v uint64,
 	})
 	t.Run("SetUI", func(t *testing.T) {
 		vc := impl.NewViewChange(r, v, log, vcCert)
-		ui := newTestUI(lastCV+1, messages.AuthenBytes(vc))
+		ui := newTestUI(cv, messages.AuthenBytes(vc))
 		vc.SetUI(ui)
 		require.Equal(t, ui, vc.UI())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		vc := newTestVC(impl, r, v, log, vcCert, lastCV+1)
+		vc := newTestVC(impl, r, v, log, vcCert, cv)
 		requireVCEqual(t, vc, remarshalMsg(impl, vc).(messages.ViewChange))
 	})
 }
