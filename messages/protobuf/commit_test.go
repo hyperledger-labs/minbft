@@ -15,7 +15,6 @@
 package protobuf
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,31 +25,34 @@ import (
 func TestCommit(t *testing.T) {
 	impl := NewImpl()
 
+	// TODO: Test against different new-view certificates
+	nv := newTestNV(impl, 1, 1, newTestNVCert(impl), 2)
+	testCommit(t, impl, 2, nv, 2)
+
+	prep := newTestPrep(impl, 1, 1, randReq(impl), 3)
+	testCommit(t, impl, 1, prep, 2)
+}
+
+func testCommit(t *testing.T, impl messages.MessageImpl, r uint32, prop messages.CertifiedMessage, cv uint64) {
 	t.Run("Fields", func(t *testing.T) {
-		r := rand.Uint32()
-		prep := randPrep(impl)
-		comm := impl.NewCommit(r, prep)
+		comm := impl.NewCommit(r, prop)
 		require.Equal(t, r, comm.ReplicaID())
-		requireCertMsgEqual(t, prep, comm.Proposal())
+		requireCertMsgEqual(t, prop, comm.Proposal())
 	})
 	t.Run("SetUI", func(t *testing.T) {
-		comm := randComm(impl)
-		ui := randUI(messages.AuthenBytes(comm))
+		comm := impl.NewCommit(r, prop)
+		ui := newTestUI(cv, messages.AuthenBytes(comm))
 		comm.SetUI(ui)
 		require.Equal(t, ui, comm.UI())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		comm := randComm(impl)
+		comm := newTestComm(impl, r, prop, cv)
 		requireCommEqual(t, comm, remarshalMsg(impl, comm).(messages.Commit))
 	})
 }
 
-func randComm(impl messages.MessageImpl) messages.Commit {
-	return newTestComm(impl, rand.Uint32(), randPrep(impl), rand.Uint64())
-}
-
-func newTestComm(impl messages.MessageImpl, r uint32, prep messages.Prepare, cv uint64) messages.Commit {
-	comm := impl.NewCommit(r, prep)
+func newTestComm(impl messages.MessageImpl, r uint32, prop messages.CertifiedMessage, cv uint64) messages.Commit {
+	comm := impl.NewCommit(r, prop)
 	comm.SetUI(newTestUI(cv, messages.AuthenBytes(comm)))
 	return comm
 }
