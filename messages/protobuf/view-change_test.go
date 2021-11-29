@@ -107,14 +107,6 @@ func newTestVC(impl messages.MessageImpl, r uint32, v uint64, log messages.Messa
 	return vc
 }
 
-func lastLogCV(log messages.MessageLog) uint64 {
-	var lastCV uint64
-	if len(log) != 0 {
-		lastCV = log[len(log)-1].UI().Counter
-	}
-	return lastCV
-}
-
 func randVCCert(impl messages.MessageImpl, f, n uint32, v uint64) messages.ViewChangeCert {
 	var cert messages.ViewChangeCert
 	for _, r := range rand.Perm(int(n))[:f+1] {
