@@ -27,6 +27,7 @@ jobs:
         run: |
           source /opt/intel/sgxsdk/environment
           LD_LIBRARY_PATH="$PWD/usig/sgx/shim:$LD_LIBRARY_PATH" \
+          GOFLAGS="-short" \
           make build check
       - name: Lint
         run: |
