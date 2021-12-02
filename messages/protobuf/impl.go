@@ -69,6 +69,10 @@ func (*impl) NewViewChange(r uint32, nv uint64, log messages.MessageLog, vcCert 
 	return newViewChange(r, nv, log, vcCert)
 }
 
+func (*impl) NewNewView(r uint32, nv uint64, nvCert messages.NewViewCert) messages.NewView {
+	return newNewView(r, nv, nvCert)
+}
+
 func marshalMessage(m proto.Message) ([]byte, error) {
 	return proto.Marshal(pb.WrapMessage(m))
 }

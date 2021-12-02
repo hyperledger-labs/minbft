@@ -53,6 +53,9 @@ func Stringify(msg Message) string {
 	case ViewChange:
 		return fmt.Sprintf("<VIEW-CHANGE cv=%d replica=%d newView=%d vcCert=%s>",
 			cv, msg.ReplicaID(), msg.NewView(), vcCertString(msg.ViewChangeCert()))
+	case NewView:
+		return fmt.Sprintf("<NEW-VIEW cv=%d replica=%d newView=%d nvCert=%s>",
+			cv, msg.ReplicaID(), msg.NewView(), nvCertString(msg.NewViewCert()))
 	}
 
 	return "(unknown message)"
@@ -62,6 +65,14 @@ func vcCertString(vcCert []ReqViewChange) string {
 	q := make([]uint32, 0, len(vcCert))
 	for _, rvc := range vcCert {
 		q = append(q, rvc.ReplicaID())
+	}
+	return fmt.Sprintf("<quorum=%v>", q)
+}
+
+func nvCertString(nvCert []ViewChange) string {
+	q := make(map[uint32]uint64, len(nvCert))
+	for _, vc := range nvCert {
+		q[vc.ReplicaID()] = vc.UI().Counter
 	}
 	return fmt.Sprintf("<quorum=%v>", q)
 }

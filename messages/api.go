@@ -31,6 +31,7 @@ type MessageImpl interface {
 	NewReply(replicaID, clientID uint32, sequence uint64, result []byte) Reply
 	NewReqViewChange(replicaID uint32, newView uint64) ReqViewChange
 	NewViewChange(replicaID uint32, newView uint64, log MessageLog, vcCert ViewChangeCert) ViewChange
+	NewNewView(replicaID uint32, newView uint64, nvCert NewViewCert) NewView
 }
 
 type Message interface {
@@ -127,5 +128,14 @@ type ViewChange interface {
 	ImplementsViewChange()
 }
 
+type NewView interface {
+	CertifiedMessage
+	NewView() uint64
+	NewViewCert() NewViewCert
+	ImplementsPeerMessage()
+	ImplementsNewView()
+}
+
 type MessageLog []CertifiedMessage
 type ViewChangeCert []ReqViewChange
+type NewViewCert []ViewChange
