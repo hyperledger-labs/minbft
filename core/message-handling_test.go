@@ -549,6 +549,11 @@ func TestMakeCertifiedMessageProcessor(t *testing.T) {
 	mock.On("viewMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 	_, err = process(msg)
 	assert.Error(t, err, "Failed to process message in current view")
+
+	// Next certified, but now unacceptable, message
+	certifiedMsg.EXPECT().UI().Return(testUI(5))
+	_, err = process(msg)
+	assert.Error(t, err, "Certified message following an incorrect one")
 }
 
 func TestMakeViewMessageProcessor(t *testing.T) {

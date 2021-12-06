@@ -518,14 +518,19 @@ func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProce
 		} else if ui.Counter > nextUI {
 			return false, fmt.Errorf("unexpected UI counter value")
 		}
-		lastUI[replicaID] = nextUI
 
 		switch msg := msg.(type) {
 		case messages.PeerMessage:
-			return processViewMessage(msg)
+			new, err = processViewMessage(msg)
 		default:
 			panic("Unknown message type")
 		}
+
+		if err == nil {
+			lastUI[replicaID] = nextUI
+		}
+
+		return new, err
 	}
 }
 
