@@ -78,14 +78,14 @@ type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 // concurrently.
 type embeddedMessageProcessor func(msg messages.PeerMessage)
 
-// uiMessageProcessor processes a valid message with UI.
+// certifiedMessageProcessor processes a valid message with UI.
 //
-// It continues processing of the supplied message with UI. Messages
-// originated from the same replica are guaranteed to be processed
-// once only and in the sequence assigned by the replica USIG. The
-// return value new indicates if the message had any effect. It is
-// safe to invoke concurrently.
-type uiMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
+// It continues processing of the supplied message certified by USIG.
+// Messages originated from the same replica are guaranteed to be
+// processed only once and in sequence according to the assigned UI.
+// The return value new indicates if the message had any effect.
+// It is safe to invoke concurrently.
+type certifiedMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
 
 // viewMessageProcessor processes a valid message in current view.
 //
@@ -186,14 +186,14 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
-	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
+	processCertifiedMessage := makeCertifiedMessageProcessor(captureUI, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 
 	collectReqViewChange := makeReqViewChangeCollector(f)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
-	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
+	processPeerMessage := makePeerMessageProcessor(processEmbedded, processCertifiedMessage, processReqViewChange)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
 	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
@@ -443,13 +443,13 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
 		processEmbedded(msg)
 
 		switch msg := msg.(type) {
 		case messages.CertifiedMessage:
-			return processUIMessage(msg)
+			return processCertifiedMessage(msg)
 		case messages.ReqViewChange:
 			return processReqViewChange(msg)
 		default:
@@ -479,7 +479,7 @@ func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger
 	}
 }
 
-func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) uiMessageProcessor {
+func makeCertifiedMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
 		new, release := captureUI(msg)
 		if !new {
