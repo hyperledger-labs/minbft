@@ -190,6 +190,51 @@ func TestMakeMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("requestValidator", msg)
 		return args.Error(0)
 	}
+	validatePeerMessage := func(msg messages.PeerMessage) error {
+		args := mock.MethodCalled("peerMessageValidator", msg)
+		return args.Error(0)
+	}
+	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
+
+	t.Run("UnknownMessageType", func(t *testing.T) {
+		msg := mock_messages.NewMockMessage(ctrl)
+		assert.Panics(t, func() { validateMessage(msg) }, "Unknown message type")
+	})
+	t.Run("Request", func(t *testing.T) {
+		req := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), randBytes())
+
+		mock.On("requestValidator", req).Return(fmt.Errorf("error")).Once()
+		err := validateMessage(req)
+		assert.Error(t, err, "Invalid Request")
+
+		mock.On("requestValidator", req).Return(nil).Once()
+		err = validateMessage(req)
+		assert.NoError(t, err)
+	})
+	t.Run("PeerMessage", func(t *testing.T) {
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(randReplicaID(randN())).AnyTimes()
+
+		mock.On("peerMessageValidator", msg).Return(fmt.Errorf("error")).Once()
+		err := validateMessage(msg)
+		assert.Error(t, err, "Invalid peer message")
+
+		mock.On("peerMessageValidator", msg).Return(nil).Once()
+		err = validateMessage(msg)
+		assert.NoError(t, err)
+	})
+}
+
+func TestMakePeerMessageValidator(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n, v := randN(), randView()
+	p := primaryID(n, v)
+
 	validatePrepare := func(msg messages.Prepare) error {
 		args := mock.MethodCalled("prepareValidator", msg)
 		return args.Error(0)
@@ -202,51 +247,49 @@ func TestMakeMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("reqViewChangeValidator", msg)
 		return args.Error(0)
 	}
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
+	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
 
-	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
-	prepare := messageImpl.NewPrepare(0, 0, request)
-	commit := messageImpl.NewCommit(0, prepare)
-	rvc := messageImpl.NewReqViewChange(0, rand.Uint64())
+	request := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), randBytes())
+	prepare := messageImpl.NewPrepare(p, v, request)
+	commit := messageImpl.NewCommit(randOtherReplicaID(p, n), prepare)
+	rvc := messageImpl.NewReqViewChange(randReplicaID(n), v+1)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockMessage(ctrl)
-		assert.Panics(t, func() { validateMessage(msg) }, "Unknown message type")
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
+		assert.Panics(t, func() { validatePeerMessage(msg) }, "Unknown message type")
 	})
-	t.Run("Request", func(t *testing.T) {
-		mock.On("requestValidator", request).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(request)
-		assert.Error(t, err, "Invalid Request")
-
-		mock.On("requestValidator", request).Return(nil).Once()
-		err = validateMessage(request)
-		assert.NoError(t, err)
+	t.Run("InvalidReplicaID", func(t *testing.T) {
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(n + uint32(rand.Intn(2))).AnyTimes()
+		err := validatePeerMessage(msg)
+		assert.Error(t, err, "Invalid replica ID")
 	})
 	t.Run("Prepare", func(t *testing.T) {
 		mock.On("prepareValidator", prepare).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(prepare)
+		err := validatePeerMessage(prepare)
 		assert.Error(t, err, "Invalid Prepare")
 
 		mock.On("prepareValidator", prepare).Return(nil).Once()
-		err = validateMessage(prepare)
+		err = validatePeerMessage(prepare)
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
 		mock.On("commitValidator", commit).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(commit)
+		err := validatePeerMessage(commit)
 		assert.Error(t, err, "Invalid Commit")
 
 		mock.On("commitValidator", commit).Return(nil).Once()
-		err = validateMessage(commit)
+		err = validatePeerMessage(commit)
 		assert.NoError(t, err)
 	})
 	t.Run("ReqViewChange", func(t *testing.T) {
 		mock.On("reqViewChangeValidator", rvc).Return(fmt.Errorf("Error")).Once()
-		err := validateMessage(rvc)
+		err := validatePeerMessage(rvc)
 		assert.Error(t, err, "Invalid ReqViewChange")
 
 		mock.On("reqViewChangeValidator", rvc).Return(nil).Once()
-		err = validateMessage(rvc)
+		err = validatePeerMessage(rvc)
 		assert.NoError(t, err)
 	})
 }

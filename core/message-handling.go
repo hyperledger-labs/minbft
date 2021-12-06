@@ -50,10 +50,16 @@ type peerConnector func(out <-chan []byte) (in <-chan []byte, err error)
 
 // messageValidator validates a message.
 //
-// It authenticates and checks the supplied message for internal
-// consistency. It does not use replica's current state and has no
+// It fully checks the supplied message for internal consistency and
+// authenticity. It does not use replica's current state and has no
 // side-effect. It is safe to invoke concurrently.
 type messageValidator func(msg messages.Message) error
+
+// peerMessageValidator validates a peer message.
+//
+// It continues validation of the supplied peer message.
+// It is safe to invoke concurrently.
+type peerMessageValidator func(msg messages.PeerMessage) error
 
 // messageProcessor processes a valid message.
 //
@@ -165,7 +171,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
+	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
+	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
@@ -411,11 +418,27 @@ func makeClientMessageHandler(validateRequest requestValidator, processRequest r
 
 // makeMessageValidator constructs an instance of messageValidator
 // using the supplied abstractions.
-func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) messageValidator {
+func makeMessageValidator(validateRequest requestValidator, validatePeerMessage peerMessageValidator) messageValidator {
 	return func(msg messages.Message) error {
 		switch msg := msg.(type) {
 		case messages.Request:
 			return validateRequest(msg)
+		case messages.PeerMessage:
+			return validatePeerMessage(msg)
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
+func makePeerMessageValidator(n uint32, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) peerMessageValidator {
+	return func(msg messages.PeerMessage) error {
+		replicaID := msg.ReplicaID()
+		if replicaID >= n {
+			return fmt.Errorf("unexpected replica ID")
+		}
+
+		switch msg := msg.(type) {
 		case messages.Prepare:
 			return validatePrepare(msg)
 		case messages.Commit:
