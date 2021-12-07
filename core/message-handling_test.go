@@ -361,6 +361,8 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	n := randN()
+
 	processEmbedded := func(msg messages.PeerMessage) {
 		mock.MethodCalled("embeddedMessageProcessor", msg)
 	}
@@ -372,21 +374,22 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("reqViewChangeProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makePeerMessageProcessor(processEmbedded, processCertifiedMessage, processReqViewChange)
+	process := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 	t.Run("CertifiedMessage", func(t *testing.T) {
-		type certifiedPeerMessage interface {
-			messages.CertifiedMessage
+		certifiedMsg := mock_messages.NewMockCertifiedMessage(ctrl)
+		certifiedMsg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
+		type peerMessage interface {
 			ImplementsPeerMessage()
 		}
 		msg := struct {
-			certifiedPeerMessage
-			v int
-		}{v: rand.Int()}
+			messages.CertifiedMessage
+			peerMessage
+		}{CertifiedMessage: certifiedMsg}
 
 		mock.On("embeddedMessageProcessor", msg).Once()
 		mock.On("certifiedMessageProcessor", msg).Return(true, nil).Once()
@@ -409,10 +412,9 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		new, err = process(msg)
 		assert.NoError(t, err)
 		assert.False(t, new)
-
 	})
 	t.Run("ReqViewChange", func(t *testing.T) {
-		msg := messageImpl.NewReqViewChange(rand.Uint32(), rand.Uint64())
+		msg := messageImpl.NewReqViewChange(randReplicaID(n), rand.Uint64())
 
 		mock.On("embeddedMessageProcessor", msg).Once()
 		mock.On("reqViewChangeProcessor", msg).Return(false, fmt.Errorf("Error")).Once()

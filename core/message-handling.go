@@ -200,7 +200,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
-	processPeerMessage := makePeerMessageProcessor(processEmbedded, processCertifiedMessage, processReqViewChange)
+	processPeerMessage := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
 	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
@@ -466,9 +466,15 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+	locks := make([]sync.Mutex, n)
+
 	return func(msg messages.PeerMessage) (new bool, err error) {
 		processEmbedded(msg)
+
+		lock := &locks[msg.ReplicaID()]
+		lock.Lock()
+		defer lock.Unlock()
 
 		switch msg := msg.(type) {
 		case messages.CertifiedMessage:
