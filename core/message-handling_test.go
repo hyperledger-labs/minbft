@@ -474,51 +474,81 @@ func TestMakeCertifiedMessageProcessor(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	captureUI := func(msg messages.CertifiedMessage) (new bool, release func()) {
-		args := mock.MethodCalled("uiCapturer", msg)
-		return args.Bool(0), func() {
-			mock.MethodCalled("uiReleaser", msg)
-		}
-	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n := randN()
+	r := randReplicaID(n)
+
 	processViewMessage := func(msg messages.PeerMessage) (new bool, err error) {
 		args := mock.MethodCalled("viewMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeCertifiedMessageProcessor(captureUI, processViewMessage)
+	process := makeCertifiedMessageProcessor(n, processViewMessage)
 
-	type certifiedPeerMessage interface {
-		messages.CertifiedMessage
+	certifiedMsg := mock_messages.NewMockCertifiedMessage(ctrl)
+	type peerMessage interface {
 		ImplementsPeerMessage()
 	}
-	uiMsg := struct {
-		certifiedPeerMessage
-		i int
-	}{i: rand.Int()}
+	msg := struct {
+		messages.CertifiedMessage
+		peerMessage
+	}{CertifiedMessage: certifiedMsg}
 
-	mock.On("uiCapturer", uiMsg).Return(false).Once()
-	new, err := process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(false, fmt.Errorf("error")).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	_, err = process(uiMsg)
-	assert.Error(t, err, "Failed to process message in current view")
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(false, nil).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	new, err = process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(true, nil).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	new, err = process(uiMsg)
+	// First certified message
+	certifiedMsg.EXPECT().ReplicaID().Return(r)
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err := process(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
+
+	// First certified message from another replica
+	certifiedMsg.EXPECT().ReplicaID().Return(randOtherReplicaID(r, n))
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	certifiedMsg.EXPECT().ReplicaID().Return(r).AnyTimes()
+
+	// Another certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(2))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	// Duplicate certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(2))
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// Older certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// New certified, but non-sequential, message from replica r
+	certifiedMsg.EXPECT().UI().Return(testUI(4))
+	_, err = process(msg)
+	assert.Error(t, err, "Non-sequential message")
+
+	// Next certified, but redundant, message
+	certifiedMsg.EXPECT().UI().Return(testUI(3))
+	mock.On("viewMessageProcessor", msg).Return(false, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// Next certified, but incorrect, message
+	certifiedMsg.EXPECT().UI().Return(testUI(4))
+	mock.On("viewMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
+	_, err = process(msg)
+	assert.Error(t, err, "Failed to process message in current view")
 }
 
 func TestMakeViewMessageProcessor(t *testing.T) {

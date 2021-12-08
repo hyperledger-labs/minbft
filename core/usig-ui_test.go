@@ -27,12 +27,10 @@ import (
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/api"
-	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/messages"
 	"github.com/hyperledger-labs/minbft/usig"
 
 	mock_api "github.com/hyperledger-labs/minbft/api/mocks"
-	mock_peerstate "github.com/hyperledger-labs/minbft/core/internal/peerstate/mocks"
 	mock_messages "github.com/hyperledger-labs/minbft/messages/mocks"
 )
 
@@ -79,47 +77,4 @@ func TestMakeUIVerifier(t *testing.T) {
 	msg.EXPECT().UI().Return(&usig.UI{Counter: 0, Cert: randBytes()})
 	err = verifyUI(msg)
 	assert.Error(t, err)
-}
-
-func TestMakeUICapturer(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mock := new(testifymock.Mock)
-	defer mock.AssertExpectations(t)
-
-	replicaID := rand.Uint32()
-	providePeerState, peerState := setupPeerStateProviderMock(ctrl, mock, replicaID)
-
-	captureUI := makeUICapturer(providePeerState)
-
-	ui := &usig.UI{Counter: rand.Uint64(), Cert: randBytes()}
-	msg := mock_messages.NewMockCertifiedMessage(ctrl)
-	msg.EXPECT().ReplicaID().Return(replicaID).AnyTimes()
-	msg.EXPECT().UI().Return(ui).AnyTimes()
-
-	peerState.EXPECT().CaptureUI(ui).Return(false, nil)
-	new, _ := captureUI(msg)
-	assert.False(t, new)
-
-	peerState.EXPECT().CaptureUI(ui).Return(true, func() {
-		mock.MethodCalled("uiReleaser", ui)
-	})
-	new, releaseUI := captureUI(msg)
-	assert.True(t, new)
-	mock.On("uiReleaser", ui).Once()
-	releaseUI()
-}
-
-func setupPeerStateProviderMock(ctrl *gomock.Controller, mock *testifymock.Mock, replicaID uint32) (peerstate.Provider, *mock_peerstate.MockState) {
-	peerState := mock_peerstate.NewMockState(ctrl)
-
-	providePeerState := func(replicaID uint32) peerstate.State {
-		args := mock.MethodCalled("peerStateProvider", replicaID)
-		return args.Get(0).(peerstate.State)
-	}
-
-	mock.On("peerStateProvider", replicaID).Return(peerState)
-
-	return providePeerState, peerState
 }

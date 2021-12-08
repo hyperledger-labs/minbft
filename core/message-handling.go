@@ -24,7 +24,6 @@ import (
 	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
-	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -90,7 +89,7 @@ type embeddedMessageProcessor func(msg messages.PeerMessage)
 // Messages originated from the same replica are guaranteed to be
 // processed only once and in sequence according to the assigned UI.
 // The return value new indicates if the message had any effect.
-// It is safe to invoke concurrently.
+// It is safe to invoke concurrently for messages from different replicas.
 type certifiedMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
 
 // viewMessageProcessor processes a valid message in current view.
@@ -143,14 +142,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	assignUI := makeUIAssigner(stack, messages.AuthenBytes)
 
 	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
-	peerStates := peerstate.NewProvider()
 	viewState := viewstate.New()
 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
 	pendingReq := requestlist.New()
-	captureUI := makeUICapturer(peerStates)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
@@ -193,7 +190,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
-	processCertifiedMessage := makeCertifiedMessageProcessor(captureUI, processViewMessage)
+	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 
 	collectReqViewChange := makeReqViewChangeCollector(f)
@@ -508,13 +505,20 @@ func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger
 	}
 }
 
-func makeCertifiedMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
+func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
+	lastUI := make([]uint64, n)
+
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
-		new, release := captureUI(msg)
-		if !new {
+		replicaID := msg.ReplicaID()
+		ui := msg.UI()
+
+		nextUI := lastUI[replicaID] + 1
+		if ui.Counter < nextUI {
 			return false, nil
+		} else if ui.Counter > nextUI {
+			return false, fmt.Errorf("unexpected UI counter value")
 		}
-		defer release()
+		lastUI[replicaID] = nextUI
 
 		switch msg := msg.(type) {
 		case messages.PeerMessage:
