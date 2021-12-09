@@ -81,7 +81,7 @@ type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 // message. The supplied message and its embedded messages are assumed
 // to be authentic and internally consistent. It is safe to invoke
 // concurrently.
-type embeddedMessageProcessor func(msg messages.PeerMessage)
+type embeddedMessageProcessor func(msg messages.PeerMessage) error
 
 // certifiedMessageProcessor processes a valid message with UI.
 //
@@ -467,7 +467,9 @@ func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor
 	locks := make([]sync.Mutex, n)
 
 	return func(msg messages.PeerMessage) (new bool, err error) {
-		processEmbedded(msg)
+		if err := processEmbedded(msg); err != nil {
+			return false, fmt.Errorf("error processing embedded messages: %s", err)
+		}
 
 		lock := &locks[msg.ReplicaID()]
 		lock.Lock()
@@ -485,23 +487,25 @@ func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor
 }
 
 func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger) embeddedMessageProcessor {
-	return func(msg messages.PeerMessage) {
-		processOne := func(m messages.Message) {
+	return func(msg messages.PeerMessage) (err error) {
+		processOne := func(m messages.Message) error {
 			if _, err := process(m); err != nil {
-				logger.Warningf("Failed to process %s extracted from %s: %s",
-					messages.Stringify(m), messages.Stringify(msg), err)
+				return fmt.Errorf("error processing %s: %s", messages.Stringify(m), err)
 			}
+			return nil
 		}
 
 		switch msg := msg.(type) {
 		case messages.Prepare:
-			processOne(msg.Request())
+			err = processOne(msg.Request())
 		case messages.Commit:
-			processOne(msg.Proposal())
+			err = processOne(msg.Proposal())
 		case messages.ReqViewChange:
 		default:
 			panic("Unknown message type")
 		}
+
+		return err
 	}
 }
 
