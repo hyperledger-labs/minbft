@@ -190,6 +190,51 @@ func TestMakeMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("requestValidator", msg)
 		return args.Error(0)
 	}
+	validatePeerMessage := func(msg messages.PeerMessage) error {
+		args := mock.MethodCalled("peerMessageValidator", msg)
+		return args.Error(0)
+	}
+	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
+
+	t.Run("UnknownMessageType", func(t *testing.T) {
+		msg := mock_messages.NewMockMessage(ctrl)
+		assert.Panics(t, func() { validateMessage(msg) }, "Unknown message type")
+	})
+	t.Run("Request", func(t *testing.T) {
+		req := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), randBytes())
+
+		mock.On("requestValidator", req).Return(fmt.Errorf("error")).Once()
+		err := validateMessage(req)
+		assert.Error(t, err, "Invalid Request")
+
+		mock.On("requestValidator", req).Return(nil).Once()
+		err = validateMessage(req)
+		assert.NoError(t, err)
+	})
+	t.Run("PeerMessage", func(t *testing.T) {
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(randReplicaID(randN())).AnyTimes()
+
+		mock.On("peerMessageValidator", msg).Return(fmt.Errorf("error")).Once()
+		err := validateMessage(msg)
+		assert.Error(t, err, "Invalid peer message")
+
+		mock.On("peerMessageValidator", msg).Return(nil).Once()
+		err = validateMessage(msg)
+		assert.NoError(t, err)
+	})
+}
+
+func TestMakePeerMessageValidator(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n, v := randN(), randView()
+	p := primaryID(n, v)
+
 	validatePrepare := func(msg messages.Prepare) error {
 		args := mock.MethodCalled("prepareValidator", msg)
 		return args.Error(0)
@@ -202,51 +247,49 @@ func TestMakeMessageValidator(t *testing.T) {
 		args := mock.MethodCalled("reqViewChangeValidator", msg)
 		return args.Error(0)
 	}
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
+	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
 
-	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
-	prepare := messageImpl.NewPrepare(0, 0, request)
-	commit := messageImpl.NewCommit(0, prepare)
-	rvc := messageImpl.NewReqViewChange(0, rand.Uint64())
+	request := messageImpl.NewRequest(rand.Uint32(), rand.Uint64(), randBytes())
+	prepare := messageImpl.NewPrepare(p, v, request)
+	commit := messageImpl.NewCommit(randOtherReplicaID(p, n), prepare)
+	rvc := messageImpl.NewReqViewChange(randReplicaID(n), v+1)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
-		msg := mock_messages.NewMockMessage(ctrl)
-		assert.Panics(t, func() { validateMessage(msg) }, "Unknown message type")
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
+		assert.Panics(t, func() { validatePeerMessage(msg) }, "Unknown message type")
 	})
-	t.Run("Request", func(t *testing.T) {
-		mock.On("requestValidator", request).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(request)
-		assert.Error(t, err, "Invalid Request")
-
-		mock.On("requestValidator", request).Return(nil).Once()
-		err = validateMessage(request)
-		assert.NoError(t, err)
+	t.Run("InvalidReplicaID", func(t *testing.T) {
+		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(n + uint32(rand.Intn(2))).AnyTimes()
+		err := validatePeerMessage(msg)
+		assert.Error(t, err, "Invalid replica ID")
 	})
 	t.Run("Prepare", func(t *testing.T) {
 		mock.On("prepareValidator", prepare).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(prepare)
+		err := validatePeerMessage(prepare)
 		assert.Error(t, err, "Invalid Prepare")
 
 		mock.On("prepareValidator", prepare).Return(nil).Once()
-		err = validateMessage(prepare)
+		err = validatePeerMessage(prepare)
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
 		mock.On("commitValidator", commit).Return(fmt.Errorf("error")).Once()
-		err := validateMessage(commit)
+		err := validatePeerMessage(commit)
 		assert.Error(t, err, "Invalid Commit")
 
 		mock.On("commitValidator", commit).Return(nil).Once()
-		err = validateMessage(commit)
+		err = validatePeerMessage(commit)
 		assert.NoError(t, err)
 	})
 	t.Run("ReqViewChange", func(t *testing.T) {
 		mock.On("reqViewChangeValidator", rvc).Return(fmt.Errorf("Error")).Once()
-		err := validateMessage(rvc)
+		err := validatePeerMessage(rvc)
 		assert.Error(t, err, "Invalid ReqViewChange")
 
 		mock.On("reqViewChangeValidator", rvc).Return(nil).Once()
-		err = validateMessage(rvc)
+		err = validatePeerMessage(rvc)
 		assert.NoError(t, err)
 	})
 }
@@ -318,58 +361,60 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	n := randN()
+
 	processEmbedded := func(msg messages.PeerMessage) {
 		mock.MethodCalled("embeddedMessageProcessor", msg)
 	}
-	processUIMessage := func(msg messages.CertifiedMessage) (new bool, err error) {
-		args := mock.MethodCalled("uiMessageProcessor", msg)
+	processCertifiedMessage := func(msg messages.CertifiedMessage) (new bool, err error) {
+		args := mock.MethodCalled("certifiedMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
 	processReqViewChange := func(msg messages.ReqViewChange) (new bool, err error) {
 		args := mock.MethodCalled("reqViewChangeProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
+	process := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 	t.Run("CertifiedMessage", func(t *testing.T) {
-		type certifiedPeerMessage interface {
-			messages.CertifiedMessage
+		certifiedMsg := mock_messages.NewMockCertifiedMessage(ctrl)
+		certifiedMsg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
+		type peerMessage interface {
 			ImplementsPeerMessage()
 		}
 		msg := struct {
-			certifiedPeerMessage
-			v int
-		}{v: rand.Int()}
+			messages.CertifiedMessage
+			peerMessage
+		}{CertifiedMessage: certifiedMsg}
 
 		mock.On("embeddedMessageProcessor", msg).Once()
-		mock.On("uiMessageProcessor", msg).Return(true, nil).Once()
+		mock.On("certifiedMessageProcessor", msg).Return(true, nil).Once()
 		_, err := process(msg)
 		assert.NoError(t, err)
 
 		mock.On("embeddedMessageProcessor", msg).Once()
-		mock.On("uiMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
+		mock.On("certifiedMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 		_, err = process(msg)
 		assert.Error(t, err, "Failed to finish processing certified message")
 
 		mock.On("embeddedMessageProcessor", msg).Once()
-		mock.On("uiMessageProcessor", msg).Return(true, nil).Once()
+		mock.On("certifiedMessageProcessor", msg).Return(true, nil).Once()
 		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
 		mock.On("embeddedMessageProcessor", msg).Once()
-		mock.On("uiMessageProcessor", msg).Return(false, nil).Once()
+		mock.On("certifiedMessageProcessor", msg).Return(false, nil).Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
 		assert.False(t, new)
-
 	})
 	t.Run("ReqViewChange", func(t *testing.T) {
-		msg := messageImpl.NewReqViewChange(rand.Uint32(), rand.Uint64())
+		msg := messageImpl.NewReqViewChange(randReplicaID(n), rand.Uint64())
 
 		mock.On("embeddedMessageProcessor", msg).Once()
 		mock.On("reqViewChangeProcessor", msg).Return(false, fmt.Errorf("Error")).Once()
@@ -425,55 +470,90 @@ func TestMakeEmbeddedMessageProcessor(t *testing.T) {
 	})
 }
 
-func TestMakeUIMessageProcessor(t *testing.T) {
+func TestMakeCertifiedMessageProcessor(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
-	captureUI := func(msg messages.CertifiedMessage) (new bool, release func()) {
-		args := mock.MethodCalled("uiCapturer", msg)
-		return args.Bool(0), func() {
-			mock.MethodCalled("uiReleaser", msg)
-		}
-	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	n := randN()
+	r := randReplicaID(n)
+
 	processViewMessage := func(msg messages.PeerMessage) (new bool, err error) {
 		args := mock.MethodCalled("viewMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makeUIMessageProcessor(captureUI, processViewMessage)
+	process := makeCertifiedMessageProcessor(n, processViewMessage)
 
-	type certifiedPeerMessage interface {
-		messages.CertifiedMessage
+	certifiedMsg := mock_messages.NewMockCertifiedMessage(ctrl)
+	type peerMessage interface {
 		ImplementsPeerMessage()
 	}
-	uiMsg := struct {
-		certifiedPeerMessage
-		i int
-	}{i: rand.Int()}
+	msg := struct {
+		messages.CertifiedMessage
+		peerMessage
+	}{CertifiedMessage: certifiedMsg}
 
-	mock.On("uiCapturer", uiMsg).Return(false).Once()
-	new, err := process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(false, fmt.Errorf("error")).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	_, err = process(uiMsg)
-	assert.Error(t, err, "Failed to process message in current view")
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(false, nil).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	new, err = process(uiMsg)
-	assert.NoError(t, err)
-	assert.False(t, new)
-
-	mock.On("uiCapturer", uiMsg).Return(true).Once()
-	mock.On("viewMessageProcessor", uiMsg).Return(true, nil).Once()
-	mock.On("uiReleaser", uiMsg).Once()
-	new, err = process(uiMsg)
+	// First certified message
+	certifiedMsg.EXPECT().ReplicaID().Return(r)
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err := process(msg)
 	assert.NoError(t, err)
 	assert.True(t, new)
+
+	// First certified message from another replica
+	certifiedMsg.EXPECT().ReplicaID().Return(randOtherReplicaID(r, n))
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	certifiedMsg.EXPECT().ReplicaID().Return(r).AnyTimes()
+
+	// Another certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(2))
+	mock.On("viewMessageProcessor", msg).Return(true, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.True(t, new)
+
+	// Duplicate certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(2))
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// Older certified message
+	certifiedMsg.EXPECT().UI().Return(testUI(1))
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// New certified, but non-sequential, message from replica r
+	certifiedMsg.EXPECT().UI().Return(testUI(4))
+	_, err = process(msg)
+	assert.Error(t, err, "Non-sequential message")
+
+	// Next certified, but redundant, message
+	certifiedMsg.EXPECT().UI().Return(testUI(3))
+	mock.On("viewMessageProcessor", msg).Return(false, nil).Once()
+	new, err = process(msg)
+	assert.NoError(t, err)
+	assert.False(t, new)
+
+	// Next certified, but incorrect, message
+	certifiedMsg.EXPECT().UI().Return(testUI(4))
+	mock.On("viewMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
+	_, err = process(msg)
+	assert.Error(t, err, "Failed to process message in current view")
+
+	// Next certified, but now unacceptable, message
+	certifiedMsg.EXPECT().UI().Return(testUI(5))
+	_, err = process(msg)
+	assert.Error(t, err, "Certified message following an incorrect one")
 }
 
 func TestMakeViewMessageProcessor(t *testing.T) {

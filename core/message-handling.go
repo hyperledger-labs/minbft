@@ -24,7 +24,6 @@ import (
 	"github.com/hyperledger-labs/minbft/common/logger"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
-	"github.com/hyperledger-labs/minbft/core/internal/peerstate"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 	"github.com/hyperledger-labs/minbft/messages"
@@ -50,10 +49,16 @@ type peerConnector func(out <-chan []byte) (in <-chan []byte, err error)
 
 // messageValidator validates a message.
 //
-// It authenticates and checks the supplied message for internal
-// consistency. It does not use replica's current state and has no
+// It fully checks the supplied message for internal consistency and
+// authenticity. It does not use replica's current state and has no
 // side-effect. It is safe to invoke concurrently.
 type messageValidator func(msg messages.Message) error
+
+// peerMessageValidator validates a peer message.
+//
+// It continues validation of the supplied peer message.
+// It is safe to invoke concurrently.
+type peerMessageValidator func(msg messages.PeerMessage) error
 
 // messageProcessor processes a valid message.
 //
@@ -78,14 +83,14 @@ type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 // concurrently.
 type embeddedMessageProcessor func(msg messages.PeerMessage)
 
-// uiMessageProcessor processes a valid message with UI.
+// certifiedMessageProcessor processes a valid message with UI.
 //
-// It continues processing of the supplied message with UI. Messages
-// originated from the same replica are guaranteed to be processed
-// once only and in the sequence assigned by the replica USIG. The
-// return value new indicates if the message had any effect. It is
-// safe to invoke concurrently.
-type uiMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
+// It continues processing of the supplied message certified by USIG.
+// Messages originated from the same replica are guaranteed to be
+// processed only once and in sequence according to the assigned UI.
+// The return value new indicates if the message had any effect.
+// It is safe to invoke concurrently for messages from different replicas.
+type certifiedMessageProcessor func(msg messages.CertifiedMessage) (new bool, err error)
 
 // viewMessageProcessor processes a valid message in current view.
 //
@@ -137,14 +142,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	assignUI := makeUIAssigner(stack, messages.AuthenBytes)
 
 	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
-	peerStates := peerstate.NewProvider()
 	viewState := viewstate.New()
 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
 	pendingReq := requestlist.New()
-	captureUI := makeUICapturer(peerStates)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
@@ -165,7 +168,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
 	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
-	validateMessage := makeMessageValidator(validateRequest, validatePrepare, validateCommit, validateReqViewChange)
+	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
+	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
 	applyCommit := makeCommitApplier(collectCommitment)
 	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
@@ -186,14 +190,14 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
-	processUIMessage := makeUIMessageProcessor(captureUI, processViewMessage)
+	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 
 	collectReqViewChange := makeReqViewChangeCollector(f)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
-	processPeerMessage := makePeerMessageProcessor(processEmbedded, processUIMessage, processReqViewChange)
+	processPeerMessage := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
 	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
 	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
@@ -411,11 +415,27 @@ func makeClientMessageHandler(validateRequest requestValidator, processRequest r
 
 // makeMessageValidator constructs an instance of messageValidator
 // using the supplied abstractions.
-func makeMessageValidator(validateRequest requestValidator, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) messageValidator {
+func makeMessageValidator(validateRequest requestValidator, validatePeerMessage peerMessageValidator) messageValidator {
 	return func(msg messages.Message) error {
 		switch msg := msg.(type) {
 		case messages.Request:
 			return validateRequest(msg)
+		case messages.PeerMessage:
+			return validatePeerMessage(msg)
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
+func makePeerMessageValidator(n uint32, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) peerMessageValidator {
+	return func(msg messages.PeerMessage) error {
+		replicaID := msg.ReplicaID()
+		if replicaID >= n {
+			return fmt.Errorf("unexpected replica ID")
+		}
+
+		switch msg := msg.(type) {
 		case messages.Prepare:
 			return validatePrepare(msg)
 		case messages.Commit:
@@ -443,13 +463,19 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(processEmbedded embeddedMessageProcessor, processUIMessage uiMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+	locks := make([]sync.Mutex, n)
+
 	return func(msg messages.PeerMessage) (new bool, err error) {
 		processEmbedded(msg)
 
+		lock := &locks[msg.ReplicaID()]
+		lock.Lock()
+		defer lock.Unlock()
+
 		switch msg := msg.(type) {
 		case messages.CertifiedMessage:
-			return processUIMessage(msg)
+			return processCertifiedMessage(msg)
 		case messages.ReqViewChange:
 			return processReqViewChange(msg)
 		default:
@@ -479,20 +505,32 @@ func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger
 	}
 }
 
-func makeUIMessageProcessor(captureUI uiCapturer, processViewMessage viewMessageProcessor) uiMessageProcessor {
+func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
+	lastUI := make([]uint64, n)
+
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
-		new, release := captureUI(msg)
-		if !new {
+		replicaID := msg.ReplicaID()
+		ui := msg.UI()
+
+		nextUI := lastUI[replicaID] + 1
+		if ui.Counter < nextUI {
 			return false, nil
+		} else if ui.Counter > nextUI {
+			return false, fmt.Errorf("unexpected UI counter value")
 		}
-		defer release()
 
 		switch msg := msg.(type) {
 		case messages.PeerMessage:
-			return processViewMessage(msg)
+			new, err = processViewMessage(msg)
 		default:
 			panic("Unknown message type")
 		}
+
+		if err == nil {
+			lastUI[replicaID] = nextUI
+		}
+
+		return new, err
 	}
 }
 

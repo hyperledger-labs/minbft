@@ -18,6 +18,8 @@ package minbft
 
 import (
 	"math/rand"
+
+	"github.com/hyperledger-labs/minbft/usig"
 )
 
 // randN returns a random number of replicas for testing
@@ -67,4 +69,8 @@ func randOtherReplicaID(id, n uint32) uint32 {
 // randBytes returns a slice of random bytes
 func randBytes() []byte {
 	return []byte{byte(rand.Int())} // nolint:gosec
+}
+
+func testUI(cv uint64) *usig.UI {
+	return &usig.UI{Counter: cv, Cert: randBytes()}
 }
