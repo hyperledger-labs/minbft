@@ -133,6 +133,11 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	n := config.N()
 	f := config.F()
 
+	// Commit certificate size is the number of commitments from
+	// different replicas, i.e. Prepare/NewView/Commit messages,
+	// that triggers request execution.
+	commitCertSize := f + 1
+
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
 
@@ -160,7 +165,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
 
 	acceptCommitment := makeCommitmentAcceptor()
-	countCommitment := makeCommitmentCounter(f)
+	countCommitment := makeCommitmentCounter(commitCertSize)
 	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
 	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
@@ -193,7 +198,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
 	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 
-	collectReqViewChange := makeReqViewChangeCollector(f)
+	collectReqViewChange := makeReqViewChangeCollector(commitCertSize, n)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 

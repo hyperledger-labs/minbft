@@ -98,6 +98,7 @@ func TestMakeReqViewChangeProcessor(t *testing.T) {
 
 func TestMakeReqViewChangeCollector(t *testing.T) {
 	const f = 1
+	const n = 3
 
 	var cases []struct {
 		ID      uint32
@@ -131,7 +132,8 @@ func TestMakeReqViewChangeCollector(t *testing.T) {
 		certs = append(certs, cert)
 	}
 
-	collect := makeReqViewChangeCollector(f)
+	commitCertSize := uint32(f + 1)
+	collect := makeReqViewChangeCollector(commitCertSize, n)
 	for i, c := range cases {
 		desc := fmt.Sprintf("Case #%d", i)
 		new, cert := collect(msgs[i])
