@@ -1,6 +1,7 @@
 [![GitHub Actions](https://github.com/hyperledger-labs/minbft/workflows/Continuous%20integration/badge.svg)](https://github.com/hyperledger-labs/minbft/actions)
 [![GoDoc](https://godoc.org/github.com/hyperledger-labs/minbft?status.svg)](https://godoc.org/github.com/hyperledger-labs/minbft)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hyperledger-labs/minbft)](https://goreportcard.com/report/github.com/hyperledger-labs/minbft)
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/hyperledger-labs/minbft.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hyperledger-labs/minbft/alerts/)
 
 # MinBFT #
 
