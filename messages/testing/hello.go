@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package testing
 
 import (
 	"math/rand"
@@ -23,24 +23,22 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-func TestHello(t *testing.T) {
-	impl := NewImpl()
-
+func DoTestHello(t *testing.T, impl messages.MessageImpl) {
 	t.Run("Fields", func(t *testing.T) {
 		r := rand.Uint32()
 		h := impl.NewHello(r)
 		require.Equal(t, r, h.ReplicaID())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		h := randHello(impl)
-		requireHelloEqual(t, h, remarshalMsg(impl, h).(messages.Hello))
+		h := RandHello(impl)
+		RequireHelloEqual(t, h, RemarshalMsg(impl, h).(messages.Hello))
 	})
 }
 
-func randHello(impl messages.MessageImpl) messages.Hello {
+func RandHello(impl messages.MessageImpl) messages.Hello {
 	return impl.NewHello(rand.Uint32())
 }
 
-func requireHelloEqual(t *testing.T, h1, h2 messages.Hello) {
+func RequireHelloEqual(t *testing.T, h1, h2 messages.Hello) {
 	require.Equal(t, h1.ReplicaID(), h2.ReplicaID())
 }

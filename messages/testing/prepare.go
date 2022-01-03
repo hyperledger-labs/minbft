@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package testing
 
 import (
 	"math/rand"
@@ -23,43 +23,41 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-func TestPrepare(t *testing.T) {
-	impl := NewImpl()
-
+func DoTestPrepare(t *testing.T, impl messages.MessageImpl) {
 	t.Run("Fields", func(t *testing.T) {
 		r := rand.Uint32()
 		v := rand.Uint64()
-		req := randReq(impl)
+		req := RandReq(impl)
 		prep := impl.NewPrepare(r, v, req)
 		require.Equal(t, r, prep.ReplicaID())
 		require.Equal(t, v, prep.View())
-		requireReqEqual(t, req, prep.Request())
+		RequireReqEqual(t, req, prep.Request())
 	})
 	t.Run("SetUI", func(t *testing.T) {
-		prep := randPrep(impl)
-		ui := randUI(messages.AuthenBytes(prep))
+		prep := RandPrep(impl)
+		ui := RandUI(messages.AuthenBytes(prep))
 		prep.SetUI(ui)
 		require.Equal(t, ui, prep.UI())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		prep := randPrep(impl)
-		requirePrepEqual(t, prep, remarshalMsg(impl, prep).(messages.Prepare))
+		prep := RandPrep(impl)
+		RequirePrepEqual(t, prep, RemarshalMsg(impl, prep).(messages.Prepare))
 	})
 }
 
-func randPrep(impl messages.MessageImpl) messages.Prepare {
-	return newTestPrep(impl, rand.Uint32(), rand.Uint64(), randReq(impl), rand.Uint64())
+func RandPrep(impl messages.MessageImpl) messages.Prepare {
+	return MakeTestPrep(impl, rand.Uint32(), rand.Uint64(), RandReq(impl), rand.Uint64())
 }
 
-func newTestPrep(impl messages.MessageImpl, r uint32, v uint64, req messages.Request, cv uint64) messages.Prepare {
+func MakeTestPrep(impl messages.MessageImpl, r uint32, v uint64, req messages.Request, cv uint64) messages.Prepare {
 	prep := impl.NewPrepare(r, v, req)
-	prep.SetUI(newTestUI(cv, messages.AuthenBytes(prep)))
+	prep.SetUI(MakeTestUI(cv, messages.AuthenBytes(prep)))
 	return prep
 }
 
-func requirePrepEqual(t *testing.T, prep1, prep2 messages.Prepare) {
+func RequirePrepEqual(t *testing.T, prep1, prep2 messages.Prepare) {
 	require.Equal(t, prep1.ReplicaID(), prep2.ReplicaID())
 	require.Equal(t, prep1.View(), prep2.View())
-	requireReqEqual(t, prep1.Request(), prep2.Request())
+	RequireReqEqual(t, prep1.Request(), prep2.Request())
 	require.Equal(t, prep1.UI(), prep2.UI())
 }
