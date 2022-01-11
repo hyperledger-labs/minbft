@@ -71,7 +71,7 @@ type commitmentCounter func(view, primaryCV uint64) (done bool)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
-func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) commitValidator {
+func makeCommitValidator(verifyUI uiVerifier) commitValidator {
 	return func(commit messages.Commit) error {
 		prop := commit.Proposal()
 
@@ -79,11 +79,8 @@ func makeCommitValidator(verifyUI uiVerifier, validatePrepare prepareValidator) 
 			return fmt.Errorf("commit from primary")
 		}
 
-		switch m := prop.(type) {
+		switch prop.(type) {
 		case messages.Prepare:
-			if err := validatePrepare(m); err != nil {
-				return fmt.Errorf("invalid Prepare: %s", err)
-			}
 		default:
 			panic("Unexpected proposal message type")
 		}

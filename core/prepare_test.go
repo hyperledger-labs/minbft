@@ -43,11 +43,7 @@ func TestMakePrepareValidator(t *testing.T) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Error(0)
 	}
-	validateRequest := func(request messages.Request) error {
-		args := mock.MethodCalled("requestValidator", request)
-		return args.Error(0)
-	}
-	validate := makePrepareValidator(n, verifyUI, validateRequest)
+	validate := makePrepareValidator(n, verifyUI)
 
 	prepare := messageImpl.NewPrepare(backup, view, request)
 	err := validate(prepare)
@@ -55,16 +51,10 @@ func TestMakePrepareValidator(t *testing.T) {
 
 	prepare = messageImpl.NewPrepare(primary, view, request)
 
-	mock.On("requestValidator", request).Return(fmt.Errorf("invalid signature")).Once()
+	mock.On("uiVerifier", prepare).Return(fmt.Errorf("error")).Once()
 	err = validate(prepare)
 	assert.Error(t, err)
 
-	mock.On("requestValidator", request).Return(nil).Once()
-	mock.On("uiVerifier", prepare).Return(fmt.Errorf("UI not valid")).Once()
-	err = validate(prepare)
-	assert.Error(t, err)
-
-	mock.On("requestValidator", request).Return(nil).Once()
 	mock.On("uiVerifier", prepare).Return(nil).Once()
 	err = validate(prepare)
 	assert.NoError(t, err)
