@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package testing
 
 import (
 	"math/rand"
@@ -23,9 +23,7 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-func TestReqViewChange(t *testing.T) {
-	impl := NewImpl()
-
+func DoTestReqViewChange(t *testing.T, impl messages.MessageImpl) {
 	t.Run("Fields", func(t *testing.T) {
 		r := rand.Uint32()
 		nv := rand.Uint64()
@@ -34,28 +32,28 @@ func TestReqViewChange(t *testing.T) {
 		require.Equal(t, nv, rvc.NewView())
 	})
 	t.Run("SetSignature", func(t *testing.T) {
-		rvc := randReqViewChange(impl)
-		sig := testSig(messages.AuthenBytes(rvc))
+		rvc := RandReqViewChange(impl)
+		sig := MakeTestSig(messages.AuthenBytes(rvc))
 		rvc.SetSignature(sig)
 		require.Equal(t, sig, rvc.Signature())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		rvc := randReqViewChange(impl)
-		requireReqViewChangeEqual(t, rvc, remarshalMsg(impl, rvc).(messages.ReqViewChange))
+		rvc := RandReqViewChange(impl)
+		RequireReqViewChangeEqual(t, rvc, RemarshalMsg(impl, rvc).(messages.ReqViewChange))
 	})
 }
 
-func randReqViewChange(impl messages.MessageImpl) messages.ReqViewChange {
-	return newTestReqViewChange(impl, rand.Uint32(), rand.Uint64())
+func RandReqViewChange(impl messages.MessageImpl) messages.ReqViewChange {
+	return MakeTestReqViewChange(impl, rand.Uint32(), rand.Uint64())
 }
 
-func newTestReqViewChange(impl messages.MessageImpl, r uint32, nv uint64) messages.ReqViewChange {
+func MakeTestReqViewChange(impl messages.MessageImpl, r uint32, nv uint64) messages.ReqViewChange {
 	rvc := impl.NewReqViewChange(r, nv)
-	rvc.SetSignature(testSig(messages.AuthenBytes(rvc)))
+	rvc.SetSignature(MakeTestSig(messages.AuthenBytes(rvc)))
 	return rvc
 }
 
-func requireReqViewChangeEqual(t *testing.T, rvc1, rvc2 messages.ReqViewChange) {
+func RequireReqViewChangeEqual(t *testing.T, rvc1, rvc2 messages.ReqViewChange) {
 	require.Equal(t, rvc1.ReplicaID(), rvc2.ReplicaID())
 	require.Equal(t, rvc1.NewView(), rvc2.NewView())
 	require.Equal(t, rvc1.Signature(), rvc2.Signature())

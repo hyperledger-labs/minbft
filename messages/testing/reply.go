@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package testing
 
 import (
 	"math/rand"
@@ -23,14 +23,12 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-func TestReply(t *testing.T) {
-	impl := NewImpl()
-
+func DoTestReply(t *testing.T, impl messages.MessageImpl) {
 	t.Run("Fields", func(t *testing.T) {
 		r := rand.Uint32()
 		cl := rand.Uint32()
 		seq := rand.Uint64()
-		res := randBytes()
+		res := RandBytes()
 		reply := impl.NewReply(r, cl, seq, res)
 		require.Equal(t, r, reply.ReplicaID())
 		require.Equal(t, cl, reply.ClientID())
@@ -38,28 +36,28 @@ func TestReply(t *testing.T) {
 		require.Equal(t, res, reply.Result())
 	})
 	t.Run("SetSignature", func(t *testing.T) {
-		reply := randReply(impl)
-		sig := testSig(messages.AuthenBytes(reply))
+		reply := RandReply(impl)
+		sig := MakeTestSig(messages.AuthenBytes(reply))
 		reply.SetSignature(sig)
 		require.Equal(t, sig, reply.Signature())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		reply := randReply(impl)
-		requireReplyEqual(t, reply, remarshalMsg(impl, reply).(messages.Reply))
+		reply := RandReply(impl)
+		RequireReplyEqual(t, reply, RemarshalMsg(impl, reply).(messages.Reply))
 	})
 }
 
-func randReply(impl messages.MessageImpl) messages.Reply {
-	return newTestReply(impl, rand.Uint32(), rand.Uint32(), rand.Uint64(), randBytes())
+func RandReply(impl messages.MessageImpl) messages.Reply {
+	return MakeTestReply(impl, rand.Uint32(), rand.Uint32(), rand.Uint64(), RandBytes())
 }
 
-func newTestReply(impl messages.MessageImpl, r, cl uint32, seq uint64, res []byte) messages.Reply {
+func MakeTestReply(impl messages.MessageImpl, r, cl uint32, seq uint64, res []byte) messages.Reply {
 	reply := impl.NewReply(r, cl, seq, res)
-	reply.SetSignature(testSig(messages.AuthenBytes(reply)))
+	reply.SetSignature(MakeTestSig(messages.AuthenBytes(reply)))
 	return reply
 }
 
-func requireReplyEqual(t *testing.T, reply1, reply2 messages.Reply) {
+func RequireReplyEqual(t *testing.T, reply1, reply2 messages.Reply) {
 	require.Equal(t, reply1.ReplicaID(), reply2.ReplicaID())
 	require.Equal(t, reply1.ClientID(), reply2.ClientID())
 	require.Equal(t, reply1.Sequence(), reply2.Sequence())

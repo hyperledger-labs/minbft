@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protobuf
+package testing
 
 import (
 	"math/rand"
@@ -23,41 +23,39 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-func TestRequest(t *testing.T) {
-	impl := NewImpl()
-
+func DoTestRequest(t *testing.T, impl messages.MessageImpl) {
 	t.Run("Fields", func(t *testing.T) {
 		cl := rand.Uint32()
 		seq := rand.Uint64()
-		op := randBytes()
+		op := RandBytes()
 		req := impl.NewRequest(cl, seq, op)
 		require.Equal(t, cl, req.ClientID())
 		require.Equal(t, seq, req.Sequence())
 		require.Equal(t, op, req.Operation())
 	})
 	t.Run("SetSignature", func(t *testing.T) {
-		req := randReq(impl)
-		sig := testSig(messages.AuthenBytes(req))
+		req := RandReq(impl)
+		sig := MakeTestSig(messages.AuthenBytes(req))
 		req.SetSignature(sig)
 		require.Equal(t, sig, req.Signature())
 	})
 	t.Run("Marshaling", func(t *testing.T) {
-		req := randReq(impl)
-		requireReqEqual(t, req, remarshalMsg(impl, req).(messages.Request))
+		req := RandReq(impl)
+		RequireReqEqual(t, req, RemarshalMsg(impl, req).(messages.Request))
 	})
 }
 
-func randReq(impl messages.MessageImpl) messages.Request {
-	return newTestReq(impl, rand.Uint32(), rand.Uint64(), randBytes())
+func RandReq(impl messages.MessageImpl) messages.Request {
+	return MakeTestReq(impl, rand.Uint32(), rand.Uint64(), RandBytes())
 }
 
-func newTestReq(impl messages.MessageImpl, cl uint32, seq uint64, op []byte) messages.Request {
+func MakeTestReq(impl messages.MessageImpl, cl uint32, seq uint64, op []byte) messages.Request {
 	req := impl.NewRequest(cl, seq, op)
-	req.SetSignature(testSig(messages.AuthenBytes(req)))
+	req.SetSignature(MakeTestSig(messages.AuthenBytes(req)))
 	return req
 }
 
-func requireReqEqual(t *testing.T, req1, req2 messages.Request) {
+func RequireReqEqual(t *testing.T, req1, req2 messages.Request) {
 	require.Equal(t, req1.ClientID(), req2.ClientID())
 	require.Equal(t, req1.Sequence(), req2.Sequence())
 	require.Equal(t, req1.Operation(), req2.Operation())
