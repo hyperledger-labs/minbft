@@ -41,6 +41,12 @@ type messageStreamHandler func(in <-chan []byte, reply chan<- []byte)
 // new indicates that the message has not been processed before.
 type messageHandler func(msg messages.Message) (reply <-chan messages.Message, new bool, err error)
 
+// embeddedMessageHandler fully handles embedded messages.
+//
+// It recursively handles messages embedded into the supplied message.
+// It is safe to invoke concurrently.
+type embeddedMessageHandler func(msg messages.Message) error
+
 // peerConnector initiates message exchange with a peer replica.
 //
 // Given a channel of outgoing messages to supply to the replica, it
@@ -74,14 +80,6 @@ type messageProcessor func(msg messages.Message) (new bool, err error)
 // value new indicates if the message had any effect. It is safe to
 // invoke concurrently.
 type peerMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
-
-// embeddedMessageProcessor processes embedded messages.
-//
-// It recursively processes messages embedded into the supplied
-// message. The supplied message and its embedded messages are assumed
-// to be authentic and internally consistent. It is safe to invoke
-// concurrently.
-type embeddedMessageProcessor func(msg messages.PeerMessage) error
 
 // certifiedMessageProcessor processes a valid message with UI.
 //
@@ -170,8 +168,8 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
-	validatePrepare := makePrepareValidator(n, verifyUI, validateRequest)
-	validateCommit := makeCommitValidator(verifyUI, validatePrepare)
+	validatePrepare := makePrepareValidator(n, verifyUI)
+	validateCommit := makeCommitValidator(verifyUI)
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
 	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
@@ -181,31 +179,26 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit)
 	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 
-	var processMessage messageProcessor
-
-	// Due to recursive nature of message processing, an instance
-	// of messageProcessor is eventually required for it to be
-	// constructed itself. On the other hand, it will actually be
-	// invoked only after getting fully constructed. This "thunk"
-	// delays evaluation of processMessage variable, thus
-	// resolving this circular dependency.
-	processMessageThunk := func(msg messages.Message) (new bool, err error) {
-		return processMessage(msg)
-	}
-
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
-	processEmbedded := makeEmbeddedMessageProcessor(processMessageThunk, logger)
 
 	collectReqViewChange := makeReqViewChangeCollector(commitCertSize, n)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
-	processPeerMessage := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
-	processMessage = makeMessageProcessor(processRequest, processPeerMessage)
+	processPeerMessage := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)
+	processMessage := makeMessageProcessor(processRequest, processPeerMessage)
 	handleOwnMessage = makeOwnMessageHandler(processMessage)
-	handlePeerMessage = makePeerMessageHandler(validateMessage, processMessage)
+
+	// This "thunk" delays evaluation of handlePeerMessage thus
+	// resolving circular dependency due to recursive nature of
+	// peer message handling.
+	handlePeerMessageThunk := func(msg messages.Message) (reply <-chan messages.Message, new bool, err error) {
+		return handlePeerMessage(msg)
+	}
+	handleEmbedded := makeEmbeddedMessageHandler(handlePeerMessageThunk)
+	handlePeerMessage = makePeerMessageHandler(validateMessage, handleEmbedded, processMessage)
 
 	replyRequest := makeRequestReplier(clientStates)
 	handleClientMessage = makeClientMessageHandler(validateRequest, processRequest, replyRequest)
@@ -374,11 +367,16 @@ func makeOwnMessageHandler(process messageProcessor) messageHandler {
 	}
 }
 
-func makePeerMessageHandler(validate messageValidator, process messageProcessor) messageHandler {
+func makePeerMessageHandler(validate messageValidator, handleEmbedded embeddedMessageHandler, process messageProcessor) messageHandler {
 	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
 		err = validate(msg)
 		if err != nil {
 			return nil, false, fmt.Errorf("validation failed: %s", err)
+		}
+
+		err = handleEmbedded(msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("error handling embedded messages: %s", err)
 		}
 
 		new, err = process(msg)
@@ -387,6 +385,29 @@ func makePeerMessageHandler(validate messageValidator, process messageProcessor)
 		}
 
 		return nil, new, nil
+	}
+}
+
+func makeEmbeddedMessageHandler(handle messageHandler) embeddedMessageHandler {
+	return func(msg messages.Message) (err error) {
+		handleOne := func(m messages.Message) error {
+			if _, _, err := handle(m); err != nil {
+				return fmt.Errorf("error handling %s: %s", messages.Stringify(m), err)
+			}
+			return nil
+		}
+
+		switch msg := msg.(type) {
+		case messages.Request:
+		case messages.Prepare:
+			err = handleOne(msg.Request())
+		case messages.Commit:
+			err = handleOne(msg.Proposal())
+		case messages.ReqViewChange:
+		default:
+			panic("Unknown message type")
+		}
+		return err
 	}
 }
 
@@ -468,14 +489,10 @@ func makeMessageProcessor(processRequest requestProcessor, processPeerMessage pe
 	}
 }
 
-func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
+func makePeerMessageProcessor(n uint32, processCertifiedMessage certifiedMessageProcessor, processReqViewChange reqViewChangeProcessor) peerMessageProcessor {
 	locks := make([]sync.Mutex, n)
 
 	return func(msg messages.PeerMessage) (new bool, err error) {
-		if err := processEmbedded(msg); err != nil {
-			return false, fmt.Errorf("error processing embedded messages: %s", err)
-		}
-
 		lock := &locks[msg.ReplicaID()]
 		lock.Lock()
 		defer lock.Unlock()
@@ -488,29 +505,6 @@ func makePeerMessageProcessor(n uint32, processEmbedded embeddedMessageProcessor
 		default:
 			panic("Unknown message type")
 		}
-	}
-}
-
-func makeEmbeddedMessageProcessor(process messageProcessor, logger logger.Logger) embeddedMessageProcessor {
-	return func(msg messages.PeerMessage) (err error) {
-		processOne := func(m messages.Message) error {
-			if _, err := process(m); err != nil {
-				return fmt.Errorf("error processing %s: %s", messages.Stringify(m), err)
-			}
-			return nil
-		}
-
-		switch msg := msg.(type) {
-		case messages.Prepare:
-			err = processOne(msg.Request())
-		case messages.Commit:
-			err = processOne(msg.Proposal())
-		case messages.ReqViewChange:
-		default:
-			panic("Unknown message type")
-		}
-
-		return err
 	}
 }
 

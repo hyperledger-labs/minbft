@@ -47,11 +47,7 @@ func TestMakeCommitValidator(t *testing.T) {
 		args := mock.MethodCalled("uiVerifier", msg)
 		return args.Error(0)
 	}
-	validatePrepare := func(prepare messages.Prepare) error {
-		args := mock.MethodCalled("prepareValidator", prepare)
-		return args.Error(0)
-	}
-	validate := makeCommitValidator(verifyUI, validatePrepare)
+	validate := makeCommitValidator(verifyUI)
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
@@ -62,16 +58,10 @@ func TestMakeCommitValidator(t *testing.T) {
 
 	commit = messageImpl.NewCommit(backup, prepare)
 
-	mock.On("prepareValidator", prepare).Return(fmt.Errorf("UI not valid")).Once()
-	err = validate(commit)
-	assert.Error(t, err, "Invalid Prepare")
-
-	mock.On("prepareValidator", prepare).Return(nil).Once()
-	mock.On("uiVerifier", commit).Return(fmt.Errorf("UI not valid")).Once()
+	mock.On("uiVerifier", commit).Return(fmt.Errorf("error")).Once()
 	err = validate(commit)
 	assert.Error(t, err, "Invalid UI")
 
-	mock.On("prepareValidator", prepare).Return(nil).Once()
 	mock.On("uiVerifier", commit).Return(nil).Once()
 	err = validate(commit)
 	assert.NoError(t, err)

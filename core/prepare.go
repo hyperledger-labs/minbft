@@ -43,17 +43,13 @@ type prepareApplier func(prepare messages.Prepare, active bool) error
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
 // interfaces.
-func makePrepareValidator(n uint32, verifyUI uiVerifier, validateRequest requestValidator) prepareValidator {
+func makePrepareValidator(n uint32, verifyUI uiVerifier) prepareValidator {
 	return func(prepare messages.Prepare) error {
 		replicaID := prepare.ReplicaID()
 		view := prepare.View()
 
 		if !isPrimary(view, replicaID, n) {
 			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
-		}
-
-		if err := validateRequest(prepare.Request()); err != nil {
-			return fmt.Errorf("Request invalid: %s", err)
 		}
 
 		if err := verifyUI(prepare); err != nil {

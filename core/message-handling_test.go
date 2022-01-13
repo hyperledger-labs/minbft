@@ -78,11 +78,15 @@ func TestMakePeerMessageHandler(t *testing.T) {
 		args := mock.MethodCalled("messageValidator", msg)
 		return args.Error(0)
 	}
+	handleEmbedded := func(msg messages.Message) error {
+		args := mock.MethodCalled("embeddedMessageHandler", msg)
+		return args.Error(0)
+	}
 	processMessage := func(msg messages.Message) (new bool, err error) {
 		args := mock.MethodCalled("messageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	handle := makePeerMessageHandler(validateMessage, processMessage)
+	handle := makePeerMessageHandler(validateMessage, handleEmbedded, processMessage)
 
 	msg := struct {
 		messages.Message
@@ -94,11 +98,18 @@ func TestMakePeerMessageHandler(t *testing.T) {
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("embeddedMessageHandler", msg).Return(fmt.Errorf("error")).Once()
+	_, _, err = handle(msg)
+	assert.Error(t, err)
+
+	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
 	_, _, err = handle(msg)
 	assert.Error(t, err)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	ch, new, err := handle(msg)
 	assert.NoError(t, err)
@@ -106,6 +117,7 @@ func TestMakePeerMessageHandler(t *testing.T) {
 	assert.Nil(t, ch)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	ch, new, err = handle(msg)
 	assert.NoError(t, err)
@@ -113,6 +125,7 @@ func TestMakePeerMessageHandler(t *testing.T) {
 	assert.Nil(t, ch)
 
 	mock.On("messageValidator", msg).Return(nil).Once()
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	ch, new, err = handle(msg)
 	assert.NoError(t, err)
@@ -363,10 +376,6 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 
 	n := randN()
 
-	processEmbedded := func(msg messages.PeerMessage) error {
-		args := mock.MethodCalled("embeddedMessageProcessor", msg)
-		return args.Error(0)
-	}
 	processCertifiedMessage := func(msg messages.CertifiedMessage) (new bool, err error) {
 		args := mock.MethodCalled("certifiedMessageProcessor", msg)
 		return args.Bool(0), args.Error(1)
@@ -375,10 +384,11 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 		args := mock.MethodCalled("reqViewChangeProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	process := makePeerMessageProcessor(n, processEmbedded, processCertifiedMessage, processReqViewChange)
+	process := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
+		msg.EXPECT().ReplicaID().Return(randReplicaID(n)).AnyTimes()
 		assert.Panics(t, func() { process(msg) }, "Unknown message type")
 	})
 	t.Run("CertifiedMessage", func(t *testing.T) {
@@ -392,22 +402,15 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 			peerMessage
 		}{CertifiedMessage: certifiedMsg}
 
-		mock.On("embeddedMessageProcessor", msg).Return(fmt.Errorf("error")).Once()
-		_, err := process(msg)
-		assert.Error(t, err, "Incorrect embedded message")
-
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("certifiedMessageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
-		_, err = process(msg)
+		_, err := process(msg)
 		assert.Error(t, err, "Failed to finish processing certified message")
 
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("certifiedMessageProcessor", msg).Return(true, nil).Once()
 		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("certifiedMessageProcessor", msg).Return(false, nil).Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
@@ -416,22 +419,15 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 	t.Run("ReqViewChange", func(t *testing.T) {
 		msg := messageImpl.NewReqViewChange(randReplicaID(n), rand.Uint64())
 
-		mock.On("embeddedMessageProcessor", msg).Return(fmt.Errorf("error")).Once()
-		_, err := process(msg)
-		assert.Error(t, err, "Incorrect embedded message")
-
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("reqViewChangeProcessor", msg).Return(false, fmt.Errorf("error")).Once()
-		_, err = process(msg)
+		_, err := process(msg)
 		assert.Error(t, err, "Failed to finish processing certified message")
 
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("reqViewChangeProcessor", msg).Return(true, nil).Once()
 		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
-		mock.On("embeddedMessageProcessor", msg).Return(nil).Once()
 		mock.On("reqViewChangeProcessor", msg).Return(false, nil).Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
@@ -439,19 +435,19 @@ func TestMakePeerMessageProcessor(t *testing.T) {
 	})
 }
 
-func TestMakeEmbeddedMessageProcessor(t *testing.T) {
+func TestMakeEmbeddedMessageHandler(t *testing.T) {
 	mock := new(testifymock.Mock)
 	defer mock.AssertExpectations(t)
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	processMessage := func(msg messages.Message) (new bool, err error) {
-		args := mock.MethodCalled("messageProcessor", msg)
-		return args.Bool(0), args.Error(1)
+	handleMessage := func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
+		args := mock.MethodCalled("messageHandler", msg)
+		return nil, args.Bool(0), args.Error(1)
 	}
 
-	process := makeEmbeddedMessageProcessor(processMessage, logger.NewReplicaLogger(0))
+	handle := makeEmbeddedMessageHandler(handleMessage)
 
 	n, view := randN(), randView()
 	primary := primaryID(n, view)
@@ -464,32 +460,32 @@ func TestMakeEmbeddedMessageProcessor(t *testing.T) {
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
-		assert.Panics(t, func() { process(msg) }, "Unknown message type")
+		assert.Panics(t, func() { handle(msg) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		mock.On("messageProcessor", request).Return(false, fmt.Errorf("error")).Once()
-		err := process(prepare)
+		mock.On("messageHandler", request).Return(false, fmt.Errorf("error")).Once()
+		err := handle(prepare)
 		assert.Error(t, err)
 
-		mock.On("messageProcessor", request).Return(false, nil).Once()
-		err = process(prepare)
+		mock.On("messageHandler", request).Return(false, nil).Once()
+		err = handle(prepare)
 		assert.NoError(t, err)
 
-		mock.On("messageProcessor", request).Return(true, nil).Once()
-		err = process(prepare)
+		mock.On("messageHandler", request).Return(true, nil).Once()
+		err = handle(prepare)
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("messageProcessor", prepare).Return(false, fmt.Errorf("error")).Once()
-		err := process(commit)
+		mock.On("messageHandler", prepare).Return(false, fmt.Errorf("error")).Once()
+		err := handle(commit)
 		assert.Error(t, err)
 
-		mock.On("messageProcessor", prepare).Return(false, nil).Once()
-		err = process(commit)
+		mock.On("messageHandler", prepare).Return(false, nil).Once()
+		err = handle(commit)
 		assert.NoError(t, err)
 
-		mock.On("messageProcessor", prepare).Return(true, nil).Once()
-		err = process(commit)
+		mock.On("messageHandler", prepare).Return(true, nil).Once()
+		err = handle(commit)
 		assert.NoError(t, err)
 	})
 }
