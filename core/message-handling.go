@@ -66,6 +66,12 @@ type messageValidator func(msg messages.Message) error
 // It is safe to invoke concurrently.
 type peerMessageValidator func(msg messages.PeerMessage) error
 
+// certifiedMessageValidator validates a message certified by USIG.
+//
+// It continues validation of the supplied message certified by USIG.
+// It is safe to invoke concurrently.
+type certifiedMessageValidator func(msg messages.CertifiedMessage) error
+
 // messageProcessor processes a valid message.
 //
 // It fully processes the supplied message in the context of the
@@ -168,10 +174,11 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest)
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
-	validatePrepare := makePrepareValidator(n, verifyUI)
-	validateCommit := makeCommitValidator(verifyUI)
+	validatePrepare := makePrepareValidator(n)
+	validateCommit := makeCommitValidator()
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
-	validatePeerMessage := makePeerMessageValidator(n, validatePrepare, validateCommit, validateReqViewChange)
+	validateCertifiedMessage := makeCertifiedMessageValidator(validatePrepare, validateCommit, verifyUI)
+	validatePeerMessage := makePeerMessageValidator(n, validateCertifiedMessage, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
 	applyCommit := makeCommitApplier(collectCommitment)
@@ -454,7 +461,7 @@ func makeMessageValidator(validateRequest requestValidator, validatePeerMessage 
 	}
 }
 
-func makePeerMessageValidator(n uint32, validatePrepare prepareValidator, validateCommit commitValidator, validateReqViewChange reqViewChangeValidator) peerMessageValidator {
+func makePeerMessageValidator(n uint32, validateCertified certifiedMessageValidator, validateReqViewChange reqViewChangeValidator) peerMessageValidator {
 	return func(msg messages.PeerMessage) error {
 		replicaID := msg.ReplicaID()
 		if replicaID >= n {
@@ -462,12 +469,27 @@ func makePeerMessageValidator(n uint32, validatePrepare prepareValidator, valida
 		}
 
 		switch msg := msg.(type) {
+		case messages.CertifiedMessage:
+			return validateCertified(msg)
+		case messages.ReqViewChange:
+			return validateReqViewChange(msg)
+		default:
+			panic("Unknown message type")
+		}
+	}
+}
+
+func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCommit commitValidator, verifyUI uiVerifier) certifiedMessageValidator {
+	return func(msg messages.CertifiedMessage) error {
+		if err := verifyUI(msg); err != nil {
+			return fmt.Errorf("invalid UI: %s", err)
+		}
+
+		switch msg := msg.(type) {
 		case messages.Prepare:
 			return validatePrepare(msg)
 		case messages.Commit:
 			return validateCommit(msg)
-		case messages.ReqViewChange:
-			return validateReqViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}

@@ -43,11 +43,7 @@ func TestMakeCommitValidator(t *testing.T) {
 	primary := primaryID(n, view)
 	backup := randOtherReplicaID(primary, n)
 
-	verifyUI := func(msg messages.CertifiedMessage) error {
-		args := mock.MethodCalled("uiVerifier", msg)
-		return args.Error(0)
-	}
-	validate := makeCommitValidator(verifyUI)
+	validate := makeCommitValidator()
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 	prepare := messageImpl.NewPrepare(primary, view, request)
@@ -57,12 +53,6 @@ func TestMakeCommitValidator(t *testing.T) {
 	assert.Error(t, err, "Commit from primary")
 
 	commit = messageImpl.NewCommit(backup, prepare)
-
-	mock.On("uiVerifier", commit).Return(fmt.Errorf("error")).Once()
-	err = validate(commit)
-	assert.Error(t, err, "Invalid UI")
-
-	mock.On("uiVerifier", commit).Return(nil).Once()
 	err = validate(commit)
 	assert.NoError(t, err)
 }
