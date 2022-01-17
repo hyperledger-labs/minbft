@@ -39,23 +39,13 @@ func TestMakePrepareValidator(t *testing.T) {
 
 	request := messageImpl.NewRequest(0, rand.Uint64(), nil)
 
-	verifyUI := func(msg messages.CertifiedMessage) error {
-		args := mock.MethodCalled("uiVerifier", msg)
-		return args.Error(0)
-	}
-	validate := makePrepareValidator(n, verifyUI)
+	validate := makePrepareValidator(n)
 
 	prepare := messageImpl.NewPrepare(backup, view, request)
 	err := validate(prepare)
 	assert.Error(t, err)
 
 	prepare = messageImpl.NewPrepare(primary, view, request)
-
-	mock.On("uiVerifier", prepare).Return(fmt.Errorf("error")).Once()
-	err = validate(prepare)
-	assert.Error(t, err)
-
-	mock.On("uiVerifier", prepare).Return(nil).Once()
 	err = validate(prepare)
 	assert.NoError(t, err)
 }

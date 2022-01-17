@@ -26,9 +26,9 @@ import (
 
 // commitValidator validates a Commit message.
 //
-// It authenticates and checks the supplied message for internal
-// consistency. It does not use replica's current state and has no
-// side-effect. It is safe to invoke concurrently.
+// It checks the supplied message for internal consistency. It does
+// not use replica's current state and has no side-effect. It is safe
+// to invoke concurrently.
 type commitValidator func(commit messages.Commit) error
 
 // commitApplier applies Commit message to current replica state.
@@ -71,7 +71,7 @@ type commitmentCounter func(view, primaryCV uint64) (done bool)
 
 // makeCommitValidator constructs an instance of commitValidator using
 // the supplied abstractions.
-func makeCommitValidator(verifyUI uiVerifier) commitValidator {
+func makeCommitValidator() commitValidator {
 	return func(commit messages.Commit) error {
 		prop := commit.Proposal()
 
@@ -83,10 +83,6 @@ func makeCommitValidator(verifyUI uiVerifier) commitValidator {
 		case messages.Prepare:
 		default:
 			panic("Unexpected proposal message type")
-		}
-
-		if err := verifyUI(commit); err != nil {
-			return fmt.Errorf("UI is not valid: %s", err)
 		}
 
 		return nil

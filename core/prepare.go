@@ -25,9 +25,9 @@ import (
 
 // prepareValidator validates a Prepare message.
 //
-// It authenticates and checks the supplied message for internal
-// consistency. It does not use replica's current state and has no
-// side-effect. It is safe to invoke concurrently.
+// It checks the supplied message for internal consistency. It does
+// not use replica's current state and has no side-effect. It is safe
+// to invoke concurrently.
 type prepareValidator func(prepare messages.Prepare) error
 
 // prepareApplier applies Prepare message to current replica state.
@@ -43,17 +43,13 @@ type prepareApplier func(prepare messages.Prepare, active bool) error
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
 // interfaces.
-func makePrepareValidator(n uint32, verifyUI uiVerifier) prepareValidator {
+func makePrepareValidator(n uint32) prepareValidator {
 	return func(prepare messages.Prepare) error {
 		replicaID := prepare.ReplicaID()
 		view := prepare.View()
 
 		if !isPrimary(view, replicaID, n) {
 			return fmt.Errorf("Prepare from backup %d for view %d", replicaID, view)
-		}
-
-		if err := verifyUI(prepare); err != nil {
-			return fmt.Errorf("UI not valid: %s", err)
 		}
 
 		return nil
