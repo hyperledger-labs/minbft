@@ -139,8 +139,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	// Commit certificate size is the number of commitments from
 	// different replicas, i.e. Prepare/NewView/Commit messages,
-	// that triggers request execution.
+	// that triggers request execution. View-change certificate
+	// size is the number of replicas required to proceed with
+	// view change. Any commit and view-change certificates must
+	// intersect in at least one replica.
 	commitCertSize := f + 1
+	viewChangeCertSize := n - commitCertSize + 1
 
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
@@ -190,7 +194,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
 
-	collectReqViewChange := makeReqViewChangeCollector(commitCertSize, n)
+	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
