@@ -83,10 +83,10 @@ func makeReqViewChangeProcessor(collect reqViewChangeCollector, startViewChange 
 	}
 }
 
-func makeReqViewChangeCollector(commitCertSize, n uint32) reqViewChangeCollector {
+func makeReqViewChangeCollector(viewChangeCertSize uint32) reqViewChangeCollector {
 	var (
 		view      uint64
-		collected = make(messages.ViewChangeCert, 0, n-commitCertSize+1)
+		collected = make(messages.ViewChangeCert, 0, viewChangeCertSize)
 		replicas  = make(map[uint32]bool, cap(collected))
 	)
 
@@ -100,7 +100,7 @@ func makeReqViewChangeCollector(commitCertSize, n uint32) reqViewChangeCollector
 		collected = append(collected, rvc)
 		replicas[replicaID] = true
 
-		if len(collected) <= int(n-commitCertSize) {
+		if len(collected) < int(viewChangeCertSize) {
 			return true, nil
 		}
 

@@ -132,8 +132,8 @@ func TestMakeReqViewChangeCollector(t *testing.T) {
 		certs = append(certs, cert)
 	}
 
-	commitCertSize := uint32(f + 1)
-	collect := makeReqViewChangeCollector(commitCertSize, n)
+	viewChangeCertSize := uint32(n - f)
+	collect := makeReqViewChangeCollector(viewChangeCertSize)
 	for i, c := range cases {
 		desc := fmt.Sprintf("Case #%d", i)
 		new, cert := collect(msgs[i])

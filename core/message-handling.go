@@ -139,8 +139,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	// Commit certificate size is the number of commitments from
 	// different replicas, i.e. Prepare/NewView/Commit messages,
-	// that triggers request execution.
+	// that triggers request execution. View-change certificate
+	// size is the number of replicas required to proceed with
+	// view change. Any commit and view-change certificates must
+	// intersect in at least one replica.
 	commitCertSize := f + 1
+	viewChangeCertSize := n - commitCertSize + 1
 
 	reqTimeout := makeRequestTimeoutProvider(config)
 	prepTimeout := makePrepareTimeoutProvider(config)
@@ -177,7 +181,9 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validatePrepare := makePrepareValidator(n)
 	validateCommit := makeCommitValidator()
 	validateReqViewChange := makeReqViewChangeValidator(verifyMessageSignature)
-	validateCertifiedMessage := makeCertifiedMessageValidator(validatePrepare, validateCommit, verifyUI)
+	validateVCCert := makeViewChangeCertValidator(viewChangeCertSize)
+	validateViewChange := makeViewChangeValidator(validateMessageLog, validateVCCert)
+	validateCertifiedMessage := makeCertifiedMessageValidator(validatePrepare, validateCommit, validateViewChange, verifyUI)
 	validatePeerMessage := makePeerMessageValidator(n, validateCertifiedMessage, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
@@ -187,10 +193,15 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 
 	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
-	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
-	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage)
 
-	collectReqViewChange := makeReqViewChangeCollector(commitCertSize, n)
+	collectViewChange := makeViewChangeCollector(id, n, viewChangeCertSize)
+	processNewViewCert := makeNewViewCertProcessor(id, viewState, log, handleGeneratedMessage)
+	processViewChange := makeViewChangeProcessor(collectViewChange, processNewViewCert)
+
+	processViewMessage := makeViewMessageProcessor(viewState, applyPeerMessage)
+	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
+
+	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
 	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
@@ -411,9 +422,21 @@ func makeEmbeddedMessageHandler(handle messageHandler) embeddedMessageHandler {
 		case messages.Commit:
 			err = handleOne(msg.Proposal())
 		case messages.ReqViewChange:
+		case messages.ViewChange:
+			for _, m := range msg.ViewChangeCert() {
+				if err = handleOne(m); err != nil {
+					goto out
+				}
+			}
+			for _, m := range msg.MessageLog() {
+				if err = handleOne(m); err != nil {
+					goto out
+				}
+			}
 		default:
 			panic("Unknown message type")
 		}
+	out:
 		return err
 	}
 }
@@ -479,7 +502,7 @@ func makePeerMessageValidator(n uint32, validateCertified certifiedMessageValida
 	}
 }
 
-func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCommit commitValidator, verifyUI uiVerifier) certifiedMessageValidator {
+func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCommit commitValidator, validateViewChange viewChangeValidator, verifyUI uiVerifier) certifiedMessageValidator {
 	return func(msg messages.CertifiedMessage) error {
 		if err := verifyUI(msg); err != nil {
 			return fmt.Errorf("invalid UI: %s", err)
@@ -490,6 +513,8 @@ func makeCertifiedMessageValidator(validatePrepare prepareValidator, validateCom
 			return validatePrepare(msg)
 		case messages.Commit:
 			return validateCommit(msg)
+		case messages.ViewChange:
+			return validateViewChange(msg)
 		default:
 			panic("Unknown message type")
 		}
@@ -530,7 +555,7 @@ func makePeerMessageProcessor(n uint32, processCertifiedMessage certifiedMessage
 	}
 }
 
-func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor) certifiedMessageProcessor {
+func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProcessor, processViewChange viewChangeProcessor) certifiedMessageProcessor {
 	lastUI := make([]uint64, n)
 
 	return func(msg messages.CertifiedMessage) (new bool, err error) {
@@ -545,6 +570,8 @@ func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProce
 		}
 
 		switch msg := msg.(type) {
+		case messages.ViewChange:
+			new, err = processViewChange(msg)
 		case messages.PeerMessage:
 			new, err = processViewMessage(msg)
 		default:
