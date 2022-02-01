@@ -205,3 +205,15 @@ func (mr *MockStateMockRecorder) StopRequestTimer(arg0 interface{}) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopRequestTimer", reflect.TypeOf((*MockState)(nil).StopRequestTimer), arg0)
 }
+
+// UnprepareRequestSeq mocks base method
+func (m *MockState) UnprepareRequestSeq() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UnprepareRequestSeq")
+}
+
+// UnprepareRequestSeq indicates an expected call of UnprepareRequestSeq
+func (mr *MockStateMockRecorder) UnprepareRequestSeq() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnprepareRequestSeq", reflect.TypeOf((*MockState)(nil).UnprepareRequestSeq))
+}

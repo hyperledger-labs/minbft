@@ -132,6 +132,9 @@ func (p *provider) Clients() (clientIDs []uint32) {
 // identifier can only be retired if it is greater than the last
 // retired and has been prepared before.
 //
+// UnprepareRequestSeq un-prepares any previously prepared but not yet
+// retired request identifier seq.
+//
 // AddReply accepts a Reply message. Reply messages should be added in
 // sequence of corresponding request identifiers. Only a single Reply
 // message should be added for each request identifier. It will never
@@ -166,6 +169,7 @@ type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
 	RetireRequestSeq(seq uint64) (new bool, err error)
+	UnprepareRequestSeq()
 
 	AddReply(reply messages.Reply) error
 	ReplyChannel(seq uint64) <-chan messages.Reply

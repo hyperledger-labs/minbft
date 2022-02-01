@@ -110,3 +110,10 @@ func (s *seqState) RetireRequestSeq(seq uint64) (new bool, err error) {
 
 	return true, nil
 }
+
+func (s *seqState) UnprepareRequestSeq() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.lastPreparedSeq = s.lastRetiredSeq
+}
