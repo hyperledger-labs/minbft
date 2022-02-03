@@ -27,31 +27,87 @@ import (
 	"github.com/hyperledger-labs/minbft/messages"
 )
 
-// Provider returns an instance of state representation associated
-// with a client given its ID. It is safe to invoke concurrently.
-type Provider func(clientID uint32) State
+// Provider represents the replica state maintained for the clients.
+// It is safe to use concurrently.
+//
+// ClientState method returns the piece of replica state associated
+// with a client, given the client ID.
+//
+// Clients method returns a slice of maintained client IDs.
+type Provider interface {
+	ClientState(clientID uint32) State
+	Clients() (clientIDs []uint32)
+}
+
+// Option represents a parameter to initialize State with.
+type Option func(*options)
+
+type options struct {
+	timerProvider timer.Provider
+}
+
+var defaultOptions = options{
+	timerProvider: timer.Standard(),
+}
+
+// WithTimerProvider specifies the abstract timer implementation to
+// use. Standard timer implementation is used by default.
+func WithTimerProvider(timerProvider timer.Provider) Option {
+	return func(opts *options) {
+		opts.timerProvider = timerProvider
+	}
+}
+
+type provider struct {
+	sync.Mutex
+	options
+
+	requestTimeout func() time.Duration
+	prepareTimeout func() time.Duration
+
+	// Client ID -> client state
+	clientStates map[uint32]*clientState
+}
 
 // NewProvider creates an instance of Provider. Optional parameters
-// can be specified as opts.
-func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) Provider {
-	var (
-		lock sync.Mutex
-		// Client ID -> client state
-		clientStates = make(map[uint32]State)
-	)
-
-	return func(clientID uint32) State {
-		lock.Lock()
-		defer lock.Unlock()
-
-		state := clientStates[clientID]
-		if state == nil {
-			state = New(requestTimeout, prepareTimeout, opts...)
-			clientStates[clientID] = state
-		}
-
-		return state
+// can be specified as args.
+func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, args ...Option) Provider {
+	opts := defaultOptions
+	for _, opt := range args {
+		opt(&opts)
 	}
+
+	return &provider{
+		options:        opts,
+		requestTimeout: requestTimeout,
+		prepareTimeout: prepareTimeout,
+		clientStates:   make(map[uint32]*clientState),
+	}
+}
+
+func (p *provider) ClientState(clientID uint32) State {
+	p.Lock()
+	defer p.Unlock()
+
+	state := p.clientStates[clientID]
+	if state == nil {
+		state = newClientState(p.timerProvider, p.requestTimeout, p.prepareTimeout)
+		p.clientStates[clientID] = state
+	}
+
+	return state
+}
+
+func (p *provider) Clients() (clientIDs []uint32) {
+	p.Lock()
+	defer p.Unlock()
+
+	clientIDs = make([]uint32, 0, len(p.clientStates))
+	for c := range p.clientStates {
+		clientIDs = append(clientIDs, c)
+	}
+
+	return clientIDs
 }
 
 // State represents the state maintained by the replica for each
@@ -75,6 +131,9 @@ func NewProvider(requestTimeout func() time.Duration, prepareTimeout func() time
 // RetireRequestSeq records the request identifier seq as retired. An
 // identifier can only be retired if it is greater than the last
 // retired and has been prepared before.
+//
+// UnprepareRequestSeq un-prepares any previously prepared but not yet
+// retired request identifier seq.
 //
 // AddReply accepts a Reply message. Reply messages should be added in
 // sequence of corresponding request identifiers. Only a single Reply
@@ -110,6 +169,7 @@ type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
 	RetireRequestSeq(seq uint64) (new bool, err error)
+	UnprepareRequestSeq()
 
 	AddReply(reply messages.Reply) error
 	ReplyChannel(seq uint64) <-chan messages.Reply
@@ -121,50 +181,21 @@ type State interface {
 	StopPrepareTimer(seq uint64)
 }
 
-// New creates a new instance of client state representation. Optional
-// arguments opts specify initialization parameters.
-func New(requestTimeout func() time.Duration, prepareTimeout func() time.Duration, opts ...Option) State {
-	s := &clientState{opts: defaultOptions}
-
-	for _, opt := range opts {
-		opt(&s.opts)
-	}
-
-	s.seqState = newSeqState()
-	s.replyState = newReplyState()
-	s.requestTimer = newTimerState(s.opts.timerProvider, requestTimeout)
-	s.prepareTimer = newTimerState(s.opts.timerProvider, prepareTimeout)
-
-	return s
-}
-
-// Option represents a parameter to initialize State with.
-type Option func(*options)
-
-type options struct {
-	timerProvider timer.Provider
-}
-
-var defaultOptions = options{
-	timerProvider: timer.Standard(),
-}
-
-// WithTimerProvider specifies the abstract timer implementation to
-// use. Standard timer implementation is used by default.
-func WithTimerProvider(timerProvider timer.Provider) Option {
-	return func(opts *options) {
-		opts.timerProvider = timerProvider
-	}
-}
-
 type clientState struct {
 	*seqState
 	*replyState
 
 	requestTimer *timerState
 	prepareTimer *timerState
+}
 
-	opts options
+func newClientState(timerProvider timer.Provider, requestTimeout, prepareTimeout func() time.Duration) *clientState {
+	return &clientState{
+		seqState:     newSeqState(),
+		replyState:   newReplyState(),
+		requestTimer: newTimerState(timerProvider, requestTimeout),
+		prepareTimer: newTimerState(timerProvider, prepareTimeout),
+	}
 }
 
 func (s *clientState) StartRequestTimer(seq uint64, handleTimeout func()) {

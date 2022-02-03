@@ -676,7 +676,7 @@ func makeGeneratedMessageConsumer(log messagelog.MessageLog, provider clientstat
 		switch msg := msg.(type) {
 		case messages.Reply:
 			clientID := msg.ClientID()
-			if err := provider(clientID).AddReply(msg); err != nil {
+			if err := provider.ClientState(clientID).AddReply(msg); err != nil {
 				// Erroneous Reply must never be supplied
 				panic(fmt.Errorf("failed to consume generated Reply: %s", err))
 			}

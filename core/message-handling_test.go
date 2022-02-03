@@ -24,12 +24,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	testifymock "github.com/stretchr/testify/mock"
 
 	"github.com/hyperledger-labs/minbft/common/logger"
-	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/messages"
 
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
@@ -932,10 +930,8 @@ func TestMakeGeneratedMessageConsumer(t *testing.T) {
 
 	log := mock_messagelog.NewMockMessageLog(ctrl)
 	clientState := mock_clientstate.NewMockState(ctrl)
-	clientStates := func(id uint32) clientstate.State {
-		require.Equal(t, clientID, id)
-		return clientState
-	}
+	clientStates := mock_clientstate.NewMockProvider(ctrl)
+	clientStates.EXPECT().ClientState(clientID).Return(clientState).AnyTimes()
 
 	consume := makeGeneratedMessageConsumer(log, clientStates, logger.NewReplicaLogger(0))
 

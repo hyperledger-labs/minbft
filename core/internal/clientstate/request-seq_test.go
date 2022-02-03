@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hyperledger-labs/minbft/core/internal/timer"
 )
 
 func TestReqeustSeq(t *testing.T) {
@@ -28,10 +30,11 @@ func TestReqeustSeq(t *testing.T) {
 	t.Run("CaptureReleaseConcurrent", testCaptureReleaseRequestSeqConcurrent)
 	t.Run("Prepare", testPrepareRequestSeq)
 	t.Run("Retire", testRetireRequestSeq)
+	t.Run("Unprepare", testUnprepareRequestSeq)
 }
 
 func testCaptureReleaseRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -69,7 +72,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 	seqs := make([]bool, nrSeqs)
 	wg := new(sync.WaitGroup)
 
-	state := New(defaultTimeout, defaultTimeout)
+	state := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	wg.Add(nrConcurrent)
 	for workerID := 0; workerID < nrConcurrent; workerID++ {
@@ -96,7 +99,7 @@ func testCaptureReleaseRequestSeqConcurrent(t *testing.T) {
 }
 
 func testPrepareRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -160,7 +163,7 @@ func testPrepareRequestSeq(t *testing.T) {
 }
 
 func testRetireRequestSeq(t *testing.T) {
-	s := New(defaultTimeout, defaultTimeout)
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
 
 	cases := []struct {
 		desc string
@@ -223,6 +226,62 @@ func testRetireRequestSeq(t *testing.T) {
 			} else {
 				require.Error(t, err, c.desc)
 			}
+		}
+	}
+}
+
+func testUnprepareRequestSeq(t *testing.T) {
+	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
+
+	cases := []struct {
+		desc string
+		seq  int
+
+		prepare   bool
+		retire    bool
+		unprepare bool
+
+		new bool
+	}{{
+		desc:      "Prepare and unprepare first ID",
+		seq:       100,
+		prepare:   true,
+		unprepare: true,
+		new:       true,
+	}, {
+		desc:    "Prepare the first ID again",
+		seq:     100,
+		prepare: true,
+		new:     true,
+	}, {
+		desc:      "Prepare, retire, and unprepare another ID",
+		seq:       200,
+		prepare:   true,
+		retire:    true,
+		unprepare: true,
+		new:       true,
+	}, {
+		desc:    "Prepare the other ID again",
+		seq:     200,
+		prepare: true,
+		new:     false,
+	}}
+
+	for _, c := range cases {
+		seq := uint64(c.seq)
+		if c.prepare {
+			if new, release := s.CaptureRequestSeq(seq); new {
+				go release()
+			}
+
+			new, _ := s.PrepareRequestSeq(seq)
+			require.Equal(t, c.new, new, c.desc)
+		}
+		if c.retire {
+			_, _ = s.RetireRequestSeq(seq)
+		}
+		if c.unprepare {
+			s.UnprepareRequestSeq()
 		}
 	}
 }
