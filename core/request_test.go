@@ -283,6 +283,27 @@ func TestMakeRequestSeqRetirer(t *testing.T) {
 	assert.True(t, new)
 }
 
+func TestMakeRequestSeqUnpreparer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ids := []uint32{rand.Uint32(), rand.Uint32()}
+	provider := mock_clientstate.NewMockProvider(ctrl)
+	provider.EXPECT().Clients().Return(ids).AnyTimes()
+	states := make([]*mock_clientstate.MockState, len(ids))
+	for i, c := range ids {
+		states[i] = mock_clientstate.NewMockState(ctrl)
+		provider.EXPECT().ClientState(c).Return(states[i]).AnyTimes()
+	}
+
+	unprepareSeq := makeRequestSeqUnpreparer(provider)
+
+	for _, s := range states {
+		s.EXPECT().UnprepareRequestSeq()
+	}
+	unprepareSeq()
+}
+
 func TestMakeRequestReplier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

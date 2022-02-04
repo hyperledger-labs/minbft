@@ -158,6 +158,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
 	retireSeq := makeRequestSeqRetirer(clientStates)
+	unprepareSeq := makeRequestSeqUnpreparer(clientStates)
 	pendingReq := requestlist.New()
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
@@ -200,7 +201,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
 
 	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
-	startViewChange := makeViewChangeStarter(id, viewState, log, handleGeneratedMessage)
+	startViewChange := makeViewChangeStarter(id, viewState, log, unprepareSeq, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
 	processPeerMessage := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)
