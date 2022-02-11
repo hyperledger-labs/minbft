@@ -728,8 +728,11 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	defer ctrl.Finish()
 
 	viewState := mock_viewstate.NewMockState(ctrl)
-	applyPeerMessage := func(msg messages.PeerMessage, active bool) error {
-		args := mock.MethodCalled("peerMessageApplier", msg, active)
+	releaseView := func() {
+		mock.MethodCalled("viewReleaser")
+	}
+	applyPeerMessage := func(msg messages.PeerMessage) error {
+		args := mock.MethodCalled("peerMessageApplier", msg)
 		return args.Error(0)
 	}
 	process := makeViewMessageProcessor(viewState, applyPeerMessage)
@@ -750,38 +753,29 @@ func TestMakeViewMessageProcessor(t *testing.T) {
 	})
 
 	testPeerMessage := func(t *testing.T, msg messages.PeerMessage) {
-		viewState.EXPECT().HoldView().Return(view, newView, func() {
-			mock.MethodCalled("viewReleaser")
-		})
+		viewState.EXPECT().HoldView().Return(oldView, oldView, releaseView)
 		mock.On("viewReleaser").Once()
-		mock.On("peerMessageApplier", msg, false).Return(nil).Once()
+		_, err := process(msg)
+		assert.Error(t, err, "Message for unexpected view")
+
+		viewState.EXPECT().HoldView().Return(view, view, releaseView)
+		mock.On("peerMessageApplier", msg).Return(nil).Once()
+		mock.On("viewReleaser").Once()
 		new, err := process(msg)
 		assert.NoError(t, err)
 		assert.True(t, new)
 
-		viewState.EXPECT().HoldView().Return(newView, newView, func() {
-			mock.MethodCalled("viewReleaser")
-		})
+		viewState.EXPECT().HoldView().Return(view, newView, releaseView)
 		mock.On("viewReleaser").Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
-		assert.False(t, new, "Message for former view")
+		assert.False(t, new)
 
-		viewState.EXPECT().HoldView().Return(oldView, oldView, func() {
-			mock.MethodCalled("viewReleaser")
-		})
-		mock.On("viewReleaser").Once()
-		_, err = process(msg)
-		assert.Error(t, err, "Message for unexpected view")
-
-		viewState.EXPECT().HoldView().Return(view, view, func() {
-			mock.MethodCalled("viewReleaser")
-		})
-		mock.On("peerMessageApplier", msg, true).Return(nil).Once()
+		viewState.EXPECT().HoldView().Return(newView, newView, releaseView)
 		mock.On("viewReleaser").Once()
 		new, err = process(msg)
 		assert.NoError(t, err)
-		assert.True(t, new)
+		assert.False(t, new)
 	}
 	t.Run("Prepare", func(t *testing.T) {
 		testPeerMessage(t, prepare)
@@ -798,12 +792,12 @@ func TestMakePeerMessageApplier(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	applyPrepare := func(msg messages.Prepare, active bool) error {
-		args := mock.MethodCalled("prepareApplier", msg, active)
+	applyPrepare := func(msg messages.Prepare) error {
+		args := mock.MethodCalled("prepareApplier", msg)
 		return args.Error(0)
 	}
-	applyCommit := func(msg messages.Commit, active bool) error {
-		args := mock.MethodCalled("commitApplier", msg, active)
+	applyCommit := func(msg messages.Commit) error {
+		args := mock.MethodCalled("commitApplier", msg)
 		return args.Error(0)
 	}
 	apply := makePeerMessageApplier(applyPrepare, applyCommit)
@@ -815,32 +809,24 @@ func TestMakePeerMessageApplier(t *testing.T) {
 
 	t.Run("UnknownMessageType", func(t *testing.T) {
 		msg := mock_messages.NewMockPeerMessage(ctrl)
-		assert.Panics(t, func() { apply(msg, true) }, "Unknown message type")
+		assert.Panics(t, func() { apply(msg) }, "Unknown message type")
 	})
 	t.Run("Prepare", func(t *testing.T) {
-		mock.On("prepareApplier", prepare, true).Return(fmt.Errorf("error")).Once()
-		err := apply(prepare, true)
+		mock.On("prepareApplier", prepare).Return(fmt.Errorf("error")).Once()
+		err := apply(prepare)
 		assert.Error(t, err, "Failed to apply Prepare")
 
-		mock.On("prepareApplier", prepare, true).Return(nil).Once()
-		err = apply(prepare, true)
-		assert.NoError(t, err)
-
-		mock.On("prepareApplier", prepare, false).Return(nil).Once()
-		err = apply(prepare, false)
+		mock.On("prepareApplier", prepare).Return(nil).Once()
+		err = apply(prepare)
 		assert.NoError(t, err)
 	})
 	t.Run("Commit", func(t *testing.T) {
-		mock.On("commitApplier", commit, true).Return(fmt.Errorf("error")).Once()
-		err := apply(commit, true)
+		mock.On("commitApplier", commit).Return(fmt.Errorf("error")).Once()
+		err := apply(commit)
 		assert.Error(t, err, "Failed to apply Commit")
 
-		mock.On("commitApplier", commit, true).Return(nil).Once()
-		err = apply(commit, true)
-		assert.NoError(t, err)
-
-		mock.On("commitApplier", commit, false).Return(nil).Once()
-		err = apply(commit, false)
+		mock.On("commitApplier", commit).Return(nil).Once()
+		err = apply(commit)
 		assert.NoError(t, err)
 	})
 }

@@ -110,10 +110,8 @@ type viewMessageProcessor func(msg messages.PeerMessage) (new bool, err error)
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required messages
 // or side effects. The supplied message is assumed to be authentic
-// and internally consistent. Parameter active indicates if the
-// message refers to the active view. It is safe to invoke
-// concurrently.
-type peerMessageApplier func(msg messages.PeerMessage, active bool) error
+// and internally consistent. It is safe to invoke concurrently.
+type peerMessageApplier func(msg messages.PeerMessage) error
 
 // generatedMessageHandler finalizes and handles generated message.
 //
@@ -588,8 +586,6 @@ func makeCertifiedMessageProcessor(n uint32, processViewMessage viewMessageProce
 
 func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMessageApplier) viewMessageProcessor {
 	return func(msg messages.PeerMessage) (new bool, err error) {
-		var active bool
-
 		switch msg := msg.(type) {
 		case messages.Prepare, messages.Commit:
 			var messageView uint64
@@ -609,24 +605,19 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 			currentView, expectedView, release := viewState.HoldView()
 			defer release()
 
-			if currentView == expectedView {
-				active = true
-			}
-
-			if messageView < currentView {
-				return false, nil
-			} else if messageView > currentView {
-				// A correct peer replica would ensure
-				// that this replica would transition
-				// into the new view before processing
-				// the message.
+			if messageView > currentView {
+				// A correct replica must first ensure
+				// transition into the new view.
 				return false, fmt.Errorf("message refers to unexpected view")
+			}
+			if messageView < expectedView {
+				return false, nil
 			}
 		default:
 			panic("Unknown message type")
 		}
 
-		if err := applyPeerMessage(msg, active); err != nil {
+		if err := applyPeerMessage(msg); err != nil {
 			return false, fmt.Errorf("failed to apply message: %s", err)
 		}
 
@@ -637,12 +628,12 @@ func makeViewMessageProcessor(viewState viewstate.State, applyPeerMessage peerMe
 // makePeerMessageApplier constructs an instance of peerMessageApplier using
 // the supplied abstractions.
 func makePeerMessageApplier(applyPrepare prepareApplier, applyCommit commitApplier) peerMessageApplier {
-	return func(msg messages.PeerMessage, active bool) error {
+	return func(msg messages.PeerMessage) error {
 		switch msg := msg.(type) {
 		case messages.Prepare:
-			return applyPrepare(msg, active)
+			return applyPrepare(msg)
 		case messages.Commit:
-			return applyCommit(msg, active)
+			return applyCommit(msg)
 		default:
 			panic("Unknown message type")
 		}
