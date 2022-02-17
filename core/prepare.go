@@ -35,10 +35,8 @@ type prepareValidator func(prepare messages.Prepare) error
 // The supplied message is applied to the current replica state by
 // changing the state accordingly and producing any required messages
 // or side effects. The supplied message is assumed to be authentic
-// and internally consistent. Parameter active indicates if the
-// message refers to the active view. It is safe to invoke
-// concurrently.
-type prepareApplier func(prepare messages.Prepare, active bool) error
+// and internally consistent. It is safe to invoke concurrently.
+type prepareApplier func(prepare messages.Prepare) error
 
 // makePrepareValidator constructs an instance of prepareValidator
 // using n as the total number of nodes, and the supplied abstract
@@ -59,7 +57,7 @@ func makePrepareValidator(n uint32) prepareValidator {
 // makePrepareApplier constructs an instance of prepareApplier using
 // id as the current replica ID, and the supplied abstract interfaces.
 func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedMessage generatedMessageHandler, stopPrepTimer prepareTimerStopper) prepareApplier {
-	return func(prepare messages.Prepare, active bool) error {
+	return func(prepare messages.Prepare) error {
 		request := prepare.Request()
 
 		if new := prepareSeq(request); !new {
@@ -72,10 +70,6 @@ func makePrepareApplier(id uint32, prepareSeq requestSeqPreparer, collectCommitm
 
 		if id == prepare.ReplicaID() {
 			return nil // do not generate Commit for own message
-		}
-
-		if !active {
-			return nil
 		}
 
 		stopPrepTimer(request)
