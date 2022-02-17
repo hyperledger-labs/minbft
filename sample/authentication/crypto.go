@@ -198,17 +198,16 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 	au.lock.Lock()
 	defer au.lock.Unlock()
 
-	// Capture the epoch value received with the first valid UI to
-	// dynamically determine the full USIG identity. Note that
-	// this relies on the assumption that all peer replicas are
-	// initially correct, each uses a unique USIG key pairs per
-	// consensus protocol instance and generates its first UI
-	// using a single USIG instance per replica. Moreover, those
-	// first UIs are assumed to be received and processed by
-	// correct replicas before any replica becomes faulty in a
-	// sense that it starts generating and sending UIs using
-	// another USIG instance initialized with the same sealed key
-	// pair.
+	// Capture the epoch value from the first received valid UI
+	// for dynamically determining the USIG instance identity.
+	// Note that this approach relies on the assumption that all
+	// peer replicas are initially correct, each uses a unique
+	// USIG key pair per consensus protocol instance, and
+	// generates its UIs using a single USIG instance. Moreover,
+	// it is assumed that all replicas receive those first UIs
+	// before any replica becomes faulty in a sense that it starts
+	// generating and sending UIs using another USIG instance
+	// initialized with the same sealed key pair.
 	//
 	// Those assumptions might be too strong in some environments.
 	// In that case, all correct replicas are required to use some
@@ -217,7 +216,7 @@ func (au *SGXUSIGAuthenticationScheme) VerifyAuthenticationTag(m []byte, sig []b
 	// UIs. This, for example, can be achieved using some
 	// bootstrapping procedure.
 	epoch, ok := au.epoch[fingerprint]
-	if !ok && ui.Counter == uint64(1) {
+	if !ok {
 		epoch, _, err = sgxusig.ParseCert(ui.Cert)
 		if err != nil {
 			return fmt.Errorf("failed to parse UI certificate: %s", err)
