@@ -94,6 +94,10 @@ type requestSeqPreparer func(request messages.Request) (new bool)
 // previously prepared. It is safe to invoke concurrently.
 type requestSeqRetirer func(request messages.Request) (new bool)
 
+// requestSeqUnpreparer un-prepares any previously prepared but not
+// yet retired request identifier seq.
+type requestSeqUnpreparer func()
+
 // requestTimerStarter starts request timer.
 //
 // A request timeout event is triggered if the request timeout elapses
@@ -271,6 +275,14 @@ func makeRequestSeqRetirer(clientStates clientstate.Provider) requestSeqRetirer 
 		}
 
 		return true
+	}
+}
+
+func makeRequestSeqUnpreparer(clientStates clientstate.Provider) requestSeqUnpreparer {
+	return func() {
+		for _, clientID := range clientStates.Clients() {
+			clientStates.ClientState(clientID).UnprepareRequestSeq()
+		}
 	}
 }
 
