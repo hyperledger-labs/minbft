@@ -60,7 +60,7 @@ func (mr *MockListMockRecorder) All() *gomock.Call {
 }
 
 // Remove mocks base method
-func (m *MockList) Remove(arg0 uint32) {
+func (m *MockList) Remove(arg0 messages.Request) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Remove", arg0)
 }

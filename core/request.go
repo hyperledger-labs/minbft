@@ -220,7 +220,7 @@ func makeRequestExecutor(id uint32, retireSeq requestSeqRetirer, pendingReq requ
 			return // request already accepted for execution
 		}
 
-		pendingReq.Remove(clientID)
+		pendingReq.Remove(request)
 		stopReqTimer(request)
 
 		resultChan := consumer.Deliver(request.Operation())
