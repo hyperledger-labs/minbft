@@ -86,11 +86,9 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // AddReply mocks base method
-func (m *MockState) AddReply(arg0 messages.Reply) error {
+func (m *MockState) AddReply(arg0 messages.Reply) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddReply", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "AddReply", arg0)
 }
 
 // AddReply indicates an expected call of AddReply

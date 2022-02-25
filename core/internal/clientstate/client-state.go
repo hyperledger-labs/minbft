@@ -135,10 +135,9 @@ func (p *provider) Clients() (clientIDs []uint32) {
 // UnprepareRequestSeq un-prepares any previously prepared but not yet
 // retired request identifier seq.
 //
-// AddReply accepts a Reply message. Reply messages should be added in
-// sequence of corresponding request identifiers. Only a single Reply
-// message should be added for each request identifier. It will never
-// be blocked by any of the channels returned from ReplyChannel.
+// AddReply accepts a Reply message. Only the Reply message referring
+// to the highest request identifier is accepted. It will never be
+// blocked by any of the channels returned from ReplyChannel.
 //
 // ReplyChannel returns a channel to receive the Reply message
 // corresponding to the supplied request identifier. The returned
@@ -171,7 +170,7 @@ type State interface {
 	RetireRequestSeq(seq uint64) (new bool, err error)
 	UnprepareRequestSeq()
 
-	AddReply(reply messages.Reply) error
+	AddReply(reply messages.Reply)
 	ReplyChannel(seq uint64) <-chan messages.Reply
 
 	StartRequestTimer(seq uint64, handleTimeout func())

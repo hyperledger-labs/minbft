@@ -15,7 +15,6 @@
 package clientstate
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/messages"
@@ -38,14 +37,14 @@ func newReplyState() *replyState {
 	return &replyState{}
 }
 
-func (s *replyState) AddReply(reply messages.Reply) error {
+func (s *replyState) AddReply(reply messages.Reply) {
 	seq := reply.Sequence()
 
 	s.Lock()
 	defer s.Unlock()
 
 	if seq <= s.lastRepliedSeq {
-		return fmt.Errorf("old request ID")
+		return
 	}
 
 	s.reply = reply
@@ -55,8 +54,6 @@ func (s *replyState) AddReply(reply messages.Reply) error {
 		close(ch)
 	}
 	s.replyAdded = nil
-
-	return nil
 }
 
 func (s *replyState) ReplyChannel(seq uint64) <-chan messages.Reply {

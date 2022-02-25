@@ -31,46 +31,8 @@ import (
 var messageImpl = protobufMessages.NewImpl()
 
 func TestReply(t *testing.T) {
-	t.Run("Add", testAddReply)
 	t.Run("Channel", testReplyChannel)
 	t.Run("ChannelConcurrent", testReplyChannelConcurrent)
-}
-
-func testAddReply(t *testing.T) {
-	s := newClientState(timer.Standard(), defaultTimeout, defaultTimeout)
-
-	cases := []struct {
-		desc string
-		seq  int
-
-		ok bool
-	}{{
-		desc: "Add first Reply",
-		seq:  100,
-		ok:   true,
-	}, {
-		desc: "Add duplicate Reply",
-		seq:  100,
-		ok:   false,
-	}, {
-		desc: "Add another Reply",
-		seq:  200,
-		ok:   true,
-	}, {
-		desc: "Add older Reply",
-		seq:  150,
-		ok:   false,
-	}}
-
-	for _, c := range cases {
-		reply := makeReply(uint64(c.seq))
-		err := s.AddReply(reply)
-		if c.ok {
-			require.NoError(t, err, c.desc)
-		} else {
-			require.Error(t, err, c.desc)
-		}
-	}
 }
 
 func testReplyChannel(t *testing.T) {
@@ -84,8 +46,7 @@ func testReplyChannel(t *testing.T) {
 	ch1Seq1 := s.ReplyChannel(seq1)
 	require.NotNil(t, ch1Seq1)
 
-	err := s.AddReply(rly1)
-	require.NoError(t, err)
+	s.AddReply(rly1)
 
 	ch2Seq1 := s.ReplyChannel(seq1)
 	require.NotNil(t, ch2Seq1)
@@ -100,8 +61,7 @@ func testReplyChannel(t *testing.T) {
 	ch1Seq2 := s.ReplyChannel(seq2)
 	require.NotNil(t, ch1Seq2)
 
-	err = s.AddReply(rly2)
-	require.NoError(t, err)
+	s.AddReply(rly2)
 
 	ch3Seq1 := s.ReplyChannel(seq1)
 	require.NotNil(t, ch3Seq1)
@@ -140,8 +100,7 @@ func testReplyChannelConcurrent(t *testing.T) {
 			}()
 		}
 
-		err := s.AddReply(rly)
-		assert.NoError(t, err, "seq=%d", seq)
+		s.AddReply(rly)
 
 		wg.Wait()
 	}
