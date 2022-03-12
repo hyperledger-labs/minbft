@@ -80,6 +80,7 @@ func makeCommitValidator() commitValidator {
 
 		switch prop.(type) {
 		case messages.Prepare:
+		case messages.NewView:
 		default:
 			panic("Unexpected proposal message type")
 		}
@@ -102,7 +103,7 @@ func makeCommitApplier(collectCommitment commitmentCollector) commitApplier {
 
 // makeCommitmentCollector constructs an instance of
 // commitmentCollector using the supplied abstractions.
-func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitment commitmentCounter, executeRequest requestExecutor) commitmentCollector {
+func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitment commitmentCounter, executeRequest requestExecutor, acceptNewView newViewAcceptor) commitmentCollector {
 	var lock sync.Mutex
 
 	return func(msg messages.CertifiedMessage) error {
@@ -110,7 +111,7 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 
 		var prop messages.CertifiedMessage
 		switch msg := msg.(type) {
-		case messages.Prepare:
+		case messages.Prepare, messages.NewView:
 			prop = msg
 		case messages.Commit:
 			prop = msg.Proposal()
@@ -119,9 +120,13 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 		}
 
 		var view uint64
+		var isNewView bool
 		switch prop := prop.(type) {
 		case messages.Prepare:
 			view = prop.View()
+		case messages.NewView:
+			view = prop.NewView()
+			isNewView = true
 		default:
 			return fmt.Errorf("unexpected proposal message type")
 		}
@@ -132,7 +137,7 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 		lock.Lock()
 		defer lock.Unlock()
 
-		if err := acceptCommitment(replicaID, false, view, primaryCV, replicaCV); err != nil {
+		if err := acceptCommitment(replicaID, isNewView, view, primaryCV, replicaCV); err != nil {
 			return fmt.Errorf("cannot accept commitment: %s", err)
 		}
 
@@ -143,6 +148,8 @@ func makeCommitmentCollector(acceptCommitment commitmentAcceptor, countCommitmen
 		switch prop := prop.(type) {
 		case messages.Prepare:
 			executeRequest(prop.Request())
+		case messages.NewView:
+			acceptNewView(prop)
 		default:
 			panic("Unexpected proposal message type")
 		}

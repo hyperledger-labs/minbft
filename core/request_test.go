@@ -36,6 +36,8 @@ import (
 	mock_clientstate "github.com/hyperledger-labs/minbft/core/internal/clientstate/mocks"
 	mock_requestlist "github.com/hyperledger-labs/minbft/core/internal/requestlist/mocks"
 	mock_viewstate "github.com/hyperledger-labs/minbft/core/internal/viewstate/mocks"
+
+	. "github.com/hyperledger-labs/minbft/messages/testing"
 )
 
 func TestMakeRequestProcessor(t *testing.T) {
@@ -136,6 +138,30 @@ func TestMakeRequestApplier(t *testing.T) {
 	mock.On("generatedMessageHandler", prepare).Once()
 	err = apply(request, ownView)
 	assert.NoError(t, err)
+}
+
+func TestMakePendingRequestApplier(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	pendingReqList := mock_requestlist.NewMockList(ctrl)
+	applyRequest := func(req messages.Request, view uint64) error {
+		args := mock.MethodCalled("requestApplier", req, view)
+		return args.Error(0)
+	}
+	apply := makePendingRequestApplier(pendingReqList, applyRequest)
+
+	view := randView()
+	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
+	pendingReqList.EXPECT().All().Return(reqs).AnyTimes()
+
+	for _, req := range reqs {
+		mock.On("requestApplier", req, view).Return(nil).Once()
+	}
+	apply(view)
 }
 
 func TestMakeRequestValidator(t *testing.T) {

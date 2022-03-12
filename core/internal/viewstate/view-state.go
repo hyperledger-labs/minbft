@@ -19,8 +19,7 @@
 //
 // There are two main values that represent the state of the view:
 // 'current' and 'expected' view numbers. The values initially equal
-// to zero and can only monotonically increase. The current view is
-// active if current and expected view numbers match.
+// to zero and can only monotonically increase.
 package viewstate
 
 import "sync"
@@ -41,16 +40,15 @@ import "sync"
 //
 // AdvanceCurrentView method synchronizes transition into a new view.
 // If the supplied value is greater than the current view number then
-// the latter is increased to match the supplied one. The return value
-// "ok" indicates if the current view number was updated. In that
-// case, the current and expected view numbers will remain the same
-// until the returned release function is invoked. The return value
-// "active" indicates if the current and expected view numbers match,
-// i.e. the current view has become active.
+// the latter is increased to match the supplied one. It returns true
+// if the current view number was updated. In that case, the current
+// and expected view numbers will remain the same, and the returned
+// expected view number will denote the actual view state, until the
+// returned release function is invoked.
 type State interface {
 	HoldView() (current, expected uint64, release func())
 	AdvanceExpectedView(view uint64) (ok bool, release func())
-	AdvanceCurrentView(view uint64) (ok, active bool, release func())
+	AdvanceCurrentView(view uint64) (ok bool, expected uint64, release func())
 }
 
 type viewState struct {
@@ -86,20 +84,16 @@ func (s *viewState) AdvanceExpectedView(view uint64) (ok bool, release func()) {
 	return false, nil
 }
 
-func (s *viewState) AdvanceCurrentView(view uint64) (ok, active bool, release func()) {
+func (s *viewState) AdvanceCurrentView(view uint64) (ok bool, expected uint64, release func()) {
 	s.Lock()
 	release = s.Unlock
 
 	if s.currentView < view {
 		s.currentView = view
 
-		if s.currentView == s.expectedView {
-			active = true
-		}
-
-		return true, active, release
+		return true, s.expectedView, release
 	}
 
 	release()
-	return false, false, nil
+	return false, 0, nil
 }

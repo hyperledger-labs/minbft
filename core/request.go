@@ -61,6 +61,12 @@ type requestProcessor func(request messages.Request) (new bool, err error)
 // the current active view. It is safe to invoke concurrently.
 type requestApplier func(request messages.Request, view uint64) error
 
+// pendingRequestApplier applies all pending requests.
+//
+// It applies all the pending requests to the current replica state in
+// the supplied active view number.
+type pendingRequestApplier func(view uint64)
+
 // requestExecutor given a Request message executes the requested
 // operation, produces the corresponding Reply message ready for
 // delivery to the client, and hands it over for further processing.
@@ -197,6 +203,14 @@ func makeRequestApplier(id, n uint32, handleGeneratedMessage generatedMessageHan
 		}
 
 		return nil
+	}
+}
+
+func makePendingRequestApplier(pendingReqList requestlist.List, applyRequest requestApplier) pendingRequestApplier {
+	return func(view uint64) {
+		for _, req := range pendingReqList.All() {
+			_ = applyRequest(req, view)
+		}
 	}
 }
 
