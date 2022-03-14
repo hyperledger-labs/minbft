@@ -152,6 +152,38 @@ func TestMakeNewViewApplier(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestMakeNewViewAcceptor(t *testing.T) {
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
+	n := randN()
+	view := randOtherView(0)
+	primary := primaryID(n, view)
+
+	extractPrepared := func(nvCert messages.NewViewCert) []messages.Request {
+		args := mock.MethodCalled("preparedRequestExtractor", nvCert)
+		return args.Get(0).([]messages.Request)
+	}
+	executeRequest := func(request messages.Request) {
+		mock.MethodCalled("requestExecutor", request)
+	}
+	applyPendingReqs := func(view uint64) {
+		mock.MethodCalled("pendingRequestApplier", view)
+	}
+	accept := makeNewViewAcceptor(extractPrepared, executeRequest, applyPendingReqs)
+
+	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
+	nvCert := MakeTestNVCert(messageImpl)
+	nv := messageImpl.NewNewView(primary, view, nvCert)
+
+	mock.On("preparedRequestExtractor", nvCert).Return(reqs)
+	for _, m := range reqs {
+		mock.On("requestExecutor", m)
+	}
+	mock.On("pendingRequestApplier", view).Once()
+	accept(nv)
+}
+
 func TestExtractPreparedRequests(t *testing.T) {
 	const n, f = 3, 1
 	const maxView = 2
