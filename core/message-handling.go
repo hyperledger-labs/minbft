@@ -212,7 +212,15 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	processPeerMessage := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)
 	processMessage := makeMessageProcessor(processRequest, processPeerMessage)
-	handleOwnMessage = makeOwnMessageHandler(processMessage)
+
+	// This "thunk" delays evaluation of handleOwnMessage thus
+	// resolving circular dependency due to recursive nature of
+	// peer message handling.
+	handleOwnMessageThunk := func(msg messages.Message) (reply <-chan messages.Message, new bool, err error) {
+		return handleOwnMessage(msg)
+	}
+	handleOwnEmbedded := makeEmbeddedMessageHandler(handleOwnMessageThunk)
+	handleOwnMessage = makeOwnMessageHandler(handleOwnEmbedded, processMessage)
 
 	// This "thunk" delays evaluation of handlePeerMessage thus
 	// resolving circular dependency due to recursive nature of
@@ -379,8 +387,13 @@ func makeHelloHandler(ownID, n uint32, messageLog messagelog.MessageLog, unicast
 	}
 }
 
-func makeOwnMessageHandler(process messageProcessor) messageHandler {
+func makeOwnMessageHandler(handleEmbedded embeddedMessageHandler, process messageProcessor) messageHandler {
 	return func(msg messages.Message) (_ <-chan messages.Message, new bool, err error) {
+		err = handleEmbedded(msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("error handling embedded messages: %s", err)
+		}
+
 		new, err = process(msg)
 		if err != nil {
 			return nil, false, fmt.Errorf("error processing message: %s", err)

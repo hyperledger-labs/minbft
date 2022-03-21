@@ -45,23 +45,34 @@ func TestMakeOwnMessageHandler(t *testing.T) {
 		args := mock.MethodCalled("messageProcessor", msg)
 		return args.Bool(0), args.Error(1)
 	}
-	handle := makeOwnMessageHandler(processMessage)
+	handleEmbedded := func(msg messages.Message) error {
+		args := mock.MethodCalled("embeddedMessageHandler", msg)
+		return args.Error(0)
+	}
+	handle := makeOwnMessageHandler(handleEmbedded, processMessage)
 
 	msg := struct {
 		messages.Message
 		i int
 	}{i: rand.Int()}
 
-	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
+	mock.On("embeddedMessageHandler", msg).Return(fmt.Errorf("error")).Once()
 	_, _, err := handle(msg)
 	assert.Error(t, err)
 
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
+	mock.On("messageProcessor", msg).Return(false, fmt.Errorf("error")).Once()
+	_, _, err = handle(msg)
+	assert.Error(t, err)
+
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(false, nil).Once()
 	ch, new, err := handle(msg)
 	assert.NoError(t, err)
 	assert.False(t, new)
 	assert.Nil(t, ch)
 
+	mock.On("embeddedMessageHandler", msg).Return(nil).Once()
 	mock.On("messageProcessor", msg).Return(true, nil).Once()
 	ch, new, err = handle(msg)
 	assert.NoError(t, err)
