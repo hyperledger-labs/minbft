@@ -105,11 +105,11 @@ func makeNewViewCertValidator(viewChangeCertSize uint32) newViewCertValidator {
 	}
 }
 
-func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedMessage generatedMessageHandler) newViewApplier {
+func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, prepareReq requestPreparer, collectCommitment commitmentCollector, handleGeneratedMessage generatedMessageHandler) newViewApplier {
 	return func(nv messages.NewView) error {
 		// Re-prepare requests propagated from the previous views
-		for _, prep := range extractPrepared(nv.NewViewCert()) {
-			prepareSeq(prep)
+		for _, req := range extractPrepared(nv.NewViewCert()) {
+			prepareReq(req)
 		}
 
 		if err := collectCommitment(nv); err != nil {

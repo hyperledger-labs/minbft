@@ -110,8 +110,8 @@ func TestMakeNewViewApplier(t *testing.T) {
 		args := mock.MethodCalled("preparedRequestExtractor", nvCert)
 		return args.Get(0).([]messages.Request)
 	}
-	prepareSeq := func(request messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
+	prepareReq := func(request messages.Request) (new bool) {
+		args := mock.MethodCalled("requestPreparer", request)
 		return args.Bool(0)
 	}
 	collectCommitment := func(msg messages.CertifiedMessage) error {
@@ -121,7 +121,7 @@ func TestMakeNewViewApplier(t *testing.T) {
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-	apply := makeNewViewApplier(id, extractPrepared, prepareSeq, collectCommitment, handleGeneratedMessage)
+	apply := makeNewViewApplier(id, extractPrepared, prepareReq, collectCommitment, handleGeneratedMessage)
 
 	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
 	nvCert := MakeTestNVCert(messageImpl)
@@ -131,7 +131,7 @@ func TestMakeNewViewApplier(t *testing.T) {
 
 	mock.On("preparedRequestExtractor", nvCert).Return(reqs)
 	for _, m := range reqs {
-		mock.On("requestSeqPreparer", m).Return(rand.Intn(2) == 0)
+		mock.On("requestPreparer", m).Return(rand.Intn(2) == 0)
 	}
 
 	mock.On("commitmentCollector", ownNV).Return(fmt.Errorf("error")).Once()
