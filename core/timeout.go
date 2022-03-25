@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/hyperledger-labs/minbft/common/logger"
+	"github.com/hyperledger-labs/minbft/core/internal/backofftimer"
 	"github.com/hyperledger-labs/minbft/core/internal/viewstate"
 )
 
@@ -25,6 +26,20 @@ import (
 // The return value indicates if the invocation had any effect. It is
 // safe to invoke concurrently.
 type viewChangeRequestor func(newView uint64) (ok bool)
+
+// viewChangeTimeoutHandler handles view-change timeout expiration.
+//
+// The supplied parameter denotes the expected new view number.
+// It is safe to invoke concurrently.
+type viewChangeTimeoutHandler func(view uint64)
+
+// viewChangeTimerStarter starts the view-change timer.
+//
+// The supplied parameter denotes the expected new view number.
+type viewChangeTimerStarter func(view uint64)
+
+// viewChangeTimerStopper stops and resets the view-view change timer.
+type viewChangeTimerStopper func()
 
 // makeRequestTimeoutHandler constructs an instance of
 // requestTimeoutHandler given the supplied abstractions.
@@ -34,6 +49,16 @@ func makeRequestTimeoutHandler(requestViewChange viewChangeRequestor, logger log
 
 		if requestViewChange(newView) {
 			logger.Warningf("Requested view change to view %d due to request timeout", newView)
+		}
+	}
+}
+
+func makeViewChangeTimeoutHandler(requestViewChange viewChangeRequestor, logger logger.Logger) viewChangeTimeoutHandler {
+	return func(view uint64) {
+		newView := view + 1
+
+		if requestViewChange(newView) {
+			logger.Warningf("Requested view change to view %d due to view-change timeout", newView)
 		}
 	}
 }
@@ -67,5 +92,14 @@ func makeViewChangeRequestor(id uint32, viewState viewstate.State, handleGenerat
 		handleGeneratedMessage(messageImpl.NewReqViewChange(id, newView))
 
 		return true
+	}
+}
+
+func makeViewChangeTimerStarter(timer backofftimer.Timer, handleTimeout viewChangeTimeoutHandler, logger logger.Logger) viewChangeTimerStarter {
+	return func(view uint64) {
+		timer.Start(func() {
+			logger.Warningf("View-change timer for expected new view %d expired", view)
+			handleTimeout(view)
+		})
 	}
 }

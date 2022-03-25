@@ -167,10 +167,13 @@ func TestMakeNewViewAcceptor(t *testing.T) {
 	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
+	stopVCTimer := func() {
+		mock.MethodCalled("viewChangeTimerStopper")
+	}
 	applyPendingReqs := func(view uint64) {
 		mock.MethodCalled("pendingRequestApplier", view)
 	}
-	accept := makeNewViewAcceptor(extractPrepared, executeRequest, applyPendingReqs)
+	accept := makeNewViewAcceptor(extractPrepared, executeRequest, stopVCTimer, applyPendingReqs)
 
 	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
 	nvCert := MakeTestNVCert(messageImpl)
@@ -180,6 +183,7 @@ func TestMakeNewViewAcceptor(t *testing.T) {
 	for _, m := range reqs {
 		mock.On("requestExecutor", m)
 	}
+	mock.On("viewChangeTimerStopper").Once()
 	mock.On("pendingRequestApplier", view).Once()
 	accept(nv)
 }

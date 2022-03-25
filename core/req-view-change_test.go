@@ -152,13 +152,16 @@ func TestMakeViewChangeStarter(t *testing.T) {
 	id := rand.Uint32()
 	viewState := mock_viewstate.NewMockState(ctrl)
 	log := mock_messagelog.NewMockMessageLog(ctrl)
+	startVCTimer := func(newView uint64) {
+		mock.MethodCalled("viewChangeTimerStarter", newView)
+	}
 	handleGenerated := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
 	unprepareSeq := func() {
 		mock.MethodCalled("requestSeqUnpreparer")
 	}
-	start := makeViewChangeStarter(id, viewState, log, unprepareSeq, handleGenerated)
+	start := makeViewChangeStarter(id, viewState, log, startVCTimer, unprepareSeq, handleGenerated)
 
 	newView := rand.Uint64()
 	cert := messages.ViewChangeCert{
@@ -192,6 +195,7 @@ func TestMakeViewChangeStarter(t *testing.T) {
 	vc := messageImpl.NewViewChange(id, newView, viewLog, cert)
 	log.EXPECT().Messages().Return(msgs)
 	log.EXPECT().Reset(nil)
+	mock.On("viewChangeTimerStarter", newView)
 	mock.On("requestSeqUnpreparer").Once()
 	mock.On("generatedMessageHandler", vc).Once()
 	mock.On("viewReleaser").Once()

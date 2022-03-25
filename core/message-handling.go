@@ -22,6 +22,7 @@ import (
 
 	"github.com/hyperledger-labs/minbft/api"
 	"github.com/hyperledger-labs/minbft/common/logger"
+	"github.com/hyperledger-labs/minbft/core/internal/backofftimer"
 	"github.com/hyperledger-labs/minbft/core/internal/clientstate"
 	"github.com/hyperledger-labs/minbft/core/internal/messagelog"
 	"github.com/hyperledger-labs/minbft/core/internal/requestlist"
@@ -154,6 +155,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	clientStates := clientstate.NewProvider(reqTimeout, prepTimeout)
 	viewState := viewstate.New()
+	viewChangeTimer := backofftimer.New(config.TimeoutViewChange())
 
 	captureSeq := makeRequestSeqCapturer(clientStates)
 	prepareSeq := makeRequestSeqPreparer(clientStates)
@@ -166,10 +168,13 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	requestViewChange := makeViewChangeRequestor(id, viewState, handleGeneratedMessage)
 	handleReqTimeout := makeRequestTimeoutHandler(requestViewChange, logger)
+	handleViewChangeTimeout := makeViewChangeTimeoutHandler(requestViewChange, logger)
 	startReqTimer := makeRequestTimerStarter(clientStates, handleReqTimeout, logger)
 	stopReqTimer := makeRequestTimerStopper(clientStates)
 	startPrepTimer := makePrepareTimerStarter(n, clientStates, unicastLogs, logger)
 	stopPrepTimer := makePrepareTimerStopper(clientStates)
+	startVCTimer := makeViewChangeTimerStarter(viewChangeTimer, handleViewChangeTimeout, logger)
+	stopVCTimer := viewChangeTimer.Stop
 
 	validateRequest := makeRequestValidator(verifyMessageSignature)
 	validatePrepare := makePrepareValidator(n)
@@ -186,7 +191,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
 	applyPendingRequests := makePendingRequestApplier(pendingReq, applyRequest)
 	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
-	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest, applyPendingRequests)
+	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest, stopVCTimer, applyPendingRequests)
 
 	acceptCommitment := makeCommitmentAcceptor()
 	countCommitment := makeCommitmentCounter(commitCertSize)
@@ -207,7 +212,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
 
 	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
-	startViewChange := makeViewChangeStarter(id, viewState, log, unprepareSeq, handleGeneratedMessage)
+	startViewChange := makeViewChangeStarter(id, viewState, log, startVCTimer, unprepareSeq, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
 	processPeerMessage := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)
