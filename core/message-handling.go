@@ -192,7 +192,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	applyRequest := makeRequestApplier(id, n, startReqTimer, startPrepTimer, handleGeneratedMessage)
 	applyPendingRequests := makePendingRequestApplier(pendingReqs, applyRequest)
 	executeRequest := makeRequestExecutor(id, retireReq, stopReqTimer, stack, handleGeneratedMessage)
-	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest, stopVCTimer, applyPendingRequests)
+	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest)
 
 	acceptCommitment := makeCommitmentAcceptor()
 	countCommitment := makeCommitmentCounter(commitCertSize)
@@ -200,7 +200,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 
 	applyPrepare := makePrepareApplier(id, prepareReq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
 	applyCommit := makeCommitApplier(collectCommitment)
-	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareReq, collectCommitment, handleGeneratedMessage)
+	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareReq, collectCommitment, stopVCTimer, applyPendingRequests, handleGeneratedMessage)
 	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit, applyNewView)
 
 	processRequest := makeRequestProcessor(captureReq, viewState, applyRequest)

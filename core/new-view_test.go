@@ -118,14 +118,21 @@ func TestMakeNewViewApplier(t *testing.T) {
 		args := mock.MethodCalled("commitmentCollector", msg)
 		return args.Error(0)
 	}
+	stopVCTimer := func() {
+		mock.MethodCalled("viewChangeTimerStopper")
+	}
+	applyPendingReqs := func(view uint64) {
+		mock.MethodCalled("pendingRequestApplier", view)
+	}
 	handleGeneratedMessage := func(msg messages.ReplicaMessage) {
 		mock.MethodCalled("generatedMessageHandler", msg)
 	}
-	apply := makeNewViewApplier(id, extractPrepared, prepareReq, collectCommitment, handleGeneratedMessage)
+	apply := makeNewViewApplier(id, extractPrepared, prepareReq, collectCommitment, stopVCTimer, applyPendingReqs, handleGeneratedMessage)
 
 	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
 	nvCert := MakeTestNVCert(messageImpl)
-	ownNV := messageImpl.NewNewView(id, viewForPrimary(n, id), nvCert)
+	ownView := viewForPrimary(n, id)
+	ownNV := messageImpl.NewNewView(id, ownView, nvCert)
 	nv := messageImpl.NewNewView(primary, view, nvCert)
 	comm := messageImpl.NewCommit(id, nv)
 
@@ -139,6 +146,8 @@ func TestMakeNewViewApplier(t *testing.T) {
 	assert.Error(t, err, "Failed to collect own commitment")
 
 	mock.On("commitmentCollector", ownNV).Return(nil).Once()
+	mock.On("viewChangeTimerStopper").Once()
+	mock.On("pendingRequestApplier", ownView).Once()
 	err = apply(ownNV)
 	assert.NoError(t, err)
 
@@ -147,6 +156,8 @@ func TestMakeNewViewApplier(t *testing.T) {
 	assert.Error(t, err, "Failed to collect commitment")
 
 	mock.On("commitmentCollector", nv).Return(nil).Once()
+	mock.On("viewChangeTimerStopper").Once()
+	mock.On("pendingRequestApplier", view).Once()
 	mock.On("generatedMessageHandler", comm).Once()
 	err = apply(nv)
 	assert.NoError(t, err)
@@ -167,13 +178,7 @@ func TestMakeNewViewAcceptor(t *testing.T) {
 	executeRequest := func(request messages.Request) {
 		mock.MethodCalled("requestExecutor", request)
 	}
-	stopVCTimer := func() {
-		mock.MethodCalled("viewChangeTimerStopper")
-	}
-	applyPendingReqs := func(view uint64) {
-		mock.MethodCalled("pendingRequestApplier", view)
-	}
-	accept := makeNewViewAcceptor(extractPrepared, executeRequest, stopVCTimer, applyPendingReqs)
+	accept := makeNewViewAcceptor(extractPrepared, executeRequest)
 
 	reqs := []messages.Request{RandReq(messageImpl), RandReq(messageImpl)}
 	nvCert := MakeTestNVCert(messageImpl)
@@ -183,8 +188,6 @@ func TestMakeNewViewAcceptor(t *testing.T) {
 	for _, m := range reqs {
 		mock.On("requestExecutor", m)
 	}
-	mock.On("viewChangeTimerStopper").Once()
-	mock.On("pendingRequestApplier", view).Once()
 	accept(nv)
 }
 
