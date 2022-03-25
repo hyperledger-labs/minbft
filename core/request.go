@@ -259,7 +259,7 @@ func makeRequestCapturer(clientStates clientstate.Provider, pendingReqs requestl
 
 // makeRequestPreparer constructs an instance of requestSeqPreparer
 // using the supplied interface.
-func makeRequestPreparer(clientStates clientstate.Provider) requestPreparer {
+func makeRequestPreparer(clientStates clientstate.Provider, pendingReqs, preparedReqs requestlist.List) requestPreparer {
 	return func(request messages.Request) (new bool) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
@@ -270,13 +270,16 @@ func makeRequestPreparer(clientStates clientstate.Provider) requestPreparer {
 			return false
 		}
 
+		preparedReqs.Add(request)
+		pendingReqs.Remove(request)
+
 		return true
 	}
 }
 
 // makeRequestRetirer constructs an instance of requestSeqRetirer
 // using the supplied interface.
-func makeRequestRetirer(clientStates clientstate.Provider, pendingReqs requestlist.List) requestRetirer {
+func makeRequestRetirer(clientStates clientstate.Provider, preparedReqs requestlist.List) requestRetirer {
 	return func(request messages.Request) (new bool) {
 		clientID := request.ClientID()
 		seq := request.Sequence()
@@ -287,16 +290,18 @@ func makeRequestRetirer(clientStates clientstate.Provider, pendingReqs requestli
 			return false
 		}
 
-		pendingReqs.Remove(request)
+		preparedReqs.Remove(request)
 
 		return true
 	}
 }
 
-func makeRequestUnpreparer(clientStates clientstate.Provider) requestUnpreparer {
+func makeRequestUnpreparer(clientStates clientstate.Provider, pendingReqs, preparedReqs requestlist.List) requestUnpreparer {
 	return func() {
-		for _, clientID := range clientStates.Clients() {
-			clientStates.ClientState(clientID).UnprepareRequestSeq()
+		for _, req := range preparedReqs.All() {
+			clientStates.ClientState(req.ClientID()).UnprepareRequestSeq()
+			pendingReqs.Add(req)
+			preparedReqs.Remove(req)
 		}
 	}
 }

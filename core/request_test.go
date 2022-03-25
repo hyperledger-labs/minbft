@@ -264,10 +264,14 @@ func TestMakeRequestPreparer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mock := new(testifymock.Mock)
+	defer mock.AssertExpectations(t)
+
 	expectedClientID := rand.Uint32()
 	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
-
-	prepareReq := makeRequestPreparer(provider)
+	pendingReqs := mock_requestlist.NewMockList(ctrl)
+	preparedReqs := mock_requestlist.NewMockList(ctrl)
+	prepareReq := makeRequestPreparer(provider, pendingReqs, preparedReqs)
 
 	seq := rand.Uint64()
 	request := messageImpl.NewRequest(expectedClientID, seq, nil)
@@ -280,6 +284,8 @@ func TestMakeRequestPreparer(t *testing.T) {
 	assert.False(t, new)
 
 	state.EXPECT().PrepareRequestSeq(seq).Return(true, nil)
+	pendingReqs.EXPECT().Remove(request)
+	preparedReqs.EXPECT().Add(request)
 	new = prepareReq(request)
 	assert.True(t, new)
 }
@@ -293,8 +299,8 @@ func TestMakeRequestRetirer(t *testing.T) {
 
 	expectedClientID := rand.Uint32()
 	provider, state := setupClientStateProviderMock(t, ctrl, expectedClientID)
-	pendingReqs := mock_requestlist.NewMockList(ctrl)
-	retireReq := makeRequestRetirer(provider, pendingReqs)
+	preparedReqs := mock_requestlist.NewMockList(ctrl)
+	retireReq := makeRequestRetirer(provider, preparedReqs)
 
 	seq := rand.Uint64()
 	request := messageImpl.NewRequest(expectedClientID, seq, nil)
@@ -307,7 +313,7 @@ func TestMakeRequestRetirer(t *testing.T) {
 	assert.False(t, new)
 
 	state.EXPECT().RetireRequestSeq(seq).Return(true, nil)
-	pendingReqs.EXPECT().Remove(request)
+	preparedReqs.EXPECT().Remove(request)
 	new = retireReq(request)
 	assert.True(t, new)
 }
@@ -316,19 +322,32 @@ func TestMakeRequestUnpreparer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ids := []uint32{rand.Uint32(), rand.Uint32()}
 	provider := mock_clientstate.NewMockProvider(ctrl)
-	provider.EXPECT().Clients().Return(ids).AnyTimes()
-	states := make([]*mock_clientstate.MockState, len(ids))
-	for i, c := range ids {
-		states[i] = mock_clientstate.NewMockState(ctrl)
-		provider.EXPECT().ClientState(c).Return(states[i]).AnyTimes()
+	var reqs []messages.Request
+	var ids = make(map[uint32]bool)
+	for len(ids) < 2 {
+		req := RandReq(messageImpl)
+		clientID := req.ClientID()
+		if ids[clientID] {
+			continue
+		}
+		ids[clientID] = true
+		reqs = append(reqs, req)
 	}
 
-	unprepareReqs := makeRequestUnpreparer(provider)
+	pendingReqs := mock_requestlist.NewMockList(ctrl)
+	preparedReqs := mock_requestlist.NewMockList(ctrl)
+	unprepareReqs := makeRequestUnpreparer(provider, pendingReqs, preparedReqs)
 
-	for _, s := range states {
-		s.EXPECT().UnprepareRequestSeq()
+	preparedReqs.EXPECT().All().Return(reqs)
+	for _, req := range reqs {
+		clientID := req.ClientID()
+		state := mock_clientstate.NewMockState(ctrl)
+		provider.EXPECT().ClientState(clientID).Return(state).AnyTimes()
+
+		state.EXPECT().UnprepareRequestSeq()
+		pendingReqs.EXPECT().Add(req)
+		preparedReqs.EXPECT().Remove(req)
 	}
 	unprepareReqs()
 }

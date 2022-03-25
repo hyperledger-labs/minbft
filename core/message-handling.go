@@ -158,10 +158,11 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	viewChangeTimer := backofftimer.New(config.TimeoutViewChange())
 
 	pendingReqs := requestlist.New()
+	preparedReqs := requestlist.New()
 	captureReq := makeRequestCapturer(clientStates, pendingReqs)
-	prepareReq := makeRequestPreparer(clientStates)
-	retireReq := makeRequestRetirer(clientStates, pendingReqs)
-	unprepareReqs := makeRequestUnpreparer(clientStates)
+	prepareReq := makeRequestPreparer(clientStates, pendingReqs, preparedReqs)
+	retireReq := makeRequestRetirer(clientStates, preparedReqs)
+	unprepareReqs := makeRequestUnpreparer(clientStates, pendingReqs, preparedReqs)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
