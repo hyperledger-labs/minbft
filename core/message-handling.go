@@ -142,7 +142,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	// size is the number of replicas required to proceed with
 	// view change. Any commit and view-change certificates must
 	// intersect in at least one replica.
-	commitCertSize := f + 1
+	commitCertSize := n - f
 	viewChangeCertSize := n - commitCertSize + 1
 
 	reqTimeout := makeRequestTimeoutProvider(config)
