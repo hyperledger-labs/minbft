@@ -113,7 +113,7 @@ func makeReqViewChangeCollector(viewChangeCertSize uint32) reqViewChangeCollecto
 	}
 }
 
-func makeViewChangeStarter(id uint32, viewState viewstate.State, log messagelog.MessageLog, startVCTimer viewChangeTimerStarter, unprepareReqSeq requestSeqUnpreparer, handleGeneratedMessage generatedMessageHandler) viewChangeStarter {
+func makeViewChangeStarter(id uint32, viewState viewstate.State, log messagelog.MessageLog, startVCTimer viewChangeTimerStarter, unprepareReqs requestUnpreparer, handleGeneratedMessage generatedMessageHandler) viewChangeStarter {
 	return func(newView uint64, vcCert messages.ViewChangeCert) (ok bool, err error) {
 		ok, release := viewState.AdvanceExpectedView(newView)
 		if !ok {
@@ -130,7 +130,7 @@ func makeViewChangeStarter(id uint32, viewState viewstate.State, log messagelog.
 		log.Reset(nil)
 
 		startVCTimer(newView)
-		unprepareReqSeq()
+		unprepareReqs()
 
 		handleGeneratedMessage(messageImpl.NewViewChange(id, newView, msgs, vcCert))
 

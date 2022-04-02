@@ -105,16 +105,19 @@ func makeNewViewCertValidator(viewChangeCertSize uint32) newViewCertValidator {
 	}
 }
 
-func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, prepareSeq requestSeqPreparer, collectCommitment commitmentCollector, handleGeneratedMessage generatedMessageHandler) newViewApplier {
+func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, prepareReq requestPreparer, collectCommitment commitmentCollector, stopVCTimer viewChangeTimerStopper, applyPendingReqs pendingRequestApplier, handleGeneratedMessage generatedMessageHandler) newViewApplier {
 	return func(nv messages.NewView) error {
 		// Re-prepare requests propagated from the previous views
-		for _, prep := range extractPrepared(nv.NewViewCert()) {
-			prepareSeq(prep)
+		for _, req := range extractPrepared(nv.NewViewCert()) {
+			prepareReq(req)
 		}
 
 		if err := collectCommitment(nv); err != nil {
 			return fmt.Errorf("NewView cannot be taken into account: %s", err)
 		}
+
+		stopVCTimer()
+		applyPendingReqs(nv.NewView())
 
 		if id == nv.ReplicaID() {
 			return nil // do not generate Commit for own message
@@ -126,14 +129,11 @@ func makeNewViewApplier(id uint32, extractPrepared preparedRequestExtractor, pre
 	}
 }
 
-func makeNewViewAcceptor(extractPrepared preparedRequestExtractor, executeRequest requestExecutor, stopVCTimer viewChangeTimerStopper, applyPendingRequests pendingRequestApplier) newViewAcceptor {
+func makeNewViewAcceptor(extractPrepared preparedRequestExtractor, executeRequest requestExecutor) newViewAcceptor {
 	return func(nv messages.NewView) {
 		for _, req := range extractPrepared(nv.NewViewCert()) {
 			executeRequest(req)
 		}
-
-		stopVCTimer()
-		applyPendingRequests(nv.NewView())
 	}
 }
 

@@ -157,11 +157,12 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	viewState := viewstate.New()
 	viewChangeTimer := backofftimer.New(config.TimeoutViewChange())
 
-	captureSeq := makeRequestSeqCapturer(clientStates)
-	prepareSeq := makeRequestSeqPreparer(clientStates)
-	retireSeq := makeRequestSeqRetirer(clientStates)
-	unprepareSeq := makeRequestSeqUnpreparer(clientStates)
-	pendingReq := requestlist.New()
+	pendingReqs := requestlist.New()
+	preparedReqs := requestlist.New()
+	captureReq := makeRequestCapturer(clientStates, pendingReqs)
+	prepareReq := makeRequestPreparer(clientStates, pendingReqs, preparedReqs)
+	retireReq := makeRequestRetirer(clientStates, preparedReqs)
+	unprepareReqs := makeRequestUnpreparer(clientStates, pendingReqs, preparedReqs)
 
 	consumeGeneratedMessage := makeGeneratedMessageConsumer(log, clientStates, logger)
 	handleGeneratedMessage := makeGeneratedMessageHandler(signMessage, assignUI, consumeGeneratedMessage)
@@ -188,21 +189,21 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	validatePeerMessage := makePeerMessageValidator(n, validateCertifiedMessage, validateReqViewChange)
 	validateMessage := makeMessageValidator(validateRequest, validatePeerMessage)
 
-	applyRequest := makeRequestApplier(id, n, handleGeneratedMessage, startReqTimer, startPrepTimer)
-	applyPendingRequests := makePendingRequestApplier(pendingReq, applyRequest)
-	executeRequest := makeRequestExecutor(id, retireSeq, pendingReq, stopReqTimer, stack, handleGeneratedMessage)
-	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest, stopVCTimer, applyPendingRequests)
+	applyRequest := makeRequestApplier(id, n, startReqTimer, startPrepTimer, handleGeneratedMessage)
+	applyPendingRequests := makePendingRequestApplier(pendingReqs, applyRequest)
+	executeRequest := makeRequestExecutor(id, retireReq, stopReqTimer, stack, handleGeneratedMessage)
+	acceptNewView := makeNewViewAcceptor(extractPreparedRequests, executeRequest)
 
 	acceptCommitment := makeCommitmentAcceptor()
 	countCommitment := makeCommitmentCounter(commitCertSize)
 	collectCommitment := makeCommitmentCollector(acceptCommitment, countCommitment, executeRequest, acceptNewView)
 
-	applyPrepare := makePrepareApplier(id, prepareSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
+	applyPrepare := makePrepareApplier(id, prepareReq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
 	applyCommit := makeCommitApplier(collectCommitment)
-	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareSeq, collectCommitment, handleGeneratedMessage)
+	applyNewView := makeNewViewApplier(id, extractPreparedRequests, prepareReq, collectCommitment, stopVCTimer, applyPendingRequests, handleGeneratedMessage)
 	applyPeerMessage := makePeerMessageApplier(applyPrepare, applyCommit, applyNewView)
 
-	processRequest := makeRequestProcessor(captureSeq, pendingReq, viewState, applyRequest)
+	processRequest := makeRequestProcessor(captureReq, viewState, applyRequest)
 
 	collectViewChange := makeViewChangeCollector(id, n, viewChangeCertSize)
 	processNewViewCert := makeNewViewCertProcessor(id, viewState, log, handleGeneratedMessage)
@@ -212,7 +213,7 @@ func defaultMessageHandlers(id uint32, log messagelog.MessageLog, unicastLogs ma
 	processCertifiedMessage := makeCertifiedMessageProcessor(n, processViewMessage, processViewChange)
 
 	collectReqViewChange := makeReqViewChangeCollector(viewChangeCertSize)
-	startViewChange := makeViewChangeStarter(id, viewState, log, startVCTimer, unprepareSeq, handleGeneratedMessage)
+	startViewChange := makeViewChangeStarter(id, viewState, log, startVCTimer, unprepareReqs, handleGeneratedMessage)
 	processReqViewChange := makeReqViewChangeProcessor(collectReqViewChange, startViewChange)
 
 	processPeerMessage := makePeerMessageProcessor(n, processCertifiedMessage, processReqViewChange)

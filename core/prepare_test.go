@@ -58,8 +58,8 @@ func TestMakePrepareApplier(t *testing.T) {
 	view := randView()
 	primary := primaryID(n, view)
 	id := randOtherReplicaID(primary, n)
-	prepareRequestSeq := func(request messages.Request) (new bool) {
-		args := mock.MethodCalled("requestSeqPreparer", request)
+	prepareReq := func(request messages.Request) (new bool) {
+		args := mock.MethodCalled("requestPreparer", request)
 		return args.Bool(0)
 	}
 	collectCommitment := func(msg messages.CertifiedMessage) error {
@@ -72,7 +72,7 @@ func TestMakePrepareApplier(t *testing.T) {
 	stopPrepTimer := func(request messages.Request) {
 		mock.MethodCalled("prepareTimerStopper", request)
 	}
-	apply := makePrepareApplier(id, prepareRequestSeq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
+	apply := makePrepareApplier(id, prepareReq, collectCommitment, handleGeneratedMessage, stopPrepTimer)
 
 	clientID := rand.Uint32()
 	request := messageImpl.NewRequest(clientID, rand.Uint64(), nil)
@@ -80,30 +80,30 @@ func TestMakePrepareApplier(t *testing.T) {
 	prepare := messageImpl.NewPrepare(primary, view, request)
 	commit := messageImpl.NewCommit(id, prepare)
 
-	mock.On("requestSeqPreparer", request).Return(false).Once()
+	mock.On("requestPreparer", request).Return(false).Once()
 	err := apply(prepare)
 	assert.Error(t, err, "Request ID already prepared")
 
-	mock.On("requestSeqPreparer", request).Return(false).Once()
+	mock.On("requestPreparer", request).Return(false).Once()
 	err = apply(ownPrepare)
 	assert.Error(t, err, "Request ID already prepared")
 
-	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("requestPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", ownPrepare).Return(fmt.Errorf("error")).Once()
 	err = apply(ownPrepare)
 	assert.Error(t, err, "Failed to collect commitment")
 
-	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("requestPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", ownPrepare).Return(nil).Once()
 	err = apply(ownPrepare)
 	assert.NoError(t, err)
 
-	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("requestPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", prepare).Return(fmt.Errorf("error")).Once()
 	err = apply(prepare)
 	assert.Error(t, err, "Failed to collect commitment")
 
-	mock.On("requestSeqPreparer", request).Return(true).Once()
+	mock.On("requestPreparer", request).Return(true).Once()
 	mock.On("commitmentCollector", prepare).Return(nil).Once()
 	mock.On("prepareTimerStopper", request).Once()
 	mock.On("generatedMessageHandler", commit).Once()
