@@ -164,6 +164,8 @@ func (p *provider) Clients() (clientIDs []uint32) {
 //
 // StopPrepareTimer stops timer started for the same request
 // identifier by StartPrepareTimer, if any.
+//
+// StopAllTimers stops any timer maintained in the client state.
 type State interface {
 	CaptureRequestSeq(seq uint64) (new bool, release func())
 	PrepareRequestSeq(seq uint64) (new bool, err error)
@@ -171,13 +173,15 @@ type State interface {
 	UnprepareRequestSeq()
 
 	AddReply(reply messages.Reply)
-	ReplyChannel(seq uint64) <-chan messages.Reply
+	ReplyChannel(seq uint64, cancel <-chan struct{}) <-chan messages.Reply
 
 	StartRequestTimer(seq uint64, handleTimeout func())
 	StopRequestTimer(seq uint64)
 
 	StartPrepareTimer(seq uint64, handleTimeout func())
 	StopPrepareTimer(seq uint64)
+
+	StopAllTimers()
 }
 
 type clientState struct {
@@ -198,17 +202,22 @@ func newClientState(timerProvider timer.Provider, requestTimeout, prepareTimeout
 }
 
 func (s *clientState) StartRequestTimer(seq uint64, handleTimeout func()) {
-	s.requestTimer.StartTimer(seq, handleTimeout)
+	s.requestTimer.Start(seq, handleTimeout)
 }
 
 func (s *clientState) StopRequestTimer(seq uint64) {
-	s.requestTimer.StopTimer(seq)
+	s.requestTimer.Stop(seq)
 }
 
 func (s *clientState) StartPrepareTimer(seq uint64, handleTimeout func()) {
-	s.prepareTimer.StartTimer(seq, handleTimeout)
+	s.prepareTimer.Start(seq, handleTimeout)
 }
 
 func (s *clientState) StopPrepareTimer(seq uint64) {
-	s.prepareTimer.StopTimer(seq)
+	s.prepareTimer.Stop(seq)
+}
+
+func (s *clientState) StopAllTimers() {
+	s.requestTimer.StopAny()
+	s.prepareTimer.StopAny()
 }

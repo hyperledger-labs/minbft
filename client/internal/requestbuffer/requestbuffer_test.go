@@ -35,29 +35,29 @@ func TestAddRequest(t *testing.T) {
 
 	seq0 := uint64(0)
 	req0 := makeRequest(seq0)
-	_, ok := rb.AddRequest(req0)
+	_, ok := rb.AddRequest(req0, nil)
 	assert.False(t, ok, "Request with zero sequence ID must be rejected")
 
 	seq1 := seq0 + 1
 	req1 := makeRequest(seq1)
-	ch, ok := rb.AddRequest(req1)
+	ch, ok := rb.AddRequest(req1, nil)
 	require.True(t, ok)
 	assert.NotNil(t, ch)
 
 	rb.RemoveRequest(seq1)
 
-	_, ok = rb.AddRequest(req1)
+	_, ok = rb.AddRequest(req1, nil)
 	assert.False(t, ok, "Subsequent Request sequence ID cannot be the same")
 
 	seq2 := seq1 + 1
 	req2 := makeRequest(seq2)
-	ch, ok = rb.AddRequest(req2)
+	ch, ok = rb.AddRequest(req2, nil)
 	require.True(t, ok)
 	assert.NotNil(t, ch)
 
 	rb.RemoveRequest(seq2)
 
-	_, ok = rb.AddRequest(req1)
+	_, ok = rb.AddRequest(req1, nil)
 	assert.False(t, ok, "Subsequent Request sequence ID cannot decrease")
 }
 
@@ -68,7 +68,7 @@ func TestRemoveRequest(t *testing.T) {
 	rb.RemoveRequest(seq1) // no panic
 
 	req1 := makeRequest(seq1)
-	ch1, ok := rb.AddRequest(req1)
+	ch1, ok := rb.AddRequest(req1, nil)
 	require.True(t, ok)
 
 	seq2 := seq1 + 1
@@ -93,7 +93,7 @@ func TestAddReply(t *testing.T) {
 	assert.NotNil(t, ok, "Must drop Reply with empty buffer")
 
 	req1 := makeRequest(seq1)
-	ch, ok := rb.AddRequest(req1)
+	ch, ok := rb.AddRequest(req1, nil)
 	require.True(t, ok)
 
 	seq2 := seq1 + 1
@@ -120,6 +120,14 @@ func TestAddReply(t *testing.T) {
 
 	ok = rb.AddReply(rly1r0)
 	assert.NotNil(t, ok, "Must drop Reply after Request removal")
+
+	req2 := makeRequest(seq2)
+	cancel := make(chan struct{})
+	ch, ok = rb.AddRequest(req2, cancel)
+	require.True(t, ok)
+
+	close(cancel)
+	assert.Nil(t, <-ch)
 }
 
 func TestRequestStream(t *testing.T) {
@@ -136,7 +144,7 @@ func TestRequestStream(t *testing.T) {
 		close(doneChan)
 	}()
 
-	_, ok := rb.AddRequest(req)
+	_, ok := rb.AddRequest(req, nil)
 	require.True(t, ok)
 
 	<-doneChan
@@ -170,7 +178,7 @@ func TestConcurrent(t *testing.T) {
 	wg.Add(nrRequests)
 	for seq := uint64(1); seq <= nrRequests; seq++ {
 		req := makeRequest(seq)
-		ch, ok := rb.AddRequest(req)
+		ch, ok := rb.AddRequest(req, nil)
 		assert.True(t, ok)
 		assert.NotNil(t, ch)
 
@@ -220,7 +228,7 @@ func TestWithFaulty(t *testing.T) {
 	wg.Add(nrRequests)
 	for seq := uint64(1); seq <= nrRequests; seq++ {
 		req := makeRequest(seq)
-		ch, ok := rb.AddRequest(req)
+		ch, ok := rb.AddRequest(req, nil)
 		require.True(t, ok)
 
 		go func(seq uint64) {

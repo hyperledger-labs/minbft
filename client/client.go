@@ -42,8 +42,12 @@ type Stack interface {
 // Request requests execution of the supplied operation on the
 // replicated state machine and returns a channel to receive the
 // result of execution from.
+//
+// Terminate causes the instance to stop all activity so that the
+// garbage collector can reclaim any resources allocated for it.
 type Client interface {
 	Request(operation []byte) (resultChan <-chan []byte)
+	Terminate()
 }
 
 type options struct {
@@ -72,6 +76,11 @@ func WithLogger(logger commonLogger.Logger) Option {
 	}
 }
 
+type client struct {
+	handleRequest requestHandler
+	stopChan      chan struct{}
+}
+
 // New creates an instance of Client given a client ID, total number
 // of replica nodes n, number of tolerated faulty replica nodes f, and
 // a stack of external interfaces.
@@ -80,18 +89,24 @@ func New(id uint32, n, f uint32, stack Stack, opts ...Option) (Client, error) {
 		return nil, fmt.Errorf("insufficient number of replica nodes")
 	}
 
+	stopChan := make(chan struct{})
 	buf := requestbuffer.New()
 	logger := makeDefaultOptions(id, opts...).logger
 
-	if err := startReplicaConnections(id, n, buf, stack, logger); err != nil {
+	if err := startReplicaConnections(id, n, buf, stack, stopChan, logger); err != nil {
 		return nil, fmt.Errorf("failed to initiate connections to replicas: %s", err)
 	}
 
 	seq := makeSequenceGenerator()
-	return makeRequestHandler(id, seq, stack, buf, f, logger), nil
+	handleRequest := makeRequestHandler(id, seq, stack, buf, f, stopChan, logger)
+
+	return &client{handleRequest, stopChan}, nil
 }
 
-// Request implements Client interface on requestHandler
-func (handler requestHandler) Request(operation []byte) <-chan []byte {
-	return handler(operation)
+func (c *client) Request(operation []byte) <-chan []byte {
+	return c.handleRequest(operation)
+}
+
+func (c *client) Terminate() {
+	close(c.stopChan)
 }

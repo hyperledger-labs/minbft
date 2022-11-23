@@ -21,7 +21,7 @@ import (
 )
 
 type replyState struct {
-	sync.Mutex
+	sync.RWMutex
 
 	// Last replied request ID
 	lastRepliedSeq uint64
@@ -29,12 +29,14 @@ type replyState struct {
 	// Last Reply message
 	reply messages.Reply
 
-	// Channels to close when new Reply added
-	replyAdded []chan<- struct{}
+	// Channel to close and recreate when new Reply added
+	waitChan chan struct{}
 }
 
 func newReplyState() *replyState {
-	return &replyState{}
+	return &replyState{
+		waitChan: make(chan struct{}),
+	}
 }
 
 func (s *replyState) AddReply(reply messages.Reply) {
@@ -50,38 +52,37 @@ func (s *replyState) AddReply(reply messages.Reply) {
 	s.reply = reply
 	s.lastRepliedSeq = seq
 
-	for _, ch := range s.replyAdded {
-		close(ch)
-	}
-	s.replyAdded = nil
+	defer close(s.waitChan)
+	s.waitChan = make(chan struct{})
 }
 
-func (s *replyState) ReplyChannel(seq uint64) <-chan messages.Reply {
+func (s *replyState) ReplyChannel(seq uint64, cancel <-chan struct{}) <-chan messages.Reply {
 	out := make(chan messages.Reply, 1)
 
 	go func() {
 		defer close(out)
 
-		s.Lock()
-		for s.lastRepliedSeq < seq {
-			s.waitForReplyLocked()
-		}
-		reply := s.reply
-		s.Unlock()
+		for {
+			s.RLock()
+			lastRepliedSeq := s.lastRepliedSeq
+			reply := s.reply
+			waitChan := s.waitChan
+			s.RUnlock()
 
-		if reply.Sequence() == seq {
-			out <- reply
+			if seq <= lastRepliedSeq {
+				if reply.Sequence() == seq {
+					out <- reply
+				}
+				return
+			}
+
+			select {
+			case <-waitChan:
+			case <-cancel:
+				return
+			}
 		}
 	}()
 
 	return out
-}
-
-func (s *replyState) waitForReplyLocked() {
-	replyAdded := make(chan struct{})
-	s.replyAdded = append(s.replyAdded, replyAdded)
-
-	s.Unlock()
-	<-replyAdded
-	s.Lock()
 }

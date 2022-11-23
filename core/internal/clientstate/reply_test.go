@@ -40,15 +40,16 @@ func testReplyChannel(t *testing.T) {
 
 	seq1 := uint64(1)
 	seq2 := seq1 + 1
+	seq3 := seq2 + 1
 	rly1 := makeReply(seq1)
 	rly2 := makeReply(seq2)
 
-	ch1Seq1 := s.ReplyChannel(seq1)
+	ch1Seq1 := s.ReplyChannel(seq1, nil)
 	require.NotNil(t, ch1Seq1)
 
 	s.AddReply(rly1)
 
-	ch2Seq1 := s.ReplyChannel(seq1)
+	ch2Seq1 := s.ReplyChannel(seq1, nil)
 	require.NotNil(t, ch2Seq1)
 
 	assert.Equal(t, rly1, <-ch1Seq1)
@@ -58,20 +59,24 @@ func testReplyChannel(t *testing.T) {
 	_, more = <-ch2Seq1
 	assert.False(t, more, "Channel should be closed")
 
-	ch1Seq2 := s.ReplyChannel(seq2)
+	ch1Seq2 := s.ReplyChannel(seq2, nil)
 	require.NotNil(t, ch1Seq2)
 
 	s.AddReply(rly2)
 
-	ch3Seq1 := s.ReplyChannel(seq1)
+	ch3Seq1 := s.ReplyChannel(seq1, nil)
 	require.NotNil(t, ch3Seq1)
-
-	_, more = <-ch3Seq1
-	assert.False(t, more, "Channel should be closed")
+	assert.Nil(t, <-ch3Seq1, "Channel should be closed")
 
 	assert.Equal(t, rly2, <-ch1Seq2)
-	_, more = <-ch1Seq2
-	assert.False(t, more, "Channel should be closed")
+	assert.Nil(t, <-ch1Seq2, "Channel should be closed")
+
+	cancel := make(chan struct{})
+	ch1Seq3 := s.ReplyChannel(seq3, cancel)
+	require.NotNil(t, ch1Seq3)
+
+	close(cancel)
+	assert.Nil(t, <-ch1Seq3, "Channel should be closed")
 }
 
 func testReplyChannelConcurrent(t *testing.T) {
@@ -92,7 +97,7 @@ func testReplyChannelConcurrent(t *testing.T) {
 		for workerID := 0; workerID < nrConcurrent; workerID++ {
 			workerID := workerID
 			wg.Add(1)
-			ch := s.ReplyChannel(uint64(seq))
+			ch := s.ReplyChannel(uint64(seq), nil)
 
 			go func() {
 				defer wg.Done()

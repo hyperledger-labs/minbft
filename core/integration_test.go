@@ -57,7 +57,7 @@ type testClientStack struct {
 }
 
 var (
-	replicas      []api.Replica
+	replicas      []minbft.Replica
 	replicaStacks []*testReplicaStack
 
 	clients      []cl.Client
@@ -142,6 +142,15 @@ func initTestnetPeers(numReplica int, numClient int) {
 	makeClients(numClient, testKeys, cfg)
 }
 
+func teardownTestnet() {
+	for _, client := range clients {
+		client.Terminate()
+	}
+	for _, replica := range replicas {
+		replica.Terminate()
+	}
+}
+
 // Initialize a given number of replica instances.
 func makeReplicas(numReplica int, testKeys []byte, cfg api.Configer) {
 	// replica stubs
@@ -207,6 +216,7 @@ func testAcceptOneRequest(t *testing.T) {
 	for _, stack := range replicaStacks {
 		assert.Equal(t, uint64(1), stack.SimpleLedger.GetLength())
 	}
+
 }
 
 func TestIntegration(t *testing.T) {

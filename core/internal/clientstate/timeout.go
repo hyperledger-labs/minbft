@@ -37,7 +37,7 @@ func newTimerState(timerProvider timer.Provider, timeout func() time.Duration) *
 	}
 }
 
-func (s *timerState) StartTimer(seq uint64, handleTimeout func()) {
+func (s *timerState) Start(seq uint64, handleTimeout func()) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -55,7 +55,7 @@ func (s *timerState) StartTimer(seq uint64, handleTimeout func()) {
 	s.timer = s.timerProvider.AfterFunc(timeout, handleTimeout)
 }
 
-func (s *timerState) StopTimer(seq uint64) {
+func (s *timerState) Stop(seq uint64) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -63,9 +63,19 @@ func (s *timerState) StopTimer(seq uint64) {
 		return
 	}
 
-	if s.timer == nil {
-		return
-	}
+	s.stopAnyLocked()
+}
 
-	s.timer.Stop()
+func (s *timerState) StopAny() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.stopAnyLocked()
+}
+
+func (s *timerState) stopAnyLocked() {
+	if s.timer != nil {
+		s.timer.Stop()
+		s.timer = nil
+	}
 }
