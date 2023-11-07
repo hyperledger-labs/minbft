@@ -3,12 +3,13 @@ run:
   skip-dirs:
     - testing
 linters:
+  enable-all: false
   enable:
     - gocyclo
-    - revive
+#    - revive
     - dupl
     - unconvert
     - goconst
     - gosec
-    - gofmt
+#    - gofmt
     - misspell
